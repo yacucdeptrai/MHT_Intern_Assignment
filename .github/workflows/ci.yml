@@ -84,7 +84,7 @@ jobs:
       - name: End-to-end tests
         run: |
           if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then
-            pnpm exec playwright install --with-deps chromium
+            pnpm --filter @pm/web exec playwright install --with-deps chromium
             pnpm test:e2e
           else
             echo "No test:e2e script yet (added in M0-T2); skipping."
