@@ -15,6 +15,7 @@
     "deploy:built": "wrangler deploy"
   },
   "dependencies": {
+    "@pm/db": "workspace:*",
     "@pm/domain": "workspace:*",
     "isbot": "^5.2.3",
     "react": "^19.3.1",

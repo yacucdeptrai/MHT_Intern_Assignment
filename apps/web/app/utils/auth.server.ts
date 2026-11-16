@@ -1,0 +1,78 @@
+import { redirect } from "react-router";
+
+import { userRepository } from "@pm/db";
+import type { SessionUser } from "@pm/domain";
+
+import type { RequestContext } from "./requestContext.server";
+import { destroySession, getSession } from "./session.server";
+
+export function getSafeRedirect(target: string | null | undefined, defaultUrl = "/"): string {
+  if (!target || typeof target !== "string") {
+    return defaultUrl;
+  }
+  const trimmed = target.trim();
+  if (
+    !trimmed.startsWith("/") ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("/\\") ||
+    trimmed.includes("\\") ||
+    /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)
+  ) {
+    return defaultUrl;
+  }
+  return trimmed;
+}
+
+export async function getOptionalUser(ctx: RequestContext, request: Request): Promise<SessionUser | null> {
+  const session = await getSession(request);
+  const userId = session.get("userId");
+  if (!userId) {
+    return null;
+  }
+
+  const user = await userRepository.findById(ctx.db, userId);
+  if (!user || user.status === "LOCKED") {
+    return null;
+  }
+
+  const sessionUser: SessionUser = {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    systemRole: user.systemRole,
+    status: user.status,
+  };
+  ctx.user = sessionUser;
+  return sessionUser;
+}
+
+export async function requireUser(ctx: RequestContext, request: Request): Promise<SessionUser> {
+  const session = await getSession(request);
+  const userId = session.get("userId");
+  const url = new URL(request.url);
+  const returnUrl = url.pathname + url.search;
+
+  if (!userId) {
+    throw redirect(`/login?redirectTo=${encodeURIComponent(returnUrl)}`);
+  }
+
+  const user = await userRepository.findById(ctx.db, userId);
+  if (!user || user.status === "LOCKED") {
+    const cookie = await destroySession(session);
+    throw redirect("/login", {
+      headers: {
+        "Set-Cookie": cookie,
+      },
+    });
+  }
+
+  const sessionUser: SessionUser = {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    systemRole: user.systemRole,
+    status: user.status,
+  };
+  ctx.user = sessionUser;
+  return sessionUser;
+}

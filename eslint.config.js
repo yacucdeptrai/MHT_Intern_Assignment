@@ -45,7 +45,7 @@ export default tseslint.config(
       // Review lessons #4, #6, #7, #12 (docs/09-testing-strategy.md §6)
       "no-sequences": "error",
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/only-throw-error": "error",
+      "@typescript-eslint/only-throw-error": ["error", { allow: ["Response"] }],
       "@typescript-eslint/ban-ts-comment": [
         "error",
         { "ts-ignore": true, "ts-nocheck": true, "ts-expect-error": "allow-with-description" },
