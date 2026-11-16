@@ -202,6 +202,8 @@ export const userService = {
     const now = ctx.clock.now();
     dataToUpdate.updatedAt = now;
 
+    const action = changes.systemRole && Object.keys(changes).length === 1 ? "USER_ROLE_CHANGED" : "USER_UPDATED";
+
     try {
       await ctx.db.batch([
         userRepository.updateStmt(ctx.db, input.userId, dataToUpdate),
@@ -209,7 +211,7 @@ export const userService = {
         auditLogRepository.insertStmt(ctx.db, {
           id: crypto.randomUUID(),
           actorId: actor.userId,
-          action: "USER_UPDATED",
+          action,
           entityType: "USER",
           entityId: input.userId,
           projectId: null,
