@@ -1,0 +1,80 @@
+# --- Local only (never committed) -------------------------------------------
+# Agent guidelines and the documentation set
+AGENTS.md
+docs/
+# Original source spreadsheet(s)
+*.xlsx
+# Local tool settings and scratch
+.claude/
+.superpowers/
+
+# --- Dependencies -----------------------------------------------------------
+node_modules/
+.pnpm-store/
+/.pnp
+.pnp.js
+
+# --- Environment variables & secrets ----------------------------------------
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# --- Cloudflare / Wrangler local state --------------------------------------
+.wrangler/
+worker-configuration.d.ts.bak
+
+# --- Build outputs (any package in the monorepo) ----------------------------
+build/
+dist/
+.cache/
+public/build/
+*.tsbuildinfo
+
+# --- Testing & coverage -----------------------------------------------------
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# --- Logs & debugging -------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Database & SQLite files ------------------------------------------------
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# --- Editor & IDE settings --------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# --- OS generated files -----------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Python & scratch directories -------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

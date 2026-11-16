@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [develop, staging, main]
+  push:
+    branches: [develop, staging, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-hygiene:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Lint workflow files
+        uses: raven-actions/actionlint@v2
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if local secret files are tracked
+        run: |
+          tracked=$(git ls-files | grep -E '(^|/)\.dev\.vars$|(^|/)\.env$|(^|/)\.env\.[^/]*$' | grep -vE '\.example$' || true)
+          if [ -n "$tracked" ]; then
+            echo "Secret files must not be committed:"; echo "$tracked"; exit 1
+          fi
+
+  detect:
+    name: Detect application code
+    runs-on: ubuntu-latest
+    outputs:
+      has_app: ${{ steps.check.outputs.has_app }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        run: |
+          if [ -f pnpm-lock.yaml ]; then echo "has_app=true" >> "$GITHUB_OUTPUT"; else echo "has_app=false" >> "$GITHUB_OUTPUT"; fi
+
+  check:
+    name: Lint, typecheck, test, build
+    needs: detect
+    if: needs.detect.outputs.has_app == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Create local Worker variables for tests
+        run: |
+          cp apps/web/.dev.vars.example apps/web/.dev.vars
+          secret=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+          sed -i "s#^SESSION_SECRET=.*#SESSION_SECRET=${secret}#" apps/web/.dev.vars
+          sed -i "s#^ADMIN_SEED_PASSWORD=.*#ADMIN_SEED_PASSWORD=Ci-${{ github.run_id }}-pass#" apps/web/.dev.vars
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm spell
+      - run: pnpm deps:check
+      - run: pnpm test:coverage
+      - run: pnpm build
+
+      - name: End-to-end tests
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
