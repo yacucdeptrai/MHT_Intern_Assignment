@@ -29,7 +29,10 @@ export interface TestUser {
  * Creates a dedicated MEMBER through the admin invite flow and signs them in, so a journey that
  * changes account data never touches the shared seeded admin.
  */
-export async function createSignedInMember(browser: Browser): Promise<TestUser> {
+export async function createSignedInMember(
+  browser: Browser,
+  role: "MEMBER" | "PM" | "TEAM_LEAD" = "MEMBER",
+): Promise<TestUser> {
   const adminContext = await browser.newContext();
   const adminPage = await adminContext.newPage();
   await signInAsAdmin(adminPage);
@@ -47,6 +50,9 @@ export async function createSignedInMember(browser: Browser): Promise<TestUser> 
   const fullName = `Profile User ${uniqueId}`;
   await adminPage.getByLabel("Full Name").fill(fullName);
   await adminPage.getByLabel("Email Address").fill(email);
+  if (role !== "MEMBER") {
+    await adminPage.locator("#create-systemRole").selectOption(role);
+  }
   await adminPage.getByRole("button", { name: "Create User", exact: true }).click();
 
   await expect(adminPage.getByText("User account created successfully!")).toBeVisible();
@@ -60,7 +66,7 @@ export async function createSignedInMember(browser: Browser): Promise<TestUser> 
   await page.getByLabel("New Password").fill(password);
   await page.getByLabel("Confirm Password").fill(password);
   await page.getByRole("button", { name: "Set Password and Sign In" }).click();
-  await page.waitForURL("**/");
+  await page.waitForURL(role === "PM" ? "**/admin**" : "**/");
 
   return { email, fullName, password, context, page };
 }
