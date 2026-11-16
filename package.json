@@ -1,0 +1,31 @@
+{
+  "name": "pm-task-management",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @pm/web dev",
+    "build": "pnpm --filter @pm/web build",
+    "preview": "pnpm --filter @pm/web preview",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "spell": "cspell --no-progress --gitignore \"**/*.{ts,tsx,js,json,yml,yaml}\"",
+    "deps:check": "madge --circular --extensions ts,tsx --ts-config packages/config/tsconfig.base.json packages apps/web/app apps/web/worker"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "cspell": "^10.5.1",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "madge": "^8.0.0",
+    "prettier": "^3.10.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}

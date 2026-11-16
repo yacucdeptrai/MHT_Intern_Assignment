@@ -24,7 +24,6 @@ node_modules/
 
 # --- Cloudflare / Wrangler local state --------------------------------------
 .wrangler/
-worker-configuration.d.ts.bak
 
 # --- Build outputs (any package in the monorepo) ----------------------------
 build/
@@ -78,3 +77,7 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# --- Generated types --------------------------------------------------------
+.react-router/
+worker-configuration.d.ts

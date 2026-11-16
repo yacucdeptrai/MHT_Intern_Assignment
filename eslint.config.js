@@ -1,0 +1,90 @@
+import js from "@eslint/js";
+import reactHooks from "eslint-plugin-react-hooks";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+
+/** Modules that @pm/domain must never import: it stays pure TypeScript (docs/02-architecture.md §2.1). */
+const DOMAIN_FORBIDDEN = [
+  "drizzle-orm",
+  "drizzle-orm/*",
+  "react-router",
+  "react-router/*",
+  "@react-router/*",
+  "@cloudflare/*",
+  "cloudflare:*",
+  "@pm/*",
+];
+
+/** Modules that @pm/db must never import: no web app or HTTP layer. */
+const DB_FORBIDDEN = ["@pm/web", "@pm/web/*", "react-router", "react-router/*", "@react-router/*"];
+
+export default tseslint.config(
+  {
+    ignores: [
+      "**/node_modules/**",
+      "**/build/**",
+      "**/dist/**",
+      "**/coverage/**",
+      "**/.react-router/**",
+      "**/.wrangler/**",
+      "**/worker-configuration.d.ts",
+      "docs/**",
+    ],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: { ...globals.browser, ...globals.node },
+    },
+    rules: {
+      // Review lessons #4, #6, #7, #12 (docs/09-testing-strategy.md §6)
+      "no-sequences": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/only-throw-error": "error",
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        { "ts-ignore": true, "ts-nocheck": true, "ts-expect-error": "allow-with-description" },
+      ],
+      "@typescript-eslint/consistent-type-imports": "error",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
+      "no-console": "error",
+    },
+  },
+  {
+    files: ["**/*.{js,cjs,mjs}"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    files: ["apps/web/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    files: ["packages/domain/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: DOMAIN_FORBIDDEN, message: "@pm/domain must stay pure: no infrastructure or workspace imports." },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/db/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ group: DB_FORBIDDEN, message: "@pm/db must not depend on the web app or the HTTP layer." }] },
+      ],
+    },
+  },
+);

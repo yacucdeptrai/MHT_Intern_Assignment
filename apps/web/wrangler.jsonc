@@ -1,0 +1,16 @@
+// Local Worker configuration. Remote environments (dev, staging, production)
+// and the D1, R2, and Durable Object bindings are added in roadmap task M0-T6.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "pm-local",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-11-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  "vars": {
+    "APP_ENV": "local",
+    "APP_BASE_URL": "http://localhost:5173",
+    "EMAIL_PROVIDER": "console",
+  },
+}
