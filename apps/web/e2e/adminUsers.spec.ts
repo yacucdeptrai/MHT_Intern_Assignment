@@ -30,7 +30,7 @@ test.describe("Admin User Management Journey", () => {
 
     // 2. Open User Management
     await page.goto("/admin/users");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("User Management");
+    await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toHaveText("User Management");
 
     // 3. Open Create User Modal
     const createButton = page.getByRole("button", { name: "+ Create User" });

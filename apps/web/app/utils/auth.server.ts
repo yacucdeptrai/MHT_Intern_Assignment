@@ -2,7 +2,6 @@ import { redirect } from "react-router";
 
 import { userRepository } from "@pm/db";
 import type { SessionUser, SystemRole } from "@pm/domain";
-import { ForbiddenError } from "@pm/domain";
 
 import type { RequestContext } from "./requestContext.server";
 import { destroySession, getSession, isRequestSecure } from "./session.server";
@@ -81,7 +80,7 @@ export async function requireUser(ctx: RequestContext, request: Request): Promis
 
 export function requireSystemRole(user: SessionUser, roles: readonly SystemRole[]): SessionUser {
   if (!roles.includes(user.systemRole)) {
-    throw new ForbiddenError("You don't have access to this page");
+    throw new Response("You do not have permission to access this page", { status: 403 });
   }
   return user;
 }

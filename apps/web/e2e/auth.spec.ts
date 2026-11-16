@@ -14,7 +14,7 @@ const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
 test.describe("Authentication journey", () => {
   test("renders login page and form elements", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText("Project & Task Management");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Project & Task Management");
     await expect(page.getByLabel("Email address")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
