@@ -58,7 +58,7 @@ describe("DefaultOAuthClient", () => {
         if (url.includes("oauth2.googleapis.com/token")) {
           return Promise.resolve(new Response(JSON.stringify({ access_token: "mock-google-token" }), { status: 200 }));
         }
-        if (url.includes("openidconnect.googleapis.com/v1/userinfo")) {
+        if (url.includes("/v1/userinfo")) {
           return Promise.resolve(
             new Response(JSON.stringify({ sub: "google-sub-1", email: "guser@example.com", email_verified: true }), {
               status: 200,
@@ -143,7 +143,7 @@ describe("DefaultOAuthClient", () => {
 
       vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
         const url = getUrl(input);
-        if (url.includes("login.microsoftonline.com")) {
+        if (url.includes("/oauth2/v2.0/token")) {
           return Promise.resolve(new Response(JSON.stringify({ access_token: "mock-ms-token" }), { status: 200 }));
         }
         if (url.includes("graph.microsoft.com")) {
@@ -189,7 +189,7 @@ describe("DefaultOAuthClient", () => {
 
       vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
         const url = getUrl(input);
-        if (url.includes("login.microsoftonline.com")) {
+        if (url.includes("/oauth2/v2.0/token")) {
           return Promise.resolve(new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }));
         }
         return Promise.resolve(new Response("Forbidden", { status: 403 }));
@@ -207,7 +207,7 @@ describe("DefaultOAuthClient", () => {
 
       vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
         const url = getUrl(input);
-        if (url.includes("login.microsoftonline.com")) {
+        if (url.includes("/oauth2/v2.0/token")) {
           return Promise.resolve(new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }));
         }
         return Promise.resolve(new Response(JSON.stringify({ displayName: "No ID or mail" }), { status: 200 }));
