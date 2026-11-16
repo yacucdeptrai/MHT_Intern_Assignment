@@ -2,6 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DefaultOAuthClient } from "../../app/services/auth/oauth.server";
 
+function getUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
+}
+
 describe("DefaultOAuthClient", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -43,18 +53,19 @@ describe("DefaultOAuthClient", () => {
         GOOGLE_CLIENT_SECRET: "g-secret",
       });
 
-      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-        const url = String(input);
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        const url = getUrl(input);
         if (url.includes("oauth2.googleapis.com/token")) {
-          return new Response(JSON.stringify({ access_token: "mock-google-token" }), { status: 200 });
+          return Promise.resolve(new Response(JSON.stringify({ access_token: "mock-google-token" }), { status: 200 }));
         }
         if (url.includes("openidconnect.googleapis.com/v1/userinfo")) {
-          return new Response(
-            JSON.stringify({ sub: "google-sub-1", email: "guser@example.com", email_verified: true }),
-            { status: 200 },
+          return Promise.resolve(
+            new Response(JSON.stringify({ sub: "google-sub-1", email: "guser@example.com", email_verified: true }), {
+              status: 200,
+            }),
           );
         }
-        return new Response("Not found", { status: 404 });
+        return Promise.resolve(new Response("Not found", { status: 404 }));
       });
 
       const profile = await client.exchangeCode("GOOGLE", "real-code-123", "http://localhost/callback");
@@ -90,12 +101,12 @@ describe("DefaultOAuthClient", () => {
         APP_ENV: "production",
       });
 
-      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-        const url = String(input);
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        const url = getUrl(input);
         if (url.includes("oauth2.googleapis.com/token")) {
-          return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
+          return Promise.resolve(new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }));
         }
-        return new Response("Unauthorized", { status: 401 });
+        return Promise.resolve(new Response("Unauthorized", { status: 401 }));
       });
 
       await expect(client.exchangeCode("GOOGLE", "code-user-fail", "http://localhost/callback")).rejects.toThrow(
@@ -108,12 +119,12 @@ describe("DefaultOAuthClient", () => {
         APP_ENV: "production",
       });
 
-      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-        const url = String(input);
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        const url = getUrl(input);
         if (url.includes("oauth2.googleapis.com/token")) {
-          return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
+          return Promise.resolve(new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }));
         }
-        return new Response(JSON.stringify({ sub: "sub-only" }), { status: 200 });
+        return Promise.resolve(new Response(JSON.stringify({ sub: "sub-only" }), { status: 200 }));
       });
 
       await expect(client.exchangeCode("GOOGLE", "code-missing-fields", "http://localhost/callback")).rejects.toThrow(
@@ -130,15 +141,17 @@ describe("DefaultOAuthClient", () => {
         MICROSOFT_CLIENT_SECRET: "ms-secret",
       });
 
-      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-        const url = String(input);
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        const url = getUrl(input);
         if (url.includes("login.microsoftonline.com")) {
-          return new Response(JSON.stringify({ access_token: "mock-ms-token" }), { status: 200 });
+          return Promise.resolve(new Response(JSON.stringify({ access_token: "mock-ms-token" }), { status: 200 }));
         }
         if (url.includes("graph.microsoft.com")) {
-          return new Response(JSON.stringify({ id: "ms-id-123", mail: "msuser@example.com" }), { status: 200 });
+          return Promise.resolve(
+            new Response(JSON.stringify({ id: "ms-id-123", mail: "msuser@example.com" }), { status: 200 }),
+          );
         }
-        return new Response("Not found", { status: 404 });
+        return Promise.resolve(new Response("Not found", { status: 404 }));
       });
 
       const profile = await client.exchangeCode("MICROSOFT", "ms-code-123", "http://localhost/callback");
@@ -174,12 +187,12 @@ describe("DefaultOAuthClient", () => {
         APP_ENV: "production",
       });
 
-      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-        const url = String(input);
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        const url = getUrl(input);
         if (url.includes("login.microsoftonline.com")) {
-          return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
+          return Promise.resolve(new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }));
         }
-        return new Response("Forbidden", { status: 403 });
+        return Promise.resolve(new Response("Forbidden", { status: 403 }));
       });
 
       await expect(client.exchangeCode("MICROSOFT", "code-graph-fail", "http://localhost/callback")).rejects.toThrow(
@@ -192,12 +205,12 @@ describe("DefaultOAuthClient", () => {
         APP_ENV: "production",
       });
 
-      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-        const url = String(input);
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        const url = getUrl(input);
         if (url.includes("login.microsoftonline.com")) {
-          return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
+          return Promise.resolve(new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }));
         }
-        return new Response(JSON.stringify({ displayName: "No ID or mail" }), { status: 200 });
+        return Promise.resolve(new Response(JSON.stringify({ displayName: "No ID or mail" }), { status: 200 }));
       });
 
       await expect(
