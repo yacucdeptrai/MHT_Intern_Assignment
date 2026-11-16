@@ -16,7 +16,8 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `pnpm dev --port ${PORT}`,
+    // A fresh runner has an empty local D1, so apply migrations before the dev server starts.
+    command: `pnpm run db:migrate:local && pnpm dev --port ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !isCi,
     timeout: 120_000,
