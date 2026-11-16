@@ -1,5 +1,6 @@
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
+import { authService } from "../app/services/auth/auth.service";
 import { createRequestContext, requestContextKey } from "../app/utils/requestContext.server";
 
 export { UserNotificationHub } from "./notificationHub";
@@ -9,7 +10,9 @@ const requestHandler = createRequestHandler(() => import("virtual:react-router/s
 export default {
   async fetch(request, env, ctx) {
     const context = new RouterContextProvider();
-    context.set(requestContextKey, createRequestContext(env, ctx, request));
+    const reqCtx = createRequestContext(env, ctx, request);
+    context.set(requestContextKey, reqCtx);
+    ctx.waitUntil(authService.seedAdminUser(reqCtx));
     return requestHandler(request, context);
   },
 

@@ -72,7 +72,7 @@ describe("requireUser guard", () => {
       expect(response).toBeInstanceOf(Response);
       const res = response as Response;
       expect(res.status).toBe(302);
-      expect(res.headers.get("Location")).toBe("/login?redirectTo=%2Fprotected%2Fresource");
+      expect(decodeURIComponent(res.headers.get("Location") ?? "")).toBe("/login?redirectTo=/protected/resource");
     }
   });
 
