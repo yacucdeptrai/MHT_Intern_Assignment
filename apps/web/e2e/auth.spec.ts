@@ -1,7 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-const adminEmail = process.env.ADMIN_SEED_EMAIL ?? "admin@anh-mht.workers.dev";
-const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "k9Wp3xL7mQ2rT8vF4b";
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} must be set in apps/web/.dev.vars or the environment`);
+  }
+  return value;
+}
+
+const adminEmail = requireEnv("ADMIN_SEED_EMAIL");
+const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
 
 test.describe("Authentication journey", () => {
   test("renders login page and form elements", async ({ page }) => {

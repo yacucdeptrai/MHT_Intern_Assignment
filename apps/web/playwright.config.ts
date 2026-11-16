@@ -1,4 +1,14 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { defineConfig, devices } from "@playwright/test";
+
+// The dev server reads .dev.vars; load the same file so tests use the seeded admin credentials.
+// Variables already set in the environment take precedence.
+const devVarsPath = fileURLToPath(new URL(".dev.vars", import.meta.url));
+if (existsSync(devVarsPath)) {
+  process.loadEnvFile(devVarsPath);
+}
 
 const PORT = 4173;
 const isCi = Boolean(process.env.CI);
