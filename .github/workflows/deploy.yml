@@ -54,15 +54,19 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+
+      # @cloudflare/vite-plugin selects the Wrangler environment at build time.
+      - name: Build for the target environment
+        run: CLOUDFLARE_ENV="$TARGET_ENV" pnpm build
 
       - name: Apply D1 migrations
         working-directory: apps/web
-        run: pnpm exec wrangler d1 migrations apply DB --env "$TARGET_ENV" --remote
+        run: pnpm exec wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env "$TARGET_ENV"
 
       - name: Deploy Worker
         working-directory: apps/web
-        run: pnpm exec wrangler deploy --env "$TARGET_ENV"
+        # Deploys build/server/wrangler.json, generated for TARGET_ENV by the build step.
+        run: pnpm exec wrangler deploy
 
       - name: Smoke check
         env:
