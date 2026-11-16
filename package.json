@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "pnpm --filter @pm/web test:e2e"
+    "test:e2e": "pnpm --filter @pm/web test:e2e",
+    "db:generate": "pnpm --filter @pm/db db:generate"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.8.2",
