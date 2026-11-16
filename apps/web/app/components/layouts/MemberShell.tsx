@@ -49,9 +49,21 @@ export function MemberShell({ user, children }: MemberShellProps) {
         {/* User Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 space-y-3">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white uppercase shrink-0">
-              {user.fullName.slice(0, 2)}
-            </div>
+            {user.avatarKey ? (
+              <img
+                src={`/api/avatars/${user.id}`}
+                alt={user.fullName}
+                className="h-9 w-9 rounded-full object-cover shrink-0 border border-slate-400"
+                data-testid="shell-avatar-img"
+              />
+            ) : (
+              <div
+                className="h-9 w-9 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white uppercase shrink-0"
+                data-testid="shell-avatar-fallback"
+              >
+                {user.fullName.slice(0, 2)}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <NavLink to="/profile" className="block text-sm font-medium text-white hover:underline truncate">
                 {user.fullName}
