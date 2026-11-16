@@ -41,6 +41,7 @@ export async function getOptionalUser(ctx: RequestContext, request: Request): Pr
     fullName: user.fullName,
     systemRole: user.systemRole,
     status: user.status,
+    avatarKey: user.avatarKey,
   };
   ctx.user = sessionUser;
   return sessionUser;
@@ -73,6 +74,7 @@ export async function requireUser(ctx: RequestContext, request: Request): Promis
     fullName: user.fullName,
     systemRole: user.systemRole,
     status: user.status,
+    avatarKey: user.avatarKey,
   };
   ctx.user = sessionUser;
   return sessionUser;
