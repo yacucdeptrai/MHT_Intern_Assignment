@@ -1,26 +1,42 @@
 # Local Worker variables for `pnpm dev` / `pnpm preview` (Wrangler reads apps/web/.dev.vars).
-# Copy this file to apps/web/.dev.vars and fill the values. Never commit .dev.vars.
-# Every key here is documented in docs/08-dev-environment-and-deployment.md §4.2
-# and in docs/environment-setup.md (how to obtain each value).
+#
+# 1. Copy this file:   Copy-Item apps/web/.dev.vars.example apps/web/.dev.vars
+# 2. Fill EVERY key below. All keys are required.
+# 3. Each block names the section of docs/environment-setup.md that explains how to obtain the value.
+#
+# Never commit apps/web/.dev.vars. For deployed environments, the same secret keys are set
+# with `wrangler secret put <KEY> --env <env>` (docs/environment-setup.md §5).
 
-# --- Required ---------------------------------------------------------------
+# --- App settings (docs/environment-setup.md §1) ----------------------------
+# Leave these three as they are for local development.
 APP_ENV=local
 APP_BASE_URL=http://localhost:5173
 EMAIL_PROVIDER=console
 
+# --- Session (docs/environment-setup.md §1) ---------------------------------
 # At least 32 random bytes, base64. Generate with:
 #   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 SESSION_SECRET=replace-with-32-random-bytes-base64
 
-# First Admin account created by `pnpm db:seed:local`
-ADMIN_SEED_EMAIL=admin@example.test
+# --- First Admin account (docs/environment-setup.md §1) ---------------------
+# Created by `pnpm db:seed:local`. Password: at least 10 characters.
+ADMIN_SEED_EMAIL=replace-with-your-admin-email
 ADMIN_SEED_PASSWORD=replace-with-a-strong-password
 
-# --- Optional: SSO (buttons are hidden when empty) -------------------------
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-MICROSOFT_CLIENT_ID=
-MICROSOFT_CLIENT_SECRET=
+# --- Google SSO (docs/environment-setup.md §6) ------------------------------
+# Google Cloud Console -> APIs & Services -> Credentials -> OAuth client ID (Web application).
+# Redirect URI for local: http://localhost:5173/auth/google/callback
+GOOGLE_CLIENT_ID=replace-with-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
 
-# --- Optional: Slack (jobs end SKIPPED when empty) --------------------------
-SLACK_BOT_TOKEN=
+# --- Microsoft SSO (docs/environment-setup.md §7) ---------------------------
+# Microsoft Entra -> App registrations -> your app.
+# Client ID = "Application (client) ID"; secret = the client secret's VALUE (not its ID).
+# Redirect URI for local: http://localhost:5173/auth/microsoft/callback
+MICROSOFT_CLIENT_ID=replace-with-microsoft-application-client-id
+MICROSOFT_CLIENT_SECRET=replace-with-microsoft-client-secret-value
+
+# --- Slack (docs/environment-setup.md §8) -----------------------------------
+# api.slack.com/apps -> your app -> OAuth & Permissions -> Bot User OAuth Token (scope: chat:write).
+# The channel ID is entered per project in the app's Settings page, not here.
+SLACK_BOT_TOKEN=replace-with-xoxb-bot-token

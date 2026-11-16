@@ -1,0 +1,30 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/build/**",
+    "**/.react-router/**",
+    "**/.wrangler/**",
+    "**/worker-configuration.d.ts",
+    "pnpm-lock.yaml",
+    "docs/**"
+  ],
+  "words": [
+    "actionlint",
+    "cloudflare",
+    "drizzle",
+    "esbuild",
+    "gitleaks",
+    "isbot",
+    "madge",
+    "Minh",
+    "nodejs",
+    "pnpm",
+    "typecheck",
+    "typegen",
+    "workerd",
+    "wrangler",
+    "xoxb"
+  ]
+}
