@@ -8,6 +8,13 @@
       "when": 1794824230578,
       "tag": "0000_batch_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1794824230579,
+      "tag": "0001_users",
+      "breakpoints": true
     }
   ]
 }

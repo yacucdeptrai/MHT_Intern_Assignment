@@ -70,6 +70,7 @@ jobs:
           cp apps/web/.dev.vars.example apps/web/.dev.vars
           secret=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
           sed -i "s#^SESSION_SECRET=.*#SESSION_SECRET=${secret}#" apps/web/.dev.vars
+          sed -i "s#^ADMIN_SEED_EMAIL=.*#ADMIN_SEED_EMAIL=ci-admin@example.com#" apps/web/.dev.vars
           sed -i "s#^ADMIN_SEED_PASSWORD=.*#ADMIN_SEED_PASSWORD=Ci-${{ github.run_id }}-pass#" apps/web/.dev.vars
 
       - run: pnpm format:check

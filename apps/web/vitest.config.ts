@@ -1,17 +1,23 @@
-import { cloudflareTest } from "@cloudflare/vitest-plugin";
+import path from "node:path";
+
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineProject } from "vitest/config";
 
 export default defineProject({
   plugins: [
-    cloudflareTest({
-      // Bindings and vars come from wrangler.jsonc; the app's own entry needs the React Router build,
-      // so service and action tests run against a minimal test entry instead.
+    cloudflareTest(async () => ({
       wrangler: { configPath: "./wrangler.jsonc" },
       main: "./test/testWorker.ts",
-    }),
+      miniflare: {
+        bindings: {
+          TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "../../packages/db/migrations")),
+        },
+      },
+    })),
   ],
   test: {
     name: "web",
     include: ["test/**/*.test.ts"],
+    setupFiles: ["./test/setupD1.ts"],
   },
 });
