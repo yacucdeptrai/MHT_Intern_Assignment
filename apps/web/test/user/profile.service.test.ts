@@ -294,9 +294,39 @@ describe("profileService", () => {
       ).rejects.toThrow(ValidationError);
     });
 
+    it("rejects a file declared as PNG whose bytes are not an image", async () => {
+      const { ctx, userId, storage } = await createProfileTestContext();
+      const disguised = new TextEncoder().encode("<html><script>alert(1)</script></html>");
+
+      await expect(
+        profileService.updateAvatar(ctx, userId, {
+          bytes: disguised,
+          contentType: "image/png",
+          size: disguised.length,
+        }),
+      ).rejects.toMatchObject({
+        name: "ValidationError",
+        fieldErrors: { file: ["Avatar must be a PNG, JPEG, or WebP image"] },
+      });
+      expect(storage.files.has(`avatars/${userId}`)).toBe(false);
+    });
+
+    it("stores the content type detected from the bytes, not the declared one", async () => {
+      const { ctx, userId, storage } = await createProfileTestContext();
+      const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+
+      await profileService.updateAvatar(ctx, userId, {
+        bytes: jpegBytes,
+        contentType: "image/png",
+        size: jpegBytes.length,
+      });
+
+      expect(storage.files.get(`avatars/${userId}`)?.contentType).toBe("image/jpeg");
+    });
+
     it("cleans up R2 object if DB batch fails", async () => {
       const { ctx, userId, storage } = await createProfileTestContext();
-      const fakeImageBytes = new Uint8Array([137, 80, 78, 71]);
+      const fakeImageBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
       // Spy on db.batch to simulate DB failure
       vi.spyOn(ctx.db, "batch").mockRejectedValueOnce(new Error("D1 connection lost"));

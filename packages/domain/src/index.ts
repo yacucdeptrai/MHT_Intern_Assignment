@@ -2,6 +2,7 @@ export * from "./constants";
 export * from "./enums";
 export type * from "./ports";
 export * from "./errors";
+export * from "./files";
 export * from "./schemas/auth";
 export * from "./schemas/user";
 export * from "./schemas/invite";

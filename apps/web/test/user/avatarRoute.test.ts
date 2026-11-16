@@ -126,6 +126,8 @@ function makeArgs(request: Request, ctx: RequestContext, params: Record<string, 
   };
 }
 
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+
 describe("api.avatars.$userId route", () => {
   describe("loader (GET)", () => {
     it("redirects unauthenticated caller to login", async () => {
@@ -163,6 +165,7 @@ describe("api.avatars.$userId route", () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toBe("image/png");
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     });
 
     it("returns default SVG fallback when user has no avatarKey", async () => {
@@ -238,10 +241,29 @@ describe("api.avatars.$userId route", () => {
       expect(json.errors?.file).toBeDefined();
     });
 
+    it("returns 400 when a file declared as PNG is not an image", async () => {
+      const { ctx, userId, cookieHeader, storage } = await createAvatarTestContext();
+      const formData = new FormData();
+      formData.append("file", new File(["<html><script>alert(1)</script>"], "avatar.png", { type: "image/png" }));
+
+      const request = new Request(`http://localhost:5173/api/avatars/${userId}`, {
+        method: "POST",
+        headers: { Cookie: cookieHeader },
+        body: formData,
+      });
+
+      const response = await avatarAction(
+        makeArgs(request, ctx, { userId }) as unknown as Parameters<typeof avatarAction>[0],
+      );
+
+      expect(response.status).toBe(400);
+      expect(storage.files.has(`avatars/${userId}`)).toBe(false);
+    });
+
     it("successfully uploads valid PNG avatar and stores in R2", async () => {
       const { ctx, userId, cookieHeader, storage } = await createAvatarTestContext();
       const formData = new FormData();
-      formData.append("file", new File(["png-content"], "avatar.png", { type: "image/png" }));
+      formData.append("file", new File([PNG_BYTES], "avatar.png", { type: "image/png" }));
 
       const request = new Request(`http://localhost:5173/api/avatars/${userId}`, {
         method: "POST",

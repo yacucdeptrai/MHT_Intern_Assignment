@@ -2,12 +2,14 @@ import { auditLogRepository, conflictGuardStmt, userRepository } from "@pm/db";
 import type {
   AllowedAvatarMimeType,
   ChangePasswordInput,
+  StoredFile,
   MembershipDto,
   ProfileDto,
   ProfileUpdateInput,
 } from "@pm/domain";
 import {
   ALLOWED_AVATAR_MIME_TYPES,
+  detectImageMimeType,
   ForbiddenError,
   MAX_AVATAR_BYTES,
   NotFoundError,
@@ -25,7 +27,7 @@ export interface ProfileDetailsResult {
 }
 
 export interface AvatarUploadInput {
-  bytes: Uint8Array | ArrayBuffer | ReadableStream<Uint8Array>;
+  bytes: Uint8Array;
   contentType: string;
   size: number;
 }
@@ -181,6 +183,22 @@ export const profileService = {
     ]);
   },
 
+  /**
+   * Returns the stored avatar, or null when the user has none.
+   * Throws NotFoundError when the user does not exist or is deleted.
+   */
+  async getAvatar(ctx: RequestContext, userId: string): Promise<StoredFile | null> {
+    const user = await userRepository.findById(ctx.db, userId);
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+    if (!user.avatarKey) {
+      return null;
+    }
+    const storage = ctx.storage ?? new R2FileStorage(ctx.env.FILES);
+    return storage.get(user.avatarKey);
+  },
+
   async updateAvatar(ctx: RequestContext, userId: string, file: AvatarUploadInput): Promise<{ avatarKey: string }> {
     if (!ctx.user || ctx.user.id !== userId) {
       throw new ForbiddenError("You can only update your own avatar");
@@ -200,7 +218,9 @@ export const profileService = {
       });
     }
 
-    if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.contentType as AllowedAvatarMimeType)) {
+    // The declared type comes from the client, so the stored type is taken from the file's bytes.
+    const detectedType = detectImageMimeType(file.bytes);
+    if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.contentType as AllowedAvatarMimeType) || detectedType === null) {
       throw new ValidationError("Avatar must be a PNG, JPEG, or WebP image", {
         file: ["Avatar must be a PNG, JPEG, or WebP image"],
       });
@@ -210,7 +230,7 @@ export const profileService = {
     const storage = ctx.storage ?? new R2FileStorage(ctx.env.FILES);
 
     // Put into R2 storage before the DB batch (A29 pattern)
-    await storage.put(key, file.bytes, { contentType: file.contentType });
+    await storage.put(key, file.bytes, { contentType: detectedType });
 
     const now = ctx.clock.now();
     try {
