@@ -1,6 +1,7 @@
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
 import { authService } from "../app/services/auth/auth.service";
+import { sweepOutbox } from "../app/services/outbox.service";
 import { createRequestContext, requestContextKey } from "../app/utils/requestContext.server";
 
 export { UserNotificationHub } from "./notificationHub";
@@ -16,8 +17,8 @@ export default {
     return requestHandler(request, context);
   },
 
-  // The outbox sweep and deadline scan are wired in roadmap task M7-T1 (docs/07 §2).
-  async scheduled() {
-    // Intentionally empty until M7-T1.
+  scheduled(controller, env, ctx) {
+    const now = new Date(controller.scheduledTime);
+    ctx.waitUntil(sweepOutbox(env, now));
   },
 } satisfies ExportedHandler<Env>;

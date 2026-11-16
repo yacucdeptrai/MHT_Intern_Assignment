@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import { invites, type Invite, type NewInvite } from "../schema/invites";
@@ -6,6 +6,13 @@ import { invites, type Invite, type NewInvite } from "../schema/invites";
 export const inviteRepository = {
   insertStmt(db: AppDatabase, invite: NewInvite) {
     return db.insert(invites).values(invite);
+  },
+
+  acceptStmt(db: AppDatabase, id: string, now: Date) {
+    return db
+      .update(invites)
+      .set({ acceptedAt: now })
+      .where(and(eq(invites.id, id), isNull(invites.acceptedAt), gt(invites.expiresAt, now)));
   },
 
   async insert(db: AppDatabase, invite: NewInvite): Promise<Invite> {
