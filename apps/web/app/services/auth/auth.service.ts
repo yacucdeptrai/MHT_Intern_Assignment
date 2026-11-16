@@ -1,5 +1,5 @@
-import { userRepository } from "@pm/db";
-import type { SessionUser } from "@pm/domain";
+import { oauthAccountRepository, userRepository } from "@pm/db";
+import type { OAuthProfile, SessionUser } from "@pm/domain";
 import { ValidationError } from "@pm/domain";
 
 import type { RequestContext } from "../../utils/requestContext.server";
@@ -44,6 +44,50 @@ export const authService = {
       fullName: user.fullName,
       systemRole: user.systemRole,
       status: user.status,
+      avatarKey: user.avatarKey,
+    };
+  },
+
+  async loginWithOAuth(ctx: RequestContext, profile: OAuthProfile): Promise<SessionUser> {
+    const normalizedEmail = profile.email.trim().toLowerCase();
+    const user = await userRepository.findByEmail(ctx.db, normalizedEmail, { includeDeleted: true });
+
+    if (!user || user.deletedAt !== null) {
+      throw new ValidationError("No account exists for this email. Ask an administrator for an invite.");
+    }
+
+    if (user.status === "LOCKED") {
+      throw new ValidationError("This account is locked. Contact an administrator.");
+    }
+
+    const existingAccount = await oauthAccountRepository.findByProviderAccount(
+      ctx.db,
+      profile.provider,
+      profile.providerAccountId,
+    );
+
+    if (!existingAccount) {
+      await oauthAccountRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        provider: profile.provider,
+        providerAccountId: profile.providerAccountId,
+        createdAt: ctx.clock.now(),
+      });
+      ctx.logger.info("Linked OAuth provider account", {
+        userId: user.id,
+        provider: profile.provider,
+        providerAccountId: profile.providerAccountId,
+      });
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      systemRole: user.systemRole,
+      status: user.status,
+      avatarKey: user.avatarKey,
     };
   },
 
