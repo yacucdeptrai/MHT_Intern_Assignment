@@ -21,6 +21,9 @@ export const PASSWORD_MAX_LENGTH = 128;
 export const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60;
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
+export const ALLOWED_AVATAR_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export type AllowedAvatarMimeType = (typeof ALLOWED_AVATAR_MIME_TYPES)[number];
 
 export const OUTBOX_MAX_ATTEMPTS = 5;
 export const OUTBOX_SWEEP_LIMIT = 20;

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { SetSystemRoleSchema, UserCreateSchema, UserFiltersSchema, UserIdSchema, UserUpdateSchema } from "../src";
+import {
+  ChangePasswordSchema,
+  ProfileUpdateSchema,
+  SetSystemRoleSchema,
+  UserCreateSchema,
+  UserFiltersSchema,
+  UserIdSchema,
+  UserUpdateSchema,
+} from "../src";
 
 describe("User management schemas", () => {
   describe("UserCreateSchema", () => {
@@ -101,6 +109,67 @@ describe("User management schemas", () => {
       expect(result.data.status).toBe("ACTIVE");
       expect(result.data.systemRole).toBe("ADMIN");
       expect(result.data.q).toBe("jane");
+    });
+  });
+
+  describe("ProfileUpdateSchema", () => {
+    it("parses valid profile update data", () => {
+      const result = ProfileUpdateSchema.safeParse({
+        fullName: "New Name",
+        phone: "+84987654321",
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.fullName).toBe("New Name");
+      expect(result.data.phone).toBe("+84987654321");
+    });
+
+    it("normalizes empty phone to null", () => {
+      const result = ProfileUpdateSchema.safeParse({
+        fullName: "New Name",
+        phone: "   ",
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.phone).toBeNull();
+    });
+
+    it("rejects empty fullName", () => {
+      const result = ProfileUpdateSchema.safeParse({
+        fullName: "",
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("ChangePasswordSchema", () => {
+    it("accepts valid new password matching confirmation", () => {
+      const result = ChangePasswordSchema.safeParse({
+        currentPassword: "OldPassword123!",
+        newPassword: "NewSecurePassword456!",
+        confirmPassword: "NewSecurePassword456!",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects password shorter than 10 characters", () => {
+      const result = ChangePasswordSchema.safeParse({
+        newPassword: "short",
+        confirmPassword: "short",
+      });
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error.issues.some((i) => i.path.includes("newPassword"))).toBe(true);
+    });
+
+    it("rejects mismatched confirm password", () => {
+      const result = ChangePasswordSchema.safeParse({
+        newPassword: "NewSecurePassword456!",
+        confirmPassword: "DifferentPassword789!",
+      });
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error.issues.some((i) => i.path.includes("confirmPassword"))).toBe(true);
     });
   });
 });
