@@ -6,16 +6,19 @@
     "app/**/.server/**/*",
     "app/**/.client/**/*",
     "worker/**/*",
-    "worker-configuration.d.ts"
+    "worker-configuration.d.ts",
+    "test/**/*"
   ],
   "compilerOptions": {
     "composite": true,
     "exactOptionalPropertyTypes": false,
     "noEmit": true,
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "@cloudflare/vitest-plugin/types"],
     "jsx": "react-jsx",
     "rootDirs": [".", "./.react-router/types"],
-    "paths": { "~/*": ["./app/*"] }
+    "paths": {
+      "~/*": ["./app/*"]
+    }
   }
 }

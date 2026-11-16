@@ -8,7 +8,8 @@
     "build": "react-router build",
     "preview": "react-router build && vite preview",
     "typecheck": "wrangler types && react-router typegen && tsc -b",
-    "postinstall": "wrangler types"
+    "postinstall": "wrangler types",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@pm/domain": "workspace:*",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.69.1",
+    "@playwright/test": "^1.65.1",
     "@react-router/dev": "^8.5.1",
     "@react-router/fs-routes": "^8.5.1",
     "@tailwindcss/vite": "^4.3.5",

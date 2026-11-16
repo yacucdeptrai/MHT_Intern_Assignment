@@ -15,10 +15,17 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
     "spell": "cspell --no-progress --gitignore \"**/*.{ts,tsx,js,json,yml,yaml}\"",
-    "deps:check": "madge --circular --extensions ts,tsx --ts-config packages/config/tsconfig.base.json packages apps/web/app apps/web/worker"
+    "deps:check": "madge --circular --extensions ts,tsx --ts-config packages/config/tsconfig.base.json packages apps/web/app apps/web/worker",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "pnpm --filter @pm/web test:e2e"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.8.2",
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "@vitest/coverage-istanbul": "^5.1.0",
     "cspell": "^10.5.1",
     "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -26,6 +33,7 @@
     "madge": "^8.0.0",
     "prettier": "^3.10.1",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.72.2"
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^5.1.0"
   }
 }
