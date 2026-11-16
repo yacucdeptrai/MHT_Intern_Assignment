@@ -10,6 +10,14 @@ export const APP_CURRENCY = "VND";
 export const TOKEN_INVITE_EXPIRY_MS = 7 * DAY_MS;
 export const DUE_SOON_WINDOW_MS = DAY_MS;
 export const REVIEW_STALE_MS = 2 * DAY_MS;
+/** Workers (workerd) rejects PBKDF2 above 100,000 iterations on every plan. */
+export const PBKDF2_MAX_ITERATIONS = 100_000;
+/** Chosen in M0-T5; the CPU cost on a deployed Worker is tracked as risk R1. */
+export const PBKDF2_DEFAULT_ITERATIONS = PBKDF2_MAX_ITERATIONS;
+export const PBKDF2_MIN_ITERATIONS = 10_000;
+export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_MAX_LENGTH = 128;
+
 export const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60;
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
