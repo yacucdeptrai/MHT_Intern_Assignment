@@ -4,6 +4,7 @@ export type * from "./ports";
 export * from "./errors";
 export * from "./schemas/auth";
 export * from "./schemas/user";
+export * from "./schemas/invite";
 export * from "./policies/types";
 export * from "./policies/user";
 export type * from "./types/common";
