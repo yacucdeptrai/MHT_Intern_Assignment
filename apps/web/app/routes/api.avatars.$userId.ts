@@ -1,11 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import { userRepository } from "@pm/db";
-import type { AllowedAvatarMimeType } from "@pm/domain";
-import { ALLOWED_AVATAR_MIME_TYPES, MAX_AVATAR_BYTES, ValidationError } from "@pm/domain";
+import type { AllowedAvatarMimeType, StoredFile } from "@pm/domain";
+import { ALLOWED_AVATAR_MIME_TYPES, MAX_AVATAR_BYTES, NotFoundError, ValidationError } from "@pm/domain";
 
 import { profileService } from "../services/user/profile.service";
-import { R2FileStorage } from "../services/storage/r2FileStorage.server";
 import { requireUser } from "../utils/auth.server";
 import { requestContextKey } from "../utils/requestContext.server";
 
@@ -20,23 +18,25 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     return new Response("User ID is required", { status: 400 });
   }
 
-  const user = await userRepository.findById(ctx.db, userId);
-  if (!user) {
-    return new Response("User not found", { status: 404 });
+  let stored: StoredFile | null;
+  try {
+    stored = await profileService.getAvatar(ctx, userId);
+  } catch (err: unknown) {
+    if (err instanceof NotFoundError) {
+      return new Response("User not found", { status: 404 });
+    }
+    throw err;
   }
 
-  if (user.avatarKey) {
-    const storage = ctx.storage ?? new R2FileStorage(ctx.env.FILES);
-    const stored = await storage.get(user.avatarKey);
-    if (stored) {
-      return new Response(stored.body, {
-        status: 200,
-        headers: {
-          "Content-Type": stored.contentType,
-          "Cache-Control": "private, max-age=3600",
-        },
-      });
-    }
+  if (stored) {
+    return new Response(stored.body, {
+      status: 200,
+      headers: {
+        "Content-Type": stored.contentType,
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   }
 
   return new Response(DEFAULT_AVATAR_SVG, {
@@ -44,6 +44,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     headers: {
       "Content-Type": "image/svg+xml",
       "Cache-Control": "public, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
@@ -77,7 +78,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 
   try {
     const result = await profileService.updateAvatar(ctx, sessionUser.id, {
-      bytes: file.stream(),
+      bytes: new Uint8Array(await file.arrayBuffer()),
       contentType: file.type,
       size: file.size,
     });

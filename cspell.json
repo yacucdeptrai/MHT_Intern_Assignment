@@ -26,6 +26,7 @@
     "typegen",
     "workerd",
     "wrangler",
-    "xoxb"
+    "xoxb",
+    "nosniff"
   ]
 }
