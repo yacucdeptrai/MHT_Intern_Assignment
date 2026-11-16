@@ -1,26 +1,25 @@
 import { redirect } from "react-router";
 
-import { LoginSchema } from "@pm/domain";
+import { LoginSchema, ValidationError } from "@pm/domain";
 
 import { authService } from "../services/auth/auth.service";
 import { getSafeRedirect } from "../utils/auth.server";
 import { handleActionError } from "../utils/errors.server";
 import type { RequestContext } from "../utils/requestContext.server";
-import { commitSession, getSession } from "../utils/session.server";
+import { commitSession, getSession, isRequestSecure } from "../utils/session.server";
 
 export async function loginAction(ctx: RequestContext, request: Request): Promise<Response> {
+  let rawEmail = "";
   try {
     const formData = await request.formData();
     const intent = formData.get("intent");
 
     if (intent !== "login") {
-      return Response.json(
-        { success: false, errors: { form: ["Invalid action intent"] } },
-        { status: 400 },
-      );
+      return Response.json({ success: false, errors: { form: ["Invalid action intent"] } }, { status: 400 });
     }
 
     const rawData = Object.fromEntries(formData);
+    rawEmail = typeof rawData.email === "string" ? rawData.email : "";
     const parsed = LoginSchema.safeParse(rawData);
 
     if (!parsed.success) {
@@ -32,7 +31,7 @@ export async function loginAction(ctx: RequestContext, request: Request): Promis
           fieldErrors[field].push(issue.message);
         }
       }
-      return Response.json({ success: false, errors: fieldErrors }, { status: 400 });
+      return Response.json({ success: false, errors: fieldErrors, email: rawEmail }, { status: 400 });
     }
 
     const user = await authService.loginWithPassword(ctx, {
@@ -42,7 +41,9 @@ export async function loginAction(ctx: RequestContext, request: Request): Promis
 
     const session = await getSession(request, ctx.env.SESSION_SECRET);
     session.set("userId", user.id);
-    const cookie = await commitSession(session, ctx.env.SESSION_SECRET);
+
+    const isSecure = isRequestSecure(request) || ctx.env.APP_ENV === "production" || ctx.env.APP_ENV === "staging";
+    const cookie = await commitSession(session, { secret: ctx.env.SESSION_SECRET, secure: isSecure });
 
     const defaultHome = user.systemRole === "ADMIN" || user.systemRole === "PM" ? "/admin" : "/";
     const destination = getSafeRedirect(parsed.data.redirectTo, defaultHome);
@@ -53,6 +54,17 @@ export async function loginAction(ctx: RequestContext, request: Request): Promis
       },
     });
   } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return Response.json(
+        {
+          success: false,
+          errors: error.fieldErrors ?? { form: [error.message] },
+          message: error.message,
+          email: rawEmail,
+        },
+        { status: 400 },
+      );
+    }
     return handleActionError(error, ctx);
   }
 }

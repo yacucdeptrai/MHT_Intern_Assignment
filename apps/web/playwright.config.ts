@@ -5,7 +5,8 @@ const isCi = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: isCi,
   retries: isCi ? 1 : 0,
   reporter: isCi ? [["github"], ["html", { open: "never" }]] : [["list"]],
@@ -15,7 +16,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `pnpm preview --port ${PORT} --strictPort`,
+    command: `pnpm dev --port ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !isCi,
     timeout: 120_000,

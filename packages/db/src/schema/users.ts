@@ -24,18 +24,9 @@ export const users = sqliteTable(
   (table) => [
     uniqueIndex("uq_users_email").on(table.email),
     index("idx_users_status_deleted").on(table.deletedAt, table.status),
-    check(
-      "users_password_parity",
-      sql`(${table.passwordHash} IS NULL) = (${table.passwordIterations} IS NULL)`,
-    ),
-    check(
-      "users_system_role_check",
-      sql`${table.systemRole} IN ('MEMBER', 'TEAM_LEAD', 'PM', 'ADMIN')`,
-    ),
-    check(
-      "users_status_check",
-      sql`${table.status} IN ('ACTIVE', 'LOCKED')`,
-    ),
+    check("users_password_parity", sql`(${table.passwordHash} IS NULL) = (${table.passwordIterations} IS NULL)`),
+    check("users_system_role_check", sql`${table.systemRole} IN ('MEMBER', 'TEAM_LEAD', 'PM', 'ADMIN')`),
+    check("users_status_check", sql`${table.status} IN ('ACTIVE', 'LOCKED')`),
   ],
 );
 

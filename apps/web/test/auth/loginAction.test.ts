@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createDatabase, userRepository } from "@pm/db";
 import { loginAction } from "../../app/actions/loginAction";
 import { hashPassword } from "../../app/services/auth/password.server";
+import { requireUser } from "../../app/utils/auth.server";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 
 function createMockContext(): RequestContext {
@@ -90,9 +91,10 @@ describe("loginAction", () => {
 
     const response = await loginAction(ctx, request);
     expect(response.status).toBe(400);
-    const body = await response.json<{ success: boolean; errors: Record<string, string[]> }>();
+    const body = await response.json<{ success: boolean; errors: Record<string, string[]>; email?: string }>();
     expect(body.success).toBe(false);
     expect(body.errors.form).toContain("Email or password is incorrect");
+    expect(body.email).toBe("user@example.com");
   });
 
   it("returns 400 on locked user", async () => {
@@ -226,5 +228,49 @@ describe("loginAction", () => {
     const response = await loginAction(ctx, request);
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/");
+  });
+
+  it("authenticates with custom SESSION_SECRET and succeeds in requireUser", async () => {
+    const customSecret = "custom-production-secret-at-least-32-chars-long";
+    const ctx = createMockContext();
+    ctx.env = { ...env, SESSION_SECRET: customSecret };
+    const now = new Date();
+    const { hash, iterations } = await hashPassword("SecretPassword123!");
+
+    const user = await userRepository.insert(ctx.db, {
+      id: crypto.randomUUID(),
+      email: "secret-check@example.com",
+      fullName: "Secret User",
+      systemRole: "MEMBER",
+      status: "ACTIVE",
+      passwordHash: hash,
+      passwordIterations: iterations,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const formData = new FormData();
+    formData.append("intent", "login");
+    formData.append("email", "secret-check@example.com");
+    formData.append("password", "SecretPassword123!");
+
+    const loginReq = new Request("http://localhost/login", {
+      method: "POST",
+      body: formData,
+    });
+
+    const loginRes = await loginAction(ctx, loginReq);
+    expect(loginRes.status).toBe(302);
+    const cookieHeader = loginRes.headers.get("Set-Cookie");
+    expect(cookieHeader).toBeTruthy();
+
+    const protectedReq = new Request("http://localhost/protected", {
+      headers: {
+        Cookie: cookieHeader ?? "",
+      },
+    });
+
+    const sessionUser = await requireUser(ctx, protectedReq);
+    expect(sessionUser.id).toBe(user.id);
   });
 });

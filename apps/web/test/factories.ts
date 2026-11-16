@@ -3,10 +3,7 @@ import { userRepository } from "@pm/db";
 
 import { hashPassword } from "../app/services/auth/password.server";
 
-export async function createUser(
-  db: AppDatabase,
-  overrides?: Partial<NewUser> & { password?: string },
-): Promise<User> {
+export async function createUser(db: AppDatabase, overrides?: Partial<NewUser> & { password?: string }): Promise<User> {
   const now = new Date();
   const id = overrides?.id ?? crypto.randomUUID();
   const password = overrides?.password ?? "Password123!";
@@ -19,8 +16,7 @@ export async function createUser(
     systemRole: overrides?.systemRole ?? "MEMBER",
     status: overrides?.status ?? "ACTIVE",
     passwordHash: overrides?.passwordHash !== undefined ? overrides.passwordHash : hash,
-    passwordIterations:
-      overrides?.passwordIterations !== undefined ? overrides.passwordIterations : iterations,
+    passwordIterations: overrides?.passwordIterations !== undefined ? overrides.passwordIterations : iterations,
     createdAt: overrides?.createdAt ?? now,
     updatedAt: overrides?.updatedAt ?? now,
     deletedAt: overrides?.deletedAt ?? null,

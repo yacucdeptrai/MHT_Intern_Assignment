@@ -38,13 +38,7 @@ export const authService = {
 
     if (needsRehash({ hash: user.passwordHash, iterations: user.passwordIterations })) {
       const rehashed = await hashPassword(credentials.password);
-      await userRepository.updatePassword(
-        ctx.db,
-        user.id,
-        rehashed.hash,
-        rehashed.iterations,
-        ctx.clock.now(),
-      );
+      await userRepository.updatePassword(ctx.db, user.id, rehashed.hash, rehashed.iterations, ctx.clock.now());
     }
 
     return {

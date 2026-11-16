@@ -58,6 +58,26 @@ describe("session cookie management", () => {
     const destroyHeader = await destroySession(loaded);
     expect(destroyHeader).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
   });
+
+  it("does not set Secure cookie flag on HTTP even with custom secret", async () => {
+    const session = await getSession();
+    session.set("userId", "http-user");
+    const cookieHeader = await commitSession(session, {
+      secret: "custom-production-secret-at-least-32-chars-long",
+      secure: false,
+    });
+    expect(cookieHeader).not.toContain("Secure");
+  });
+
+  it("sets Secure cookie flag when secure is explicitly true", async () => {
+    const session = await getSession();
+    session.set("userId", "https-user");
+    const cookieHeader = await commitSession(session, {
+      secret: "custom-production-secret-at-least-32-chars-long",
+      secure: true,
+    });
+    expect(cookieHeader).toContain("Secure");
+  });
 });
 
 describe("requireUser guard", () => {
@@ -91,9 +111,9 @@ describe("requireUser guard", () => {
       updatedAt: now,
     });
 
-    const session = await getSession();
+    const session = await getSession(null, ctx.env.SESSION_SECRET);
     session.set("userId", id);
-    const cookie = await commitSession(session);
+    const cookie = await commitSession(session, ctx.env.SESSION_SECRET);
 
     const request = new Request("http://localhost/protected", {
       headers: { Cookie: cookie },
@@ -121,9 +141,9 @@ describe("requireUser guard", () => {
       updatedAt: now,
     });
 
-    const session = await getSession();
+    const session = await getSession(null, ctx.env.SESSION_SECRET);
     session.set("userId", id);
-    const cookie = await commitSession(session);
+    const cookie = await commitSession(session, ctx.env.SESSION_SECRET);
 
     const request = new Request("http://localhost/protected", {
       headers: { Cookie: cookie },

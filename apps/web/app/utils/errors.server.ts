@@ -9,6 +9,10 @@ export interface ActionErrorResponse {
 }
 
 export function handleActionError(error: unknown, ctx?: RequestContext): Response {
+  if (error instanceof Response) {
+    return error;
+  }
+
   if (error instanceof ValidationError) {
     const body: ActionErrorResponse = {
       success: false,

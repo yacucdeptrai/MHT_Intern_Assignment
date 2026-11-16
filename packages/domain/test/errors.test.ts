@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  AppError,
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  UnauthorizedError,
-  ValidationError,
-} from "../src";
+import { AppError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "../src";
 
 describe("domain errors", () => {
   it("creates AppError with custom status and message", () => {

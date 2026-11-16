@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+const adminEmail = process.env.ADMIN_SEED_EMAIL ?? "admin@anh-mht.workers.dev";
+const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "k9Wp3xL7mQ2rT8vF4b";
+
 test.describe("Authentication journey", () => {
   test("renders login page and form elements", async ({ page }) => {
     await page.goto("/login");
@@ -18,13 +21,14 @@ test.describe("Authentication journey", () => {
 
     await expect(page.getByRole("alert")).toHaveText("Email or password is incorrect");
     await expect(page.getByLabel("Email address")).toHaveValue("invalid.user@example.com");
+    await expect(page.getByLabel("Password")).toHaveValue("");
   });
 
   test("logs in with seeded admin credentials and redirects to admin dashboard", async ({ page, context }) => {
     await page.goto("/login");
 
-    await page.getByLabel("Email address").fill("admin@example.com");
-    await page.getByLabel("Password").fill("admin-password-change-me-immediately");
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password").fill(adminPassword);
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await page.waitForURL("**/admin**");
@@ -36,15 +40,17 @@ test.describe("Authentication journey", () => {
 
   test("logging out clears session cookie and returns to /login", async ({ page, context }) => {
     await page.goto("/login");
-    await page.getByLabel("Email address").fill("admin@example.com");
-    await page.getByLabel("Password").fill("admin-password-change-me-immediately");
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password").fill(adminPassword);
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL("**/admin**");
 
     const cookiesBefore = await context.cookies();
     expect(cookiesBefore.some((c) => c.name === "__session")).toBe(true);
 
-    const logoutResponse = await page.request.post("/logout");
+    const logoutResponse = await page.request.post("/logout", { maxRedirects: 0 });
+    expect(logoutResponse.status()).toBe(302);
+    expect(logoutResponse.headers()["location"]).toBe("/login");
     expect(logoutResponse.headers()["set-cookie"]).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
   });
 });

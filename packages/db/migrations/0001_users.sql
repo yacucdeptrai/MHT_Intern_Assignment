@@ -20,3 +20,4 @@ CREATE TABLE `users` (
 CREATE UNIQUE INDEX `uq_users_email` ON `users` (`email`);
 --> statement-breakpoint
 CREATE INDEX `idx_users_status_deleted` ON `users` (`deleted_at`, `status`);
+
