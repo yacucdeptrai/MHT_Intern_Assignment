@@ -13,17 +13,9 @@ export interface LoginCredentials {
 export const authService = {
   async loginWithPassword(ctx: RequestContext, credentials: LoginCredentials): Promise<SessionUser> {
     const normalizedEmail = credentials.email.trim().toLowerCase();
-    const user = await userRepository.findByEmail(ctx.db, normalizedEmail);
+    const user = await userRepository.findByEmail(ctx.db, normalizedEmail, { includeDeleted: true });
 
-    if (!user || user.deletedAt !== null) {
-      throw new ValidationError("Email or password is incorrect");
-    }
-
-    if (user.status === "LOCKED") {
-      throw new ValidationError("This account is locked. Contact an administrator.");
-    }
-
-    if (!user.passwordHash || user.passwordIterations === null) {
+    if (!user?.passwordHash || user.passwordIterations === null) {
       throw new ValidationError("Email or password is incorrect");
     }
 
@@ -34,6 +26,11 @@ export const authService = {
 
     if (!isValid) {
       throw new ValidationError("Email or password is incorrect");
+    }
+
+    // The account state is revealed only after the password is verified (FR-01 criterion 3).
+    if (user.status === "LOCKED" || user.deletedAt !== null) {
+      throw new ValidationError("This account is locked. Contact an administrator.");
     }
 
     if (needsRehash({ hash: user.passwordHash, iterations: user.passwordIterations })) {

@@ -160,4 +160,40 @@ describe("requireUser guard", () => {
       expect(res.headers.get("Set-Cookie")).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
     }
   });
+
+  it("clears session and redirects to login when user is deleted", async () => {
+    const ctx = createMockContext();
+    const now = new Date();
+    const id = crypto.randomUUID();
+
+    await userRepository.insert(ctx.db, {
+      id,
+      email: "deleted.user@example.com",
+      fullName: "Deleted User",
+      systemRole: "MEMBER",
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: now,
+    });
+
+    const session = await getSession(null, ctx.env.SESSION_SECRET);
+    session.set("userId", id);
+    const cookie = await commitSession(session, ctx.env.SESSION_SECRET);
+
+    const request = new Request("http://localhost/protected", {
+      headers: { Cookie: cookie },
+    });
+
+    try {
+      await requireUser(ctx, request);
+      expect.fail("Expected requireUser to throw redirect for deleted user");
+    } catch (response: unknown) {
+      expect(response).toBeInstanceOf(Response);
+      const res = response as Response;
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe("/login");
+      expect(res.headers.get("Set-Cookie")).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
+    }
+  });
 });

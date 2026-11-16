@@ -143,6 +143,64 @@ describe("authService.loginWithPassword", () => {
     ).rejects.toThrow(new ValidationError("This account is locked. Contact an administrator."));
   });
 
+  it("does not reveal locked status when the password is wrong", async () => {
+    const ctx = createMockContext();
+    const now = new Date();
+    const { hash, iterations } = await hashPassword("LockedPassword123!");
+
+    await userRepository.insert(ctx.db, {
+      id: crypto.randomUUID(),
+      email: "locked.wrong@example.com",
+      fullName: "Locked Wrong",
+      systemRole: "MEMBER",
+      status: "LOCKED",
+      passwordHash: hash,
+      passwordIterations: iterations,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await expect(
+      authService.loginWithPassword(ctx, {
+        email: "locked.wrong@example.com",
+        password: "WrongPassword999!",
+      }),
+    ).rejects.toThrow(new ValidationError("Email or password is incorrect"));
+  });
+
+  it("rejects deleted user with correct credentials using the locked message", async () => {
+    const ctx = createMockContext();
+    const now = new Date();
+    const { hash, iterations } = await hashPassword("DeletedPassword123!");
+
+    await userRepository.insert(ctx.db, {
+      id: crypto.randomUUID(),
+      email: "deleted@example.com",
+      fullName: "Deleted Person",
+      systemRole: "MEMBER",
+      status: "ACTIVE",
+      passwordHash: hash,
+      passwordIterations: iterations,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: now,
+    });
+
+    await expect(
+      authService.loginWithPassword(ctx, {
+        email: "deleted@example.com",
+        password: "DeletedPassword123!",
+      }),
+    ).rejects.toThrow(new ValidationError("This account is locked. Contact an administrator."));
+
+    await expect(
+      authService.loginWithPassword(ctx, {
+        email: "deleted@example.com",
+        password: "WrongPassword999!",
+      }),
+    ).rejects.toThrow(new ValidationError("Email or password is incorrect"));
+  });
+
   it("rejects user with no password hash (SSO only)", async () => {
     const ctx = createMockContext();
     const now = new Date();
