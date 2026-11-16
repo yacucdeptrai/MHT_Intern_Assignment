@@ -80,7 +80,7 @@ describe("adminUsersAction", () => {
     const response = await adminUsersAction(ctx, request);
     expect(response.status).toBe(200);
 
-    const body = (await response.json()) as { success: boolean; inviteUrl: string; user: { id: string } };
+    const body: { success: boolean; inviteUrl: string; user: { id: string } } = await response.json();
     expect(body.success).toBe(true);
     expect(body.inviteUrl).toContain("/invite/");
     expect(body.user.id).toBeDefined();
@@ -108,11 +108,11 @@ describe("adminUsersAction", () => {
     const response = await adminUsersAction(ctx, request);
     expect(response.status).toBe(400);
 
-    const body = (await response.json()) as {
+    const body: {
       success: boolean;
       errors: { email: string[] };
       values: { email: string };
-    };
+    } = await response.json();
     expect(body.success).toBe(false);
     expect(body.errors.email).toBeDefined();
     expect(body.values.email).toBe("TAKEN@example.com");
@@ -188,7 +188,10 @@ describe("adminUsersAction", () => {
     formData.append("userId", userId);
 
     const headers = new Headers();
-    headers.set("Cookie", request.headers.get("Cookie")!);
+    const cookie = request.headers.get("Cookie");
+    if (cookie) {
+      headers.set("Cookie", cookie);
+    }
 
     const ownRequest = new Request("http://localhost/admin/users", {
       method: "POST",
@@ -198,7 +201,7 @@ describe("adminUsersAction", () => {
 
     const response = await adminUsersAction(ctx, ownRequest);
     expect(response.status).toBe(400);
-    const body = (await response.json()) as { message: string };
+    const body: { message: string } = await response.json();
     expect(body.message).toContain("You cannot change your own access");
   });
 });

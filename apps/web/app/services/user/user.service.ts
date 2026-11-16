@@ -5,10 +5,17 @@ import type {
   SystemRole,
   UserAdminRow,
   UserCreateInput,
-  UserFilters,
+  UserFiltersInput,
   UserUpdateInput,
 } from "@pm/domain";
-import { canManageUsers, ForbiddenError, NotFoundError, TOKEN_INVITE_EXPIRY_MS, ValidationError } from "@pm/domain";
+import {
+  canManageUsers,
+  ForbiddenError,
+  NotFoundError,
+  TOKEN_INVITE_EXPIRY_MS,
+  UserFiltersSchema,
+  ValidationError,
+} from "@pm/domain";
 
 import type { RequestContext } from "../../utils/requestContext.server";
 
@@ -378,13 +385,14 @@ export const userService = {
     ]);
   },
 
-  async listUsers(ctx: RequestContext, filters?: UserFilters): Promise<Page<UserAdminRow>> {
+  async listUsers(ctx: RequestContext, filters?: UserFiltersInput): Promise<Page<UserAdminRow>> {
     const actor = getActorContext(ctx);
     if (!canManageUsers(actor)) {
       throw new ForbiddenError();
     }
 
-    const result = await userRepository.listUsers(ctx.db, filters);
+    const parsedFilters = filters ? UserFiltersSchema.parse(filters) : undefined;
+    const result = await userRepository.listUsers(ctx.db, parsedFilters);
     return {
       items: result.items.map((u) => ({
         id: u.id,

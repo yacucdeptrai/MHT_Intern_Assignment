@@ -10,29 +10,30 @@ export const UserBaseSchema = z.object({
     .string()
     .trim()
     .max(100, "Department must be at most 100 characters")
-    .optional()
-    .nullable()
+    .nullish()
     .transform((val) => (val && val.length > 0 ? val : null)),
 });
 
 export const UserCreateSchema = UserBaseSchema;
-export type UserCreateInput = z.infer<typeof UserCreateSchema>;
+export type UserCreateInput = z.input<typeof UserCreateSchema>;
+export type UserCreateOutput = z.output<typeof UserCreateSchema>;
 
 export const UserUpdateSchema = UserBaseSchema.partial().extend({
   userId: z.string().min(1, "User ID is required"),
 });
-export type UserUpdateInput = z.infer<typeof UserUpdateSchema>;
+export type UserUpdateInput = z.input<typeof UserUpdateSchema>;
+export type UserUpdateOutput = z.output<typeof UserUpdateSchema>;
 
 export const UserIdSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
 });
-export type UserIdInput = z.infer<typeof UserIdSchema>;
+export type UserIdInput = z.input<typeof UserIdSchema>;
 
 export const SetSystemRoleSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
   systemRole: z.enum(SYSTEM_ROLES),
 });
-export type SetSystemRoleInput = z.infer<typeof SetSystemRoleSchema>;
+export type SetSystemRoleInput = z.input<typeof SetSystemRoleSchema>;
 
 export const UserFiltersSchema = z.object({
   q: z.string().trim().optional(),
@@ -41,4 +42,5 @@ export const UserFiltersSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
-export type UserFilters = z.infer<typeof UserFiltersSchema>;
+export type UserFiltersInput = z.input<typeof UserFiltersSchema>;
+export type UserFilters = z.output<typeof UserFiltersSchema>;

@@ -14,8 +14,10 @@ const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
 test.describe("Admin User Management Journey", () => {
   test("unauthenticated user is redirected to login with redirectTo", async ({ page }) => {
     await page.goto("/admin/users");
-    await page.waitForURL("**/login?redirectTo=%2Fadmin%2Fusers");
-    expect(page.url()).toContain("/login?redirectTo=%2Fadmin%2Fusers");
+    await page.waitForURL((url) => url.pathname === "/login" && url.searchParams.get("redirectTo") === "/admin/users");
+    const currentUrl = new URL(page.url());
+    expect(currentUrl.pathname).toBe("/login");
+    expect(currentUrl.searchParams.get("redirectTo")).toBe("/admin/users");
   });
 
   test("admin logs in, navigates to user management, and creates a new user", async ({ page }) => {

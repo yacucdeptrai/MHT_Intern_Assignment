@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 
-import type { SystemRole, UserAdminRow } from "@pm/domain";
+import type { UserAdminRow } from "@pm/domain";
 import { APP_NAME } from "@pm/domain";
 
 import { adminUsersAction } from "../actions/adminUsersAction";
@@ -52,7 +52,9 @@ export default function AdminUsersPage() {
     try {
       await navigator.clipboard.writeText(url);
       setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
+      setTimeout(() => {
+        setCopiedLink(false);
+      }, 2000);
     } catch {
       // Fallback if clipboard API is unavailable
     }
@@ -70,7 +72,9 @@ export default function AdminUsersPage() {
           <div>
             <button
               type="button"
-              onClick={() => setIsCreateOpen(true)}
+              onClick={() => {
+                setIsCreateOpen(true);
+              }}
               className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               + Create User
@@ -101,7 +105,9 @@ export default function AdminUsersPage() {
               />
               <button
                 type="button"
-                onClick={() => handleCopyLink(actionData.inviteUrl!)}
+                onClick={() => {
+                  void handleCopyLink(actionData.inviteUrl ?? "");
+                }}
                 className="rounded-md bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800"
               >
                 {copiedLink ? "Copied!" : "Copy Link"}
@@ -200,7 +206,9 @@ export default function AdminUsersPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => setEditingUser(u)}
+                          onClick={() => {
+                            setEditingUser(u);
+                          }}
                           className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
                         >
                           Edit
@@ -258,7 +266,9 @@ export default function AdminUsersPage() {
                 <h2 className="text-lg font-semibold text-gray-900">Create New User</h2>
                 <button
                   type="button"
-                  onClick={() => setIsCreateOpen(false)}
+                  onClick={() => {
+                    setIsCreateOpen(false);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   ✕
@@ -338,7 +348,9 @@ export default function AdminUsersPage() {
                 <div className="mt-6 flex justify-end gap-3 border-t pt-4">
                   <button
                     type="button"
-                    onClick={() => setIsCreateOpen(false)}
+                    onClick={() => {
+                      setIsCreateOpen(false);
+                    }}
                     className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
@@ -364,7 +376,9 @@ export default function AdminUsersPage() {
                 <h2 className="text-lg font-semibold text-gray-900">Edit User: {editingUser.fullName}</h2>
                 <button
                   type="button"
-                  onClick={() => setEditingUser(null)}
+                  onClick={() => {
+                    setEditingUser(null);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   ✕
@@ -416,7 +430,7 @@ export default function AdminUsersPage() {
                   <select
                     id="edit-systemRole"
                     name="systemRole"
-                    defaultValue={editingUser.systemRole as SystemRole}
+                    defaultValue={editingUser.systemRole}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="MEMBER">Member</option>
@@ -442,7 +456,9 @@ export default function AdminUsersPage() {
                 <div className="mt-6 flex justify-end gap-3 border-t pt-4">
                   <button
                     type="button"
-                    onClick={() => setEditingUser(null)}
+                    onClick={() => {
+                      setEditingUser(null);
+                    }}
                     className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Cancel

@@ -82,7 +82,7 @@ describe("userService", () => {
       const audits = await auditLogRepository.listByEntity(ctx.db, "USER", result.user.id);
       expect(audits.length).toBe(1);
       expect(audits[0]?.action).toBe("USER_CREATED");
-      expect(audits[0]?.actorId).toBe(ctx.user!.id);
+      expect(audits[0]?.actorId).toBe(ctx.user?.id);
     });
   });
 
@@ -261,6 +261,233 @@ describe("userService", () => {
       await expect(userService.setSystemRole(ctx, targetAdmin.id, "MEMBER")).rejects.toThrow(
         "At least one administrator is required",
       );
+    });
+  });
+
+  describe("Additional edge cases and branch coverage", () => {
+    it("throws ForbiddenError if actor is not in context", async () => {
+      const ctx = await createMockContext("ADMIN");
+      (ctx as unknown as { user: unknown }).user = null;
+      await expect(userService.listUsers(ctx)).rejects.toThrow(ForbiddenError);
+      await expect(
+        userService.createUser(ctx, { fullName: "A", email: "a@b.com", systemRole: "MEMBER" }),
+      ).rejects.toThrow(ForbiddenError);
+      await expect(userService.updateUser(ctx, { userId: "some-id" })).rejects.toThrow(ForbiddenError);
+    });
+
+    it("creates user without department", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const result = await userService.createUser(ctx, {
+        fullName: "No Dept User",
+        email: "nodept@example.com",
+        systemRole: "MEMBER",
+      });
+      expect(result.user.department).toBeNull();
+    });
+
+    it("handles unlockUser successfully and errors on unknown target", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const target = await userRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        email: "locked-target@example.com",
+        fullName: "Locked Target",
+        systemRole: "MEMBER",
+        status: "LOCKED",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await userService.unlockUser(ctx, target.id);
+      const unlocked = await userRepository.findById(ctx.db, target.id);
+      expect(unlocked?.status).toBe("ACTIVE");
+
+      await expect(userService.unlockUser(ctx, "non-existent-id")).rejects.toThrow();
+    });
+
+    it("handles updateUser edge cases (department update, empty update, not found)", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const target = await userRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        email: "update-edge@example.com",
+        fullName: "Update Edge",
+        department: "Old Dept",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // Update with same values (fullName, department, systemRole identical)
+      const sameValues = await userService.updateUser(ctx, {
+        userId: target.id,
+        fullName: "Update Edge",
+        department: "Old Dept",
+        systemRole: "MEMBER",
+      });
+      expect(sameValues.id).toBe(target.id);
+
+      // Update department to empty string (converts to null)
+      const clearedDept = await userService.updateUser(ctx, {
+        userId: target.id,
+        department: "",
+      });
+      expect(clearedDept.department).toBeNull();
+
+      // Update email to a new valid email address
+      const newEmailUser = await userService.updateUser(ctx, {
+        userId: target.id,
+        email: "brand-new-email@example.com",
+      });
+      expect(newEmailUser.email).toBe("brand-new-email@example.com");
+
+      // Update email to the exact same email address
+      const sameEmailUser = await userService.updateUser(ctx, {
+        userId: target.id,
+        email: "brand-new-email@example.com",
+      });
+      expect(sameEmailUser.email).toBe("brand-new-email@example.com");
+
+      // Update department and role
+      const updated = await userService.updateUser(ctx, {
+        userId: target.id,
+        department: "New Dept",
+        systemRole: "TEAM_LEAD",
+      });
+      expect(updated.department).toBe("New Dept");
+      expect(updated.systemRole).toBe("TEAM_LEAD");
+
+      // Empty update returns same user
+      const unchanged = await userService.updateUser(ctx, {
+        userId: target.id,
+      });
+      expect(unchanged.id).toBe(target.id);
+
+      // Not found target
+      await expect(userService.updateUser(ctx, { userId: "unknown-id" })).rejects.toThrow();
+    });
+
+    it("updates role and demotes an admin when another admin exists", async () => {
+      const ctx = await createMockContext("ADMIN");
+      // Add a second admin so there are 2 admins in DB
+      const secondAdmin = await userRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        email: "second-admin@example.com",
+        fullName: "Second Admin",
+        systemRole: "ADMIN",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // Now updateUser to demote secondAdmin to MEMBER
+      const demoted = await userService.updateUser(ctx, {
+        userId: secondAdmin.id,
+        systemRole: "MEMBER",
+      });
+      expect(demoted.systemRole).toBe("MEMBER");
+
+      // Promote member back to ADMIN
+      const promoted = await userService.updateUser(ctx, {
+        userId: secondAdmin.id,
+        systemRole: "ADMIN",
+      });
+      expect(promoted.systemRole).toBe("ADMIN");
+
+      // setSystemRole demoting secondAdmin
+      await userService.setSystemRole(ctx, secondAdmin.id, "PM");
+      const asPm = await userRepository.findById(ctx.db, secondAdmin.id);
+      expect(asPm?.systemRole).toBe("PM");
+    });
+
+    it("locks and deletes an admin when another admin exists", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const adminToLock = await userRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        email: "admin-to-lock@example.com",
+        fullName: "Admin To Lock",
+        systemRole: "ADMIN",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await userService.lockUser(ctx, adminToLock.id);
+      const locked = await userRepository.findById(ctx.db, adminToLock.id);
+      expect(locked?.status).toBe("LOCKED");
+
+      const adminToDelete = await userRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        email: "admin-to-delete@example.com",
+        fullName: "Admin To Delete",
+        systemRole: "ADMIN",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await userService.deleteUser(ctx, adminToDelete.id);
+      const deleted = await userRepository.findById(ctx.db, adminToDelete.id);
+      expect(deleted).toBeNull();
+    });
+
+    it("handles lock, delete, and setSystemRole errors on non-existent users", async () => {
+      const ctx = await createMockContext("ADMIN");
+      await expect(userService.lockUser(ctx, "unknown-id")).rejects.toThrow();
+      await expect(userService.deleteUser(ctx, "unknown-id")).rejects.toThrow();
+      await expect(userService.setSystemRole(ctx, "unknown-id", "PM")).rejects.toThrow();
+    });
+
+    it("protects last admin from being locked or deleted", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const lastAdmin = await userRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        email: "last-admin-protect@example.com",
+        fullName: "Last Admin Protect",
+        systemRole: "ADMIN",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const allAdmins = await ctx.db.query.users.findMany({
+        where: (u, { and, eq, isNull }) => and(eq(u.systemRole, "ADMIN"), isNull(u.deletedAt)),
+      });
+      for (const a of allAdmins) {
+        if (a.id !== lastAdmin.id) {
+          await userRepository.softDeleteStmt(ctx.db, a.id, new Date());
+        }
+      }
+
+      await expect(userService.lockUser(ctx, lastAdmin.id)).rejects.toThrow("At least one administrator is required");
+      await expect(userService.deleteUser(ctx, lastAdmin.id)).rejects.toThrow("At least one administrator is required");
+    });
+
+    it("lists users with various filters and pagination", async () => {
+      const ctx = await createMockContext("ADMIN");
+      // Call with no filters
+      const all = await userService.listUsers(ctx);
+      expect(all.items.length).toBeGreaterThanOrEqual(1);
+
+      // Call with only status
+      const activeList = await userService.listUsers(ctx, { status: "ACTIVE" });
+      expect(activeList.items.length).toBeGreaterThanOrEqual(1);
+
+      // Call with only systemRole
+      const adminList = await userService.listUsers(ctx, { systemRole: "ADMIN" });
+      expect(adminList.items.length).toBeGreaterThanOrEqual(1);
+
+      // Call with only search query
+      const queryList = await userService.listUsers(ctx, { q: "Admin" });
+      expect(queryList.items.length).toBeGreaterThanOrEqual(1);
+
+      // Call with pagination
+      const paged = await userService.listUsers(ctx, { page: 1, pageSize: 2 });
+      expect(paged.page).toBe(1);
+      expect(paged.pageSize).toBe(2);
+
+      // Non-admin calling listUsers
+      const memberCtx = await createMockContext("MEMBER");
+      await expect(userService.listUsers(memberCtx)).rejects.toThrow(ForbiddenError);
     });
   });
 });

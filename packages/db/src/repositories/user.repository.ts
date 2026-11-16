@@ -99,7 +99,7 @@ export const userRepository = {
       .select({ count: sql<number>`count(*)` })
       .from(users)
       .where(and(eq(users.systemRole, "ADMIN"), isNull(users.deletedAt)));
-    return Number(result?.count ?? 0);
+    return result?.count ?? 0;
   },
 
   async listUsers(db: AppDatabase, options?: ListUsersOptions): Promise<Page<User>> {
@@ -135,9 +135,9 @@ export const userRepository = {
         .where(and(...conditions)),
     ]);
 
-    const total = Number(countResult?.[0]?.total ?? 0);
+    const total = countResult[0]?.total ?? 0;
     return {
-      items: items ?? [],
+      items,
       total,
       page,
       pageSize,

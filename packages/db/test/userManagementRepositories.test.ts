@@ -141,7 +141,7 @@ describe("User management repositories", () => {
       updatedAt: now,
     });
 
-    const admin2 = await userRepository.insert(db, {
+    const _admin2 = await userRepository.insert(db, {
       id: crypto.randomUUID(),
       email: "admin-count-2@example.com",
       fullName: "Admin Count Two",
@@ -162,5 +162,44 @@ describe("User management repositories", () => {
 
     expect(listResult.total).toBe(1);
     expect(listResult.items[0]?.id).toBe(admin1.id);
+  });
+
+  it("inserts directly via inviteRepository and auditLogRepository", async () => {
+    const db = createDatabase(env.DB);
+    const now = new Date();
+    const admin = await userRepository.insert(db, {
+      id: crypto.randomUUID(),
+      email: "direct-repo@example.com",
+      fullName: "Direct Repo",
+      systemRole: "ADMIN",
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const invite = await inviteRepository.insert(db, {
+      id: crypto.randomUUID(),
+      email: "direct-invitee@example.com",
+      tokenHash: "direct-hash",
+      userId: admin.id,
+      projectId: null,
+      projectRole: null,
+      invitedById: admin.id,
+      expiresAt: new Date(now.getTime() + 10000),
+      createdAt: now,
+    });
+    expect(invite.email).toBe("direct-invitee@example.com");
+
+    const audit = await auditLogRepository.insert(db, {
+      id: crypto.randomUUID(),
+      actorId: admin.id,
+      action: "USER_CREATED",
+      entityType: "USER",
+      entityId: admin.id,
+      projectId: null,
+      changes: null,
+      createdAt: now,
+    });
+    expect(audit.action).toBe("USER_CREATED");
   });
 });

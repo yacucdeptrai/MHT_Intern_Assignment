@@ -3,7 +3,6 @@ import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "@pm/domain";
-import type { AuditAction, AuditEntityType } from "@pm/domain";
 
 import { projects } from "./projects";
 import { users } from "./users";

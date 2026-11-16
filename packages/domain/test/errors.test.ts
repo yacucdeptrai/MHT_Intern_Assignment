@@ -46,6 +46,18 @@ describe("domain errors", () => {
     expect(error.message).toBe("Project not found");
   });
 
+  it("creates AppError with default status 500", () => {
+    const error = new AppError("Internal error");
+    expect(error.status).toBe(500);
+  });
+
+  it("creates NotFoundError and ConflictError with default messages", () => {
+    const notFound = new NotFoundError();
+    expect(notFound.message).toBe("Not found");
+    const conflict = new ConflictError();
+    expect(conflict.message).toBe("Conflict");
+  });
+
   it("creates ConflictError with status 409", () => {
     const error = new ConflictError("Task version mismatch");
     expect(error).toBeInstanceOf(AppError);
