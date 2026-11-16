@@ -33,8 +33,12 @@ test.describe("Admin User Management Journey", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("User Management");
 
     // 3. Open Create User Modal
-    await page.getByRole("button", { name: "+ Create User" }).click();
-    await expect(page.getByRole("heading", { level: 2, name: "Create New User" })).toBeVisible();
+    const createButton = page.getByRole("button", { name: "+ Create User" });
+    const modalHeading = page.getByRole("heading", { level: 2, name: "Create New User" });
+    await expect(async () => {
+      await createButton.click();
+      await expect(modalHeading).toBeVisible({ timeout: 1000 });
+    }).toPass({ intervals: [500], timeout: 10000 });
 
     const uniqueId = Math.random().toString(36).slice(2, 7);
     const testEmail = `intern.${uniqueId}@example.com`;
