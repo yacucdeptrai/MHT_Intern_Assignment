@@ -58,6 +58,27 @@ export const userRepository = {
       .where(and(eq(users.id, id), isNull(users.deletedAt)));
   },
 
+  updatePasswordStmt(db: AppDatabase, id: string, passwordHash: string, passwordIterations: number, now: Date) {
+    return db
+      .update(users)
+      .set({
+        passwordHash,
+        passwordIterations,
+        updatedAt: now,
+      })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)));
+  },
+
+  updateAvatarStmt(db: AppDatabase, id: string, avatarKey: string | null, now: Date) {
+    return db
+      .update(users)
+      .set({
+        avatarKey,
+        updatedAt: now,
+      })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)));
+  },
+
   async findById(db: AppDatabase, id: string, options?: FindUserOptions): Promise<User | null> {
     const conditions = [eq(users.id, id)];
     if (!options?.includeDeleted) {
