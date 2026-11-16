@@ -4,4 +4,5 @@ export * from "./repositories/user.repository";
 export * from "./repositories/invite.repository";
 export * from "./repositories/auditLog.repository";
 export * from "./repositories/outboxJob.repository";
+export * from "./repositories/oauthAccount.repository";
 export * from "./schema";
