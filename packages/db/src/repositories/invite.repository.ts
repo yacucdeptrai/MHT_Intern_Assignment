@@ -1,0 +1,28 @@
+import { eq } from "drizzle-orm";
+
+import type { AppDatabase } from "../client";
+import { invites, type Invite, type NewInvite } from "../schema/invites";
+
+export const inviteRepository = {
+  insertStmt(db: AppDatabase, invite: NewInvite) {
+    return db.insert(invites).values(invite);
+  },
+
+  async insert(db: AppDatabase, invite: NewInvite): Promise<Invite> {
+    const [created] = await db.insert(invites).values(invite).returning();
+    if (!created) {
+      throw new Error("Failed to insert invite");
+    }
+    return created;
+  },
+
+  async findById(db: AppDatabase, id: string): Promise<Invite | null> {
+    const [invite] = await db.select().from(invites).where(eq(invites.id, id)).limit(1);
+    return invite ?? null;
+  },
+
+  async findByTokenHash(db: AppDatabase, tokenHash: string): Promise<Invite | null> {
+    const [invite] = await db.select().from(invites).where(eq(invites.tokenHash, tokenHash)).limit(1);
+    return invite ?? null;
+  },
+};
