@@ -77,13 +77,18 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm spell
       - run: pnpm deps:check
-      - run: pnpm test:coverage
+      # Test scripts are added by roadmap task M0-T2; until then these steps are no-ops.
+      - run: pnpm run --if-present test:coverage
       - run: pnpm build
 
       - name: End-to-end tests
         run: |
-          pnpm exec playwright install --with-deps chromium
-          pnpm test:e2e
+          if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then
+            pnpm exec playwright install --with-deps chromium
+            pnpm test:e2e
+          else
+            echo "No test:e2e script yet (added in M0-T2); skipping."
+          fi
 
       - name: Upload Playwright report
         if: failure()

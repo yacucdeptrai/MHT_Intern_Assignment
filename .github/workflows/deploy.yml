@@ -34,7 +34,9 @@ jobs:
   deploy:
     name: Migrate, deploy, smoke check
     needs: detect
-    if: needs.detect.outputs.has_app == 'true'
+    # Deploys stay off until the repository variable DEPLOY_ENABLED is set to "true"
+    # (after the Cloudflare and GitHub setup in docs/environment-setup.md §2–§5).
+    if: needs.detect.outputs.has_app == 'true' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: ${{ needs.detect.outputs.environment }}
     env:
