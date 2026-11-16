@@ -24,8 +24,10 @@ describe("hashPassword", () => {
   });
 
   it("rejects iteration counts outside the allowed range", async () => {
-    await expect(hashPassword(PASSWORD, PBKDF2_MAX_ITERATIONS + 1)).rejects.toThrow(RangeError);
-    await expect(hashPassword(PASSWORD, PBKDF2_MIN_ITERATIONS - 1)).rejects.toThrow(RangeError);
+    const aboveCap = PBKDF2_MAX_ITERATIONS + 1;
+    const belowFloor = PBKDF2_MIN_ITERATIONS - 1;
+    await expect(hashPassword(PASSWORD, aboveCap)).rejects.toThrow(RangeError);
+    await expect(hashPassword(PASSWORD, belowFloor)).rejects.toThrow(RangeError);
   });
 });
 
