@@ -1,17 +1,20 @@
 // Worker configuration (docs/08-dev-environment-and-deployment.md §4.1).
 // Top level = local development. Remote environments repeat every binding, because
 // Wrangler does not inherit bindings or vars into `env.*` blocks.
-// Replace each REPLACE_WITH_* database_id with the id printed by `wrangler d1 create pm-<env>`
-// (docs/environment-setup.md §2). Database ids are not secret.
+// Remote database ids come from `wrangler d1 create pm-<env>` (docs/environment-setup.md §2). They are not secret.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "pm-local",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-11-13",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
+  "observability": {
+    "enabled": true,
+  },
   "upload_source_maps": true,
-  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA",
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,10 +23,29 @@
       "migrations_dir": "../../packages/db/migrations",
     },
   ],
-  "r2_buckets": [{ "binding": "FILES", "bucket_name": "pm-local" }],
-  "durable_objects": { "bindings": [{ "name": "NOTIFICATION_HUB", "class_name": "UserNotificationHub" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserNotificationHub"] }],
-  "triggers": { "crons": ["*/5 * * * *"] },
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "pm-local",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NOTIFICATION_HUB",
+        "class_name": "UserNotificationHub",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["UserNotificationHub"],
+    },
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
   "vars": {
     "APP_ENV": "local",
     "APP_BASE_URL": "http://localhost:5173",
@@ -32,61 +54,109 @@
   "env": {
     "dev": {
       "name": "pm-dev",
-      "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      "version_metadata": {
+        "binding": "CF_VERSION_METADATA",
+      },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "pm-dev",
-          "database_id": "REPLACE_WITH_PM_DEV_DATABASE_ID",
+          "database_id": "d67629ae-a8ce-407a-9813-29f09b92015f",
           "migrations_dir": "../../packages/db/migrations",
         },
       ],
-      "r2_buckets": [{ "binding": "FILES", "bucket_name": "pm-dev" }],
-      "durable_objects": { "bindings": [{ "name": "NOTIFICATION_HUB", "class_name": "UserNotificationHub" }] },
-      "triggers": { "crons": ["*/5 * * * *"] },
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "pm-dev",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "NOTIFICATION_HUB",
+            "class_name": "UserNotificationHub",
+          },
+        ],
+      },
+      "triggers": {
+        "crons": ["*/5 * * * *"],
+      },
       "vars": {
         "APP_ENV": "dev",
-        "APP_BASE_URL": "https://pm-dev.REPLACE_WITH_SUBDOMAIN.workers.dev",
+        "APP_BASE_URL": "https://pm-dev.anh-mht.workers.dev",
         "EMAIL_PROVIDER": "console",
       },
     },
     "staging": {
       "name": "pm-staging",
-      "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      "version_metadata": {
+        "binding": "CF_VERSION_METADATA",
+      },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "pm-staging",
-          "database_id": "REPLACE_WITH_PM_STAGING_DATABASE_ID",
+          "database_id": "3392660c-5d69-4cc0-bbaf-a35082276ca8",
           "migrations_dir": "../../packages/db/migrations",
         },
       ],
-      "r2_buckets": [{ "binding": "FILES", "bucket_name": "pm-staging" }],
-      "durable_objects": { "bindings": [{ "name": "NOTIFICATION_HUB", "class_name": "UserNotificationHub" }] },
-      "triggers": { "crons": ["*/5 * * * *"] },
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "pm-staging",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "NOTIFICATION_HUB",
+            "class_name": "UserNotificationHub",
+          },
+        ],
+      },
+      "triggers": {
+        "crons": ["*/5 * * * *"],
+      },
       "vars": {
         "APP_ENV": "staging",
-        "APP_BASE_URL": "https://pm-staging.REPLACE_WITH_SUBDOMAIN.workers.dev",
+        "APP_BASE_URL": "https://pm-staging.anh-mht.workers.dev",
         "EMAIL_PROVIDER": "console",
       },
     },
     "production": {
       "name": "pm-production",
-      "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      "version_metadata": {
+        "binding": "CF_VERSION_METADATA",
+      },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "pm-production",
-          "database_id": "REPLACE_WITH_PM_PRODUCTION_DATABASE_ID",
+          "database_id": "c4c377f6-e45d-42a5-8488-17ad7417a974",
           "migrations_dir": "../../packages/db/migrations",
         },
       ],
-      "r2_buckets": [{ "binding": "FILES", "bucket_name": "pm-production" }],
-      "durable_objects": { "bindings": [{ "name": "NOTIFICATION_HUB", "class_name": "UserNotificationHub" }] },
-      "triggers": { "crons": ["*/5 * * * *"] },
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "pm-production",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "NOTIFICATION_HUB",
+            "class_name": "UserNotificationHub",
+          },
+        ],
+      },
+      "triggers": {
+        "crons": ["*/5 * * * *"],
+      },
       "vars": {
         "APP_ENV": "production",
-        "APP_BASE_URL": "https://pm-production.REPLACE_WITH_SUBDOMAIN.workers.dev",
+        "APP_BASE_URL": "https://pm-production.anh-mht.workers.dev",
         "EMAIL_PROVIDER": "console",
       },
     },
