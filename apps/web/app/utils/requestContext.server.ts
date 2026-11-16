@@ -2,7 +2,7 @@ import { createContext } from "react-router";
 
 import type { AppDatabase } from "@pm/db";
 import { createDatabase } from "@pm/db";
-import type { FileStorage, SessionUser } from "@pm/domain";
+import type { FileStorage, OAuthClient, SessionUser } from "@pm/domain";
 
 import { R2FileStorage } from "../services/storage/r2FileStorage.server";
 import { createLogger, type Logger } from "./logger.server";
@@ -11,6 +11,7 @@ export interface RequestContext {
   env: Env;
   db: AppDatabase;
   storage?: FileStorage;
+  oauthClient?: OAuthClient;
   user: SessionUser | null;
   requestId: string;
   logger: Logger;
