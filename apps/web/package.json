@@ -9,7 +9,10 @@
     "preview": "react-router build && vite preview",
     "typecheck": "wrangler types && react-router typegen && tsc -b",
     "postinstall": "wrangler types",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env",
+    "deploy:built": "wrangler deploy"
   },
   "dependencies": {
     "@pm/domain": "workspace:*",
