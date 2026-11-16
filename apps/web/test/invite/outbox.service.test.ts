@@ -53,7 +53,9 @@ describe("outbox.service", () => {
     const adminId = await ensureAdminUser();
     const ctx = createTestContext(now);
     const inviteId = crypto.randomUUID();
-    const rawToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const rawToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
     const sealedToken = await sealInviteToken(rawToken, env.SESSION_SECRET);
 
     await inviteRepository.insert(db, {

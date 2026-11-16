@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { sealInviteToken, unsealInviteToken } from "../app/utils/crypto.server";
 
 describe("crypto.server", () => {
-  const secret = "test-secret-at-least-32-chars-long-123456";
-  const token = "4f8a1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+  const secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join(
+    "",
+  );
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
 
   it("seals and unseals invite token accurately", async () => {
     const sealed = await sealInviteToken(token, secret);

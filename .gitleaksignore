@@ -1,0 +1,4 @@
+# Gitleaks ignore list for false positives in test mock data
+f904e437ba2e8f7a8fdf2c155fbecb3316907746:apps/web/test/crypto.test.ts:generic-api-key:6
+f904e437ba2e8f7a8fdf2c155fbecb3316907746:apps/web/test/crypto.test.ts:generic-api-key:7
+f904e437ba2e8f7a8fdf2c155fbecb3316907746:apps/web/test/invite/outbox.service.test.ts:generic-api-key:56
