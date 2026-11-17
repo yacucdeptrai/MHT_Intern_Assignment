@@ -30,6 +30,7 @@ import {
   MyTaskFiltersSchema,
   NotFoundError,
   ProjectTaskFiltersSchema,
+  TaskArchiveSchema,
   TaskAssignSchema,
   TaskCreateSchema,
   TaskUpdateSchema,
@@ -43,6 +44,7 @@ import {
   type ProjectTaskFilters,
   type SprintOption,
   type StatusOption,
+  type TaskArchiveInput,
   type TaskAssigneeInfo,
   type TaskAssignInput,
   type TaskCreateInput,
@@ -849,5 +851,93 @@ export const taskService = {
 
     const detailData = await this.getTaskDetails(ctx, projectId, taskId);
     return detailData.task;
+  },
+
+  async archiveTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<void> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const parsed = TaskArchiveSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string") {
+          fieldErrors[field] = fieldErrors[field] ?? [];
+          fieldErrors[field].push(issue.message);
+        }
+      }
+      throw new ValidationError("Invalid task archive data", fieldErrors);
+    }
+
+    const data: TaskArchiveInput = parsed.data;
+
+    // Load project access (throws NotFoundError 404 for non-members)
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const existing = await taskRepository.findById(ctx.db, taskId);
+    if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const currentAssignees = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
+    const target: TaskPolicyTarget = {
+      createdById: existing.createdById,
+      assigneeIds: currentAssignees,
+      category: "TODO",
+    };
+
+    const actor = toActor(ctx.user, access);
+    if (!canArchiveTask(actor, target)) {
+      throw new ForbiddenError("You do not have permission to archive this task");
+    }
+
+    const now = ctx.clock.now();
+    const auditId = crypto.randomUUID();
+
+    // A20: update tasks.deleted_at (version guard); guard; update tasks.deleted_at for its sub-tasks; insert audit_logs TASK_ARCHIVED
+    const batchItems: (AppBatchItem | null)[] = [
+      taskRepository.archiveWithVersionStmt(ctx.db, {
+        id: taskId,
+        expectedVersion: data.version,
+        now,
+      }),
+      conflictGuardStmt(ctx.db),
+      taskRepository.archiveSubtasksStmt(ctx.db, {
+        parentTaskId: taskId,
+        now,
+      }),
+      auditLogRepository.insertStmt(ctx.db, {
+        id: auditId,
+        actorId: ctx.user.id,
+        action: "TASK_ARCHIVED",
+        entityType: "TASK",
+        entityId: taskId,
+        projectId,
+        changes: {
+          deletedAt: { from: null, to: now.toISOString() },
+        },
+        createdAt: now,
+      }),
+    ];
+
+    try {
+      await ctx.db.batch(compactBatch(batchItems));
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+      }
+      throw error;
+    }
+
+    ctx.logger.info("Task archived", {
+      taskId,
+      projectId,
+      actorId: ctx.user.id,
+    });
   },
 };

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { TaskAssignSchema, TaskCreateSchema, TaskIdSchema, TaskUpdateSchema } from "../src/schemas/task";
+import {
+  TaskArchiveSchema,
+  TaskAssignSchema,
+  TaskCreateSchema,
+  TaskIdSchema,
+  TaskUpdateSchema,
+} from "../src/schemas/task";
 
 describe("TaskCreateSchema", () => {
   it("FR-12 c1: accepts valid task creation payload with defaults", () => {
@@ -189,5 +195,21 @@ describe("TaskAssignSchema (FR-15)", () => {
 
     const parsedMissing = TaskAssignSchema.safeParse({});
     expect(parsedMissing.success).toBe(false);
+  });
+});
+
+describe("TaskArchiveSchema (FR-14)", () => {
+  it("FR-14 c1: accepts valid positive version", () => {
+    const parsed = TaskArchiveSchema.safeParse({ version: 2 });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.version).toBe(2);
+    }
+  });
+
+  it("FR-14 c1: rejects non-positive or missing version", () => {
+    expect(TaskArchiveSchema.safeParse({ version: 0 }).success).toBe(false);
+    expect(TaskArchiveSchema.safeParse({ version: -1 }).success).toBe(false);
+    expect(TaskArchiveSchema.safeParse({}).success).toBe(false);
   });
 });

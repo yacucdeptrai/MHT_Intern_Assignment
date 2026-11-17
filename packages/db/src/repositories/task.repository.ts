@@ -138,6 +138,26 @@ export const taskRepository = {
       .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)));
   },
 
+  archiveWithVersionStmt: (db: AppDatabase, input: { id: string; expectedVersion: number; now: Date }) => {
+    return db
+      .update(tasks)
+      .set({
+        deletedAt: input.now,
+        updatedAt: input.now,
+      })
+      .where(and(eq(tasks.id, input.id), eq(tasks.version, input.expectedVersion), isNull(tasks.deletedAt)));
+  },
+
+  archiveSubtasksStmt: (db: AppDatabase, input: { parentTaskId: string; now: Date }) => {
+    return db
+      .update(tasks)
+      .set({
+        deletedAt: input.now,
+        updatedAt: input.now,
+      })
+      .where(and(eq(tasks.parentTaskId, input.parentTaskId), isNull(tasks.deletedAt)));
+  },
+
   updateStmt: (db: AppDatabase, input: UpdateTaskInput) => {
     const setValues: Record<string, unknown> = {
       version: sql`${tasks.version} + 1`,

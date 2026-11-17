@@ -170,3 +170,9 @@ export const TaskAssignSchema = z.object({
 });
 
 export type TaskAssignInput = z.infer<typeof TaskAssignSchema>;
+
+export const TaskArchiveSchema = z.object({
+  version: z.coerce.number().int().positive("Version must be a positive integer"),
+});
+
+export type TaskArchiveInput = z.infer<typeof TaskArchiveSchema>;

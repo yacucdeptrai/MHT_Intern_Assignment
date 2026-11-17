@@ -251,4 +251,48 @@ test.describe("Task Update Journey (FR-13)", () => {
     await adminContext.close();
     await member.context.close();
   });
+
+  test("FR-14 c1: lead archives task, redirects to project page and hides task from active list", async ({ page }) => {
+    await signInAsAdmin(page);
+
+    // Create project
+    await page.goto("/projects/new");
+    const code = `ARC${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    await page.getByLabel("Project Code").fill(code);
+    await page.getByLabel("Project Name").fill(`Archive Task Project ${code}`);
+    await page.getByLabel("Start Date").fill("2026-11-01");
+    await page.getByLabel("End Date").fill("2026-12-31");
+    await page.getByRole("button", { name: "Create Project" }).click();
+
+    await page.waitForURL("**/projects");
+    await page.getByRole("link", { name: `Archive Task Project ${code}` }).click();
+
+    // Create task 1: Task to Remain
+    await page.getByTestId("create-task-button").click();
+    await page.getByTestId("task-title-input").fill("Task to Remain");
+    await page.getByTestId("task-submit-button").click();
+    await expect(page.getByTestId("tasks-table")).toBeVisible();
+
+    // Create task 2: Task to be Archived
+    await page.getByTestId("create-task-button").click();
+    await page.getByTestId("task-title-input").fill("Task to be Archived");
+    await page.getByTestId("task-submit-button").click();
+    await expect(page.getByTestId("tasks-table")).toContainText("Task to be Archived");
+
+    await page.getByRole("link", { name: "Task to be Archived" }).click();
+    await page.waitForURL("**/tasks/*");
+
+    // Click Archive Task
+    await expect(page.getByTestId("archive-task-button")).toBeVisible();
+    page.once("dialog", (dialog) => {
+      void dialog.accept();
+    });
+    await page.getByTestId("archive-task-button").click();
+
+    // Redirects to project tasks list
+    await page.waitForURL("**/projects/*");
+    await expect(page.getByTestId("tasks-table")).toBeVisible();
+    await expect(page.getByTestId("tasks-table")).toContainText("Task to Remain");
+    await expect(page.getByTestId("tasks-table")).not.toContainText("Task to be Archived");
+  });
 });

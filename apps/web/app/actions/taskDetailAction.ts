@@ -1,3 +1,5 @@
+import { redirect } from "react-router";
+
 import { taskService } from "../services/task.service";
 import { requireUser } from "../utils/auth.server";
 import { handleActionError } from "../utils/errors.server";
@@ -27,7 +29,11 @@ export async function taskDetailAction(
       return Response.json({ success: true, task }, { status: 200 });
     }
 
-    // TODO(M3-T6): archive intent
+    if (intent === "archive") {
+      await taskService.archiveTask(ctx, projectId, taskId, rawData);
+      return redirect(`/projects/${projectId}`);
+    }
+
     // TODO(M3-T7): addSubTask intent
     // TODO(M4): changeStatus, approve, reject, reopen intents
     // TODO(M5): comment, deleteComment, deleteAttachment intents
