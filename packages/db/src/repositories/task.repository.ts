@@ -172,6 +172,16 @@ export const taskRepository = {
       .where(and(eq(tasks.id, input.id), eq(tasks.version, input.expectedVersion), isNull(tasks.deletedAt)));
   },
 
+  updateVersionStmt: (db: AppDatabase, input: { id: string; expectedVersion: number; now: Date }) => {
+    return db
+      .update(tasks)
+      .set({
+        version: sql`${tasks.version} + 1`,
+        updatedAt: input.now,
+      })
+      .where(and(eq(tasks.id, input.id), eq(tasks.version, input.expectedVersion), isNull(tasks.deletedAt)));
+  },
+
   updateSubtasksSprintStmt: (db: AppDatabase, parentTaskId: string, sprintId: string | null, now: Date) => {
     return db
       .update(tasks)

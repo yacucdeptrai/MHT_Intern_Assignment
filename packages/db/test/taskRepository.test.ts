@@ -656,4 +656,47 @@ describe("taskRepository", () => {
     expect(subtasks[0]?.id).toBe(childId);
     expect(subtasks[0]?.title).toBe("Child Subtask");
   });
+
+  it("A17: updates task version with guard and replaces assignees via deleteByTaskIdStmt", async () => {
+    const { db, user, projectA, status, now } = await createBaseFixtures();
+    const taskId = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Assignment Test Task",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(db, taskId, [user.id], now),
+    ]);
+
+    const initialAssignees = await taskAssigneeRepository.findUserIdsByTaskId(db, taskId);
+    expect(initialAssignees).toEqual([user.id]);
+
+    const later = new Date(now.getTime() + 1000);
+    // Replace assignees: delete existing, update version
+    await db.batch([
+      taskRepository.updateVersionStmt(db, { id: taskId, expectedVersion: 1, now: later }),
+      conflictGuardStmt(db),
+      taskAssigneeRepository.deleteByTaskIdStmt(db, taskId),
+    ]);
+
+    const afterTask = await taskRepository.findById(db, taskId);
+    expect(afterTask?.version).toBe(2);
+    const afterAssignees = await taskAssigneeRepository.findUserIdsByTaskId(db, taskId);
+    expect(afterAssignees).toEqual([]);
+
+    // Stale version guard test
+    await expect(
+      db.batch([
+        taskRepository.updateVersionStmt(db, { id: taskId, expectedVersion: 1, now: later }),
+        conflictGuardStmt(db),
+      ]),
+    ).rejects.toThrow();
+  });
 });

@@ -15,6 +15,10 @@ export const taskAssigneeRepository = {
     );
   },
 
+  deleteByTaskIdStmt: (db: AppDatabase, taskId: string) => {
+    return db.delete(taskAssignees).where(eq(taskAssignees.taskId, taskId));
+  },
+
   deleteByMemberOnUnarchivedTasksStmt: (db: AppDatabase, projectId: string, userId: string) => {
     return db.delete(taskAssignees).where(
       and(
