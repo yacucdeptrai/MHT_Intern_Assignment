@@ -24,10 +24,13 @@
     "db:migrate:local": "pnpm --filter @pm/web db:migrate:local",
     "deploy:dev": "pnpm --filter @pm/web exec sh -c \"CLOUDFLARE_ENV=dev react-router build && wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env dev && wrangler deploy\"",
     "deploy:staging": "pnpm --filter @pm/web exec sh -c \"CLOUDFLARE_ENV=staging react-router build && wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env staging && wrangler deploy\"",
-    "deploy:production": "pnpm --filter @pm/web exec sh -c \"CLOUDFLARE_ENV=production react-router build && wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env production && wrangler deploy\""
+    "deploy:production": "pnpm --filter @pm/web exec sh -c \"CLOUDFLARE_ENV=production react-router build && wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env production && wrangler deploy\"",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.8.2",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
     "@vitest/coverage-istanbul": "^5.1.0",
@@ -35,6 +38,8 @@
     "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.1",
     "madge": "^8.0.0",
     "prettier": "^3.10.1",
     "typescript": "~5.9.3",
