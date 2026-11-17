@@ -16,3 +16,13 @@ export interface ProjectListItem {
   projectRole?: ProjectRole | null;
   memberCount?: number;
 }
+
+export interface ProjectHeaderDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  projectRole: ProjectRole;
+  isArchived: boolean;
+}

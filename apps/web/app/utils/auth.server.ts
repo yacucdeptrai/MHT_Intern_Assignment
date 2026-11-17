@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 
-import { userRepository } from "@pm/db";
-import type { SessionUser, SystemRole } from "@pm/domain";
+import { projectMemberRepository, projectRepository, userRepository, type Project } from "@pm/db";
+import { NotFoundError, UnauthorizedError, type ProjectRole, type SessionUser, type SystemRole } from "@pm/domain";
 
 import type { RequestContext } from "./requestContext.server";
 import { destroySession, getSession, isRequestSecure } from "./session.server";
@@ -85,4 +85,50 @@ export function requireSystemRole(user: SessionUser, roles: readonly SystemRole[
     throw new Response("You do not have permission to access this page", { status: 403 });
   }
   return user;
+}
+
+export interface ProjectAccess {
+  project: Project;
+  projectRole: ProjectRole;
+  isAdmin: boolean;
+  isArchived: boolean;
+}
+
+export async function loadProjectAccess(ctx: RequestContext, projectId: string): Promise<ProjectAccess> {
+  if (!ctx.user) {
+    throw new UnauthorizedError();
+  }
+
+  const project = await projectRepository.findByIdIncludingArchived(ctx.db, projectId);
+  if (!project) {
+    throw new NotFoundError("Project not found");
+  }
+
+  const isArchived = project.deletedAt !== null;
+  const isAdmin = ctx.user.systemRole === "ADMIN";
+
+  if (isAdmin) {
+    return {
+      project,
+      projectRole: "PM",
+      isAdmin: true,
+      isArchived,
+    };
+  }
+
+  if (isArchived) {
+    throw new NotFoundError("Project not found");
+  }
+
+  const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, ctx.user.id);
+  if (!member) {
+    throw new NotFoundError("Project not found");
+  }
+
+  return {
+    project,
+    projectRole: member.projectRole,
+    isAdmin: false,
+    isArchived: false,
+  };
 }
