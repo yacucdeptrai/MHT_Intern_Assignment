@@ -373,7 +373,47 @@ describe("taskService.createTask", () => {
     ).rejects.toThrow("Parent task not found in this project");
   });
 
-  it("sub-task of a sub-task throws ValidationError (only one level deep)", async () => {
+  it("FR-17 c1: member creates sub-task inheriting parent's project and sprint, ignoring client sprint", async () => {
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(memberCtx);
+
+    await memberCtx.db.batch([
+      projectMemberRepository.insertStmt(memberCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const sprint = await sprintRepository.insert(adminCtx.db, {
+      id: crypto.randomUUID(),
+      projectId,
+      name: "Sprint 1",
+      startDate: "2026-11-01",
+      endDate: "2026-11-15",
+      status: "ACTIVE",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const parentTask = await taskService.createTask(adminCtx, projectId, {
+      title: "Parent with sprint",
+      sprintId: sprint.id,
+    });
+
+    const subTask = await taskService.createTask(memberCtx, projectId, {
+      title: "Sub-task inheriting sprint",
+      parentTaskId: parentTask.id,
+      sprintId: crypto.randomUUID(),
+    });
+
+    expect(subTask.parentTaskId).toBe(parentTask.id);
+    expect(subTask.sprintId).toBe(sprint.id);
+  });
+
+  it("FR-17 c2: rejects sub-task of a sub-task with 400 'Sub-tasks cannot have sub-tasks'", async () => {
     const { ctx: adminCtx } = await createTestContext("ADMIN");
     const { projectId } = await createProjectWithMembers(adminCtx);
 
@@ -391,7 +431,55 @@ describe("taskService.createTask", () => {
         title: "Grandchild task",
         parentTaskId: subTask.id,
       }),
-    ).rejects.toThrow("Sub-tasks can only be one level deep");
+    ).rejects.toMatchObject({
+      message: "Sub-tasks cannot have sub-tasks",
+    });
+  });
+
+  it("FR-17 c3: sub-task permissions follow P8 evaluated on the sub-task itself", async () => {
+    const { ctx: creatorCtx, user: creatorUser } = await createTestContext("MEMBER");
+    const { ctx: memberBCtx, user: memberBUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+
+    await creatorCtx.db.batch([
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: creatorUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: memberBUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const parentTask = await taskService.createTask(creatorCtx, projectId, {
+      title: "Parent Task",
+    });
+
+    // Member B creates a sub-task under parent
+    const subTask = await taskService.createTask(memberBCtx, projectId, {
+      title: "Sub-task created by Member B",
+      parentTaskId: parentTask.id,
+    });
+
+    // Creator of sub-task (Member B) CAN edit sub-task
+    const updated = await taskService.updateTask(memberBCtx, projectId, subTask.id, {
+      version: 1,
+      title: "Updated Sub-task by B",
+    });
+    expect(updated.title).toBe("Updated Sub-task by B");
+
+    // Parent creator who is not lead or assignee of sub-task CANNOT edit sub-task (403)
+    await expect(
+      taskService.updateTask(creatorCtx, projectId, subTask.id, {
+        version: 2,
+        title: "Creator trying to edit subtask",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it("archived project rejects task creation with 403 This project is archived", async () => {
