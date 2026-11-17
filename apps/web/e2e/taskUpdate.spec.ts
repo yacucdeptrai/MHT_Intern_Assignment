@@ -267,12 +267,18 @@ test.describe("Task Update Journey (FR-13)", () => {
     await page.waitForURL("**/projects");
     await page.getByRole("link", { name: `Archive Task Project ${code}` }).click();
 
-    // Create task
+    // Create task 1: Task to Remain
+    await page.getByTestId("create-task-button").click();
+    await page.getByTestId("task-title-input").fill("Task to Remain");
+    await page.getByTestId("task-submit-button").click();
+    await expect(page.getByTestId("tasks-table")).toBeVisible();
+
+    // Create task 2: Task to be Archived
     await page.getByTestId("create-task-button").click();
     await page.getByTestId("task-title-input").fill("Task to be Archived");
     await page.getByTestId("task-submit-button").click();
+    await expect(page.getByTestId("tasks-table")).toContainText("Task to be Archived");
 
-    await expect(page.getByTestId("tasks-table")).toBeVisible();
     await page.getByRole("link", { name: "Task to be Archived" }).click();
     await page.waitForURL("**/tasks/*");
 
@@ -286,6 +292,7 @@ test.describe("Task Update Journey (FR-13)", () => {
     // Redirects to project tasks list
     await page.waitForURL("**/projects/*");
     await expect(page.getByTestId("tasks-table")).toBeVisible();
+    await expect(page.getByTestId("tasks-table")).toContainText("Task to Remain");
     await expect(page.getByTestId("tasks-table")).not.toContainText("Task to be Archived");
   });
 });
