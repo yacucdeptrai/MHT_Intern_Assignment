@@ -150,3 +150,23 @@ export const TaskUpdateSchema = TaskCreateBaseSchema.omit({
   });
 
 export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
+
+export const TaskAssignSchema = z.object({
+  version: z.coerce.number().int().positive("Version must be a positive integer"),
+  assigneeIds: z
+    .union([
+      z.array(z.string()),
+      z.string().transform((s) =>
+        s.trim()
+          ? s
+              .split(",")
+              .map((x) => x.trim())
+              .filter(Boolean)
+          : [],
+      ),
+    ])
+    .optional()
+    .default([]),
+});
+
+export type TaskAssignInput = z.infer<typeof TaskAssignSchema>;

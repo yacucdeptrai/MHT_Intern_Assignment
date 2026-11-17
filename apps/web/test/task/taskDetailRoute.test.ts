@@ -457,4 +457,117 @@ describe("taskDetailAction", () => {
     const res = await taskDetailAction(ctx, projectId, task.id, req);
     expect(res.status).toBe(403);
   });
+
+  describe("intent: assign (FR-15)", () => {
+    it("FR-15 c1: allowed lead assigns task to project member, returns 200", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { user: memberUser } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, {
+        title: "Task for assign route test",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "assign");
+      formData.append("version", "1");
+      formData.append("assigneeIds", memberUser.id);
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: pmCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(pmCtx, projectId, task.id, req);
+      expect(res.status).toBe(200);
+      const data = await res.json<{ success: boolean; task: { version: number; assignees: { id: string }[] } }>();
+      expect(data.success).toBe(true);
+      expect(data.task.version).toBe(2);
+      expect(data.task.assignees.map((a) => a.id)).toEqual([memberUser.id]);
+    });
+
+    it("FR-15 c2: non-member assignee returns 400 with 'Assignees must be project members'", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { user: nonMemberUser } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, {
+        title: "Task for non-member route test",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "assign");
+      formData.append("version", "1");
+      formData.append("assigneeIds", nonMemberUser.id);
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: pmCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(pmCtx, projectId, task.id, req);
+      expect(res.status).toBe(400);
+      const data = await res.json<{ success: boolean; errors?: Record<string, string[]> }>();
+      expect(data.success).toBe(false);
+      expect(data.errors?.assigneeIds).toContain("Assignees must be project members");
+    });
+
+    it("FR-15 c3: regular member posting assign intent returns 403", async () => {
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(memberCtx);
+
+      await memberCtx.db.batch([
+        projectMemberRepository.insertStmt(memberCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(memberCtx, projectId, {
+        title: "Task for regular member assign test",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "assign");
+      formData.append("version", "1");
+      formData.append("assigneeIds", memberUser.id);
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: memberCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(memberCtx, projectId, task.id, req);
+      expect(res.status).toBe(403);
+    });
+  });
 });

@@ -30,6 +30,7 @@ import {
   MyTaskFiltersSchema,
   NotFoundError,
   ProjectTaskFiltersSchema,
+  TaskAssignSchema,
   TaskCreateSchema,
   TaskUpdateSchema,
   toActor,
@@ -43,6 +44,7 @@ import {
   type SprintOption,
   type StatusOption,
   type TaskAssigneeInfo,
+  type TaskAssignInput,
   type TaskCreateInput,
   type TaskDetailDto,
   type TaskDetailLoaderData,
@@ -731,6 +733,119 @@ export const taskService = {
       }
       throw error;
     }
+
+    const detailData = await this.getTaskDetails(ctx, projectId, taskId);
+    return detailData.task;
+  },
+
+  async assignTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+    const currentUser = ctx.user;
+
+    const parsed = TaskAssignSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string") {
+          fieldErrors[field] = fieldErrors[field] ?? [];
+          fieldErrors[field].push(issue.message);
+        }
+      }
+      throw new ValidationError("Invalid task assignment data", fieldErrors);
+    }
+
+    const data: TaskAssignInput = parsed.data;
+
+    // Load project access (throws NotFoundError 404 for non-members)
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const existing = await taskRepository.findById(ctx.db, taskId);
+    if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
+      throw new NotFoundError("Task not found");
+    }
+
+    // Check permission (canAssignTask)
+    const actor = toActor(ctx.user, access);
+    if (!canAssignTask(actor)) {
+      throw new ForbiddenError("Only project leads and admins can assign tasks");
+    }
+
+    // FR-15 c2: Validate all assignees are current project members
+    for (const assigneeId of data.assigneeIds) {
+      const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, assigneeId);
+      if (!member) {
+        throw new ValidationError("Assignees must be project members", {
+          assigneeIds: ["Assignees must be project members"],
+        });
+      }
+    }
+
+    const currentAssignees = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
+    const newAssignees = data.assigneeIds.filter((id) => !currentAssignees.includes(id));
+
+    const now = ctx.clock.now();
+    const auditId = crypto.randomUUID();
+
+    // A17: update tasks.version (version guard); guard; delete task_assignees for the task; insert the new task_assignees; insert audit_logs TASK_ASSIGNED; insert notifications TASK_ASSIGNED (new assignees only)
+    const batchItems: (AppBatchItem | null)[] = [
+      taskRepository.updateVersionStmt(ctx.db, {
+        id: taskId,
+        expectedVersion: data.version,
+        now,
+      }),
+      conflictGuardStmt(ctx.db),
+      taskAssigneeRepository.deleteByTaskIdStmt(ctx.db, taskId),
+      ...taskAssigneeRepository.insertBatchStmt(ctx.db, taskId, data.assigneeIds, now),
+      auditLogRepository.insertStmt(ctx.db, {
+        id: auditId,
+        actorId: ctx.user.id,
+        action: "TASK_ASSIGNED",
+        entityType: "TASK",
+        entityId: taskId,
+        projectId,
+        changes: {
+          assignees: { from: currentAssignees, to: data.assigneeIds },
+        },
+        createdAt: now,
+      }),
+      ...newAssignees.map((userId) =>
+        notificationRepository.insertStmt(ctx.db, {
+          id: crypto.randomUUID(),
+          userId,
+          type: "TASK_ASSIGNED",
+          entityId: taskId,
+          projectId,
+          payload: {
+            title: existing.title,
+            actorName: currentUser.fullName,
+          },
+          readAt: null,
+          createdAt: now,
+        }),
+      ),
+    ];
+
+    try {
+      await ctx.db.batch(compactBatch(batchItems));
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+      }
+      throw error;
+    }
+
+    ctx.logger.info("Task assignees updated", {
+      taskId,
+      projectId,
+      assigneeCount: data.assigneeIds.length,
+      newAssigneesCount: newAssignees.length,
+    });
 
     const detailData = await this.getTaskDetails(ctx, projectId, taskId);
     return detailData.task;

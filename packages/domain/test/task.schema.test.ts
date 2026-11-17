@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TaskCreateSchema, TaskIdSchema, TaskUpdateSchema } from "../src/schemas/task";
+import { TaskAssignSchema, TaskCreateSchema, TaskIdSchema, TaskUpdateSchema } from "../src/schemas/task";
 
 describe("TaskCreateSchema", () => {
   it("FR-12 c1: accepts valid task creation payload with defaults", () => {
@@ -143,5 +143,51 @@ describe("TaskUpdateSchema", () => {
       expect(parsed.data.sprintId).toBeNull();
       expect(parsed.data.description).toBeNull();
     }
+  });
+});
+
+describe("TaskAssignSchema (FR-15)", () => {
+  it("FR-15 c1: accepts valid assign payload with array of assignees", () => {
+    const parsed = TaskAssignSchema.safeParse({
+      version: 2,
+      assigneeIds: ["user-1", "user-2"],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.version).toBe(2);
+      expect(parsed.data.assigneeIds).toEqual(["user-1", "user-2"]);
+    }
+  });
+
+  it("FR-15 c1: accepts comma-separated assignee string from form data", () => {
+    const parsed = TaskAssignSchema.safeParse({
+      version: "3",
+      assigneeIds: "user-1, user-2",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.version).toBe(3);
+      expect(parsed.data.assigneeIds).toEqual(["user-1", "user-2"]);
+    }
+  });
+
+  it("FR-15 c1: defaults to empty array when assigneeIds omitted or empty", () => {
+    const parsed = TaskAssignSchema.safeParse({
+      version: 1,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.assigneeIds).toEqual([]);
+    }
+  });
+
+  it("FR-15 c1: rejects non-positive or missing version", () => {
+    const parsed = TaskAssignSchema.safeParse({
+      version: 0,
+    });
+    expect(parsed.success).toBe(false);
+
+    const parsedMissing = TaskAssignSchema.safeParse({});
+    expect(parsedMissing.success).toBe(false);
   });
 });

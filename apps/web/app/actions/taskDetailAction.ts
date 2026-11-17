@@ -22,7 +22,11 @@ export async function taskDetailAction(
       return Response.json({ success: true, task }, { status: 200 });
     }
 
-    // TODO(M3-T5): assign intent
+    if (intent === "assign") {
+      const task = await taskService.assignTask(ctx, projectId, taskId, rawData);
+      return Response.json({ success: true, task }, { status: 200 });
+    }
+
     // TODO(M3-T6): archive intent
     // TODO(M3-T7): addSubTask intent
     // TODO(M4): changeStatus, approve, reject, reopen intents

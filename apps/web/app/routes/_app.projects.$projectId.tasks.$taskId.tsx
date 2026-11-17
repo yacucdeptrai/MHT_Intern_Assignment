@@ -37,17 +37,19 @@ interface ActionData {
 }
 
 export default function TaskDetailPage() {
-  const { task, subTasks, sprints, permissions } = useLoaderData<TaskDetailLoaderData>();
+  const { task, subTasks, sprints, members, permissions } = useLoaderData<TaskDetailLoaderData>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [prevActionData, setPrevActionData] = useState(actionData);
 
   if (actionData !== prevActionData) {
     setPrevActionData(actionData);
     if (actionData?.success) {
       setIsEditing(false);
+      setIsAssigning(false);
     }
   }
 
@@ -461,21 +463,71 @@ export default function TaskDetailPage() {
             </div>
 
             <div>
-              <p className="text-xs font-medium text-gray-500">Assignees</p>
-              <div className="mt-1 flex flex-wrap gap-2" data-testid="sidebar-assignees">
-                {task.assignees.length === 0 ? (
-                  <span className="text-sm text-gray-400">Unassigned</span>
-                ) : (
-                  task.assignees.map((a) => (
-                    <span
-                      key={a.id}
-                      className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
-                    >
-                      {a.fullName}
-                    </span>
-                  ))
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-500">Assignees</p>
+                {permissions.canAssign && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAssigning(!isAssigning);
+                    }}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                    data-testid="btn-toggle-assign"
+                  >
+                    {isAssigning ? "Cancel" : "Change"}
+                  </button>
                 )}
               </div>
+              {isAssigning ? (
+                <Form method="post" className="mt-2 space-y-2" data-testid="form-assign">
+                  <input type="hidden" name="intent" value="assign" />
+                  <input type="hidden" name="version" value={task.version} />
+                  <div className="max-h-40 overflow-y-auto space-y-1 rounded border border-gray-200 p-2">
+                    {members.map((m) => {
+                      const isAssigned = task.assignees.some((a) => a.id === m.id);
+                      return (
+                        <label key={m.id} className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            name="assigneeIds"
+                            value={m.id}
+                            defaultChecked={isAssigned}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            data-testid={`checkbox-assignee-${m.id}`}
+                          />
+                          <span>{m.fullName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      data-testid="btn-save-assign"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </Form>
+              ) : (
+                <div className="mt-1 flex flex-wrap gap-2" data-testid="sidebar-assignees">
+                  {task.assignees.length === 0 ? (
+                    <span className="text-sm text-gray-400">Unassigned</span>
+                  ) : (
+                    task.assignees.map((a) => (
+                      <span
+                        key={a.id}
+                        className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
+                        data-testid={`assignee-pill-${a.id}`}
+                      >
+                        {a.fullName}
+                      </span>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
