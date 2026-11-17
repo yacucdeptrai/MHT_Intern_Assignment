@@ -209,6 +209,28 @@ export default function TaskDetailPage() {
               Edit Task
             </button>
           ) : null}
+
+          {permissions.canArchive ? (
+            <Form
+              method="post"
+              onSubmit={(e) => {
+                if (!confirm("Are you sure you want to archive this task?")) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="intent" value="archive" />
+              <input type="hidden" name="version" value={task.version} />
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 shadow-sm hover:bg-red-50 disabled:opacity-50"
+                data-testid="archive-task-button"
+              >
+                Archive Task
+              </button>
+            </Form>
+          ) : null}
         </div>
       </div>
 

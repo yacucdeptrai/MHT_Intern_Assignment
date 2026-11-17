@@ -570,4 +570,113 @@ describe("taskDetailAction", () => {
       expect(res.status).toBe(403);
     });
   });
+
+  describe("taskDetailAction archive intent (FR-14)", () => {
+    it("FR-14 c1: creator archiving task redirects to /projects/${projectId}", async () => {
+      const { ctx: creatorCtx, user: creatorUser, cookie: creatorCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(creatorCtx);
+
+      await creatorCtx.db.batch([
+        projectMemberRepository.insertStmt(creatorCtx.db, {
+          projectId,
+          userId: creatorUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(creatorCtx, projectId, {
+        title: "Task to archive via route",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "archive");
+      formData.append("version", "1");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: creatorCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(creatorCtx, projectId, task.id, req);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe(`/projects/${projectId}`);
+
+      // Verify task is soft deleted
+      const found = await taskRepository.findById(creatorCtx.db, task.id);
+      expect(found).toBeUndefined();
+    });
+
+    it("FR-14 c2: member assignee archiving task returns 403", async () => {
+      const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, {
+        title: "Task assigned to member",
+        assigneeIds: [memberUser.id],
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "archive");
+      formData.append("version", "1");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: memberCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(memberCtx, projectId, task.id, req);
+      expect(res.status).toBe(403);
+    });
+
+    it("non-member archiving task returns 404", async () => {
+      const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+      const { ctx: nonMemberCtx, cookie: nonMemberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, {
+        title: "Task for non-member archive",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "archive");
+      formData.append("version", "1");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: nonMemberCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(nonMemberCtx, projectId, task.id, req);
+      expect(res.status).toBe(404);
+    });
+  });
 });
