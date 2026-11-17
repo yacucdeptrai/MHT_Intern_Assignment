@@ -42,8 +42,11 @@ export async function taskDetailAction(
       return Response.json({ success: true, subTask }, { status: 200 });
     }
 
-    // TODO(M4): changeStatus, approve, reject, reopen intents
-    // TODO(M5): comment, deleteComment, deleteAttachment intents
+    // TODO(M4-T1): changeStatus intent (A16)
+    // TODO(M4-T2): approve intent (A18)
+    // TODO(M4-T3): reject and reopen intents (A19)
+    // TODO(M5-T1): comment and deleteComment intents (A21, A22)
+    // TODO(M5-T2): deleteAttachment intent (A24)
 
     const intentStr = typeof intent === "string" ? intent : "";
     return Response.json({ success: false, message: `Unknown intent: ${intentStr}` }, { status: 400 });

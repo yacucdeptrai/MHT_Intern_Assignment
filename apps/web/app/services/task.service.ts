@@ -63,6 +63,23 @@ export interface TaskDto extends TaskRow {
   assignees: string[];
 }
 
+/**
+ * FR-36 c2/c3: a task's sprint must be a non-archived sprint of the same project.
+ * A sprint from another project (or an unknown id) keeps the SRS message; an archived sprint of this
+ * project gets its own message so the user knows why it cannot be chosen.
+ */
+async function assertSprintAssignable(ctx: RequestContext, projectId: string, sprintId: string): Promise<void> {
+  const sprint = await sprintRepository.findByIdIncludingArchived(ctx.db, sprintId);
+  if (!sprint || sprint.projectId !== projectId) {
+    throw new ValidationError("Sprint does not belong to this project", {
+      sprintId: ["Sprint does not belong to this project"],
+    });
+  }
+  if (sprint.deletedAt !== null) {
+    throw new ValidationError("Sprint is archived", { sprintId: ["Sprint is archived"] });
+  }
+}
+
 export const taskService = {
   async createTask(ctx: RequestContext, projectId: string, rawInput: unknown): Promise<TaskDto> {
     if (!ctx.user) {
@@ -130,12 +147,7 @@ export const taskService = {
       // FR-17 c1: Sub-tasks inherit parent's sprint; any user-supplied sprintId is ignored
       targetSprintId = parent.sprintId ?? null;
     } else if (data.sprintId) {
-      const sprint = await sprintRepository.findById(ctx.db, data.sprintId);
-      if (!sprint || sprint.projectId !== projectId) {
-        throw new ValidationError("Sprint does not belong to this project", {
-          sprintId: ["Sprint does not belong to this project"],
-        });
-      }
+      await assertSprintAssignable(ctx, projectId, data.sprintId);
     }
 
     // Determine default status for category TODO
@@ -665,12 +677,7 @@ export const taskService = {
       // Sub-tasks follow parent sprint; sprint posted for sub-task is ignored
       sprintIdToSet = undefined;
     } else if (sprintIdToSet) {
-      const sprint = await sprintRepository.findById(ctx.db, sprintIdToSet);
-      if (!sprint || sprint.projectId !== projectId) {
-        throw new ValidationError("Sprint does not belong to this project", {
-          sprintId: ["Sprint does not belong to this project"],
-        });
-      }
+      await assertSprintAssignable(ctx, projectId, sprintIdToSet);
     }
 
     // Compute changes for audit log
