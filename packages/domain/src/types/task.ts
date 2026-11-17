@@ -79,3 +79,53 @@ export interface MyTasksLoaderData {
   projects: ProjectOption[];
   statuses: StatusOption[];
 }
+
+export interface TaskDetailDto {
+  id: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  number: number;
+  title: string;
+  description: string | null;
+  priority: TaskPriority;
+  statusId: string;
+  statusName: string;
+  statusCategory: StatusCategory;
+  startDate: string | null;
+  dueDate: string | null;
+  sprintId: string | null;
+  sprintName?: string | null;
+  parentTaskId: string | null;
+  parentTaskTitle?: string | null;
+  parentTaskNumber?: number | null;
+  createdById: string;
+  creatorName: string;
+  creatorAvatarKey?: string | null;
+  assignees: TaskAssigneeInfo[];
+  version: number;
+  statusChangedAt: number;
+  completedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  isOverdue: boolean;
+  isDueSoon: boolean;
+  isTodayPriority: boolean;
+}
+
+export interface TaskPermissions {
+  canEdit: boolean;
+  canArchive: boolean;
+  canAssign: boolean;
+  canApprove: boolean;
+  canReopen: boolean;
+}
+
+export interface TaskDetailLoaderData {
+  task: TaskDetailDto;
+  subTasks: TaskListItem[];
+  members: MemberOption[];
+  sprints: SprintOption[];
+  statuses: StatusOption[];
+  permissions: TaskPermissions;
+}

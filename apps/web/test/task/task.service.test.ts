@@ -10,10 +10,11 @@ import {
   projectRepository,
   sprintRepository,
   taskAssigneeRepository,
+  taskRepository,
   taskStatusRepository,
   userRepository,
 } from "@pm/db";
-import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@pm/domain";
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@pm/domain";
 
 import { taskService } from "../../app/services/task.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
@@ -512,5 +513,404 @@ describe("taskService.listMyTasks", () => {
 
     expect(result.projects.length).toBeGreaterThanOrEqual(1);
     expect(result.tasks.items.some((t) => t.id === task.id)).toBe(true);
+  });
+});
+
+describe("taskService.getTaskDetails", () => {
+  it("FR-13 c1: returns task details, assignees, subtasks, metadata, and permissions", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId, defaultStatus } = await createProjectWithMembers(adminCtx);
+    const adminId = adminCtx.user?.id ?? "";
+
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminId,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const parentTask = await taskService.createTask(adminCtx, projectId, {
+      title: "Parent Task for Detail",
+      description: "Detailed description",
+      priority: "HIGH",
+      assigneeIds: [memberUser.id],
+    });
+
+    const subTask = await taskService.createTask(adminCtx, projectId, {
+      title: "Child Subtask",
+      parentTaskId: parentTask.id,
+      priority: "LOW",
+    });
+
+    const detail = await taskService.getTaskDetails(memberCtx, projectId, parentTask.id);
+    expect(detail.task.id).toBe(parentTask.id);
+    expect(detail.task.title).toBe("Parent Task for Detail");
+    expect(detail.task.description).toBe("Detailed description");
+    expect(detail.task.statusId).toBe(defaultStatus.id);
+    expect(detail.task.assignees.length).toBe(1);
+    expect(detail.task.assignees[0]?.id).toBe(memberUser.id);
+    expect(detail.subTasks.length).toBe(1);
+    expect(detail.subTasks[0]?.id).toBe(subTask.id);
+    // Member is assignee, so canEdit is true
+    expect(detail.permissions.canEdit).toBe(true);
+    expect(detail.permissions.canAssign).toBe(false); // Member cannot assign
+  });
+
+  it("throws NotFoundError when task does not exist or is deleted", async () => {
+    const { ctx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(ctx);
+    await ctx.db.batch([
+      projectMemberRepository.insertStmt(ctx.db, {
+        projectId,
+        userId: ctx.user?.id ?? "",
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    await expect(taskService.getTaskDetails(ctx, projectId, crypto.randomUUID())).rejects.toThrow(NotFoundError);
+  });
+
+  it("throws NotFoundError when requester is not a project member", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Secret Task",
+    });
+
+    await expect(taskService.getTaskDetails(nonMemberCtx, projectId, task.id)).rejects.toThrow(NotFoundError);
+  });
+
+  it("throws UnauthorizedError when requester is unauthenticated", async () => {
+    const { ctx } = await createTestContext("MEMBER");
+    const unauthCtx = { ...ctx, user: null };
+
+    await expect(taskService.getTaskDetails(unauthCtx, "p-1", "t-1")).rejects.toThrow(UnauthorizedError);
+  });
+});
+
+describe("taskService.updateTask", () => {
+  it("FR-13 c1 / A15: allowed editor saves changes with version, updates task, increments version, and audits TASK_UPDATED", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+    const adminId = adminCtx.user?.id ?? "";
+
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminId,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    // Member creates task -> member is creator
+    const task = await taskService.createTask(memberCtx, projectId, {
+      title: "Original Title",
+      description: "Original Description",
+      priority: "MEDIUM",
+      startDate: "2026-12-01",
+      dueDate: "2026-12-10",
+    });
+
+    expect(task.version).toBe(1);
+
+    // Member updates the task
+    const updated = await taskService.updateTask(memberCtx, projectId, task.id, {
+      version: 1,
+      title: "New Title",
+      description: "New Description",
+      priority: "HIGH",
+      startDate: "2026-12-02",
+      dueDate: "2026-12-12",
+    });
+
+    expect(updated.title).toBe("New Title");
+    expect(updated.description).toBe("New Description");
+    expect(updated.priority).toBe("HIGH");
+    expect(updated.version).toBe(2);
+
+    // Verify audit log
+    const logs = await auditLogRepository.listByEntity(adminCtx.db, "TASK", task.id);
+    const updateLog = logs.find((l) => l.action === "TASK_UPDATED");
+    expect(updateLog).toBeDefined();
+    expect(updateLog?.actorId).toBe(memberUser.id);
+    expect(updateLog?.changes?.title).toEqual({ from: "Original Title", to: "New Title" });
+    expect(updateLog?.changes?.priority).toEqual({ from: "MEDIUM", to: "HIGH" });
+  });
+
+  it("FR-13 c2: stale version returns 409 ConflictError and nothing is written", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+    const adminId = adminCtx.user?.id ?? "";
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminId,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Task Concurrent Test",
+    });
+
+    // First update: bumps version to 2
+    await taskService.updateTask(adminCtx, projectId, task.id, {
+      version: 1,
+      title: "Updated First",
+    });
+
+    // Second update with stale version 1 must throw ConflictError
+    await expect(
+      taskService.updateTask(adminCtx, projectId, task.id, {
+        version: 1,
+        title: "Conflicting Update",
+      }),
+    ).rejects.toThrow(ConflictError);
+
+    // Verify task title is still "Updated First"
+    const loaded = await taskRepository.findById(adminCtx.db, task.id);
+    expect(loaded?.title).toBe("Updated First");
+    expect(loaded?.version).toBe(2);
+  });
+
+  it("FR-13 c3: project member who is neither creator nor assignee receives 403 ForbiddenError", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    const { ctx: otherMemberCtx, user: otherMember } = await createTestContext("MEMBER");
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: otherMember.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    // Lead creates task without assigning otherMember
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Lead Only Task",
+    });
+
+    // otherMember tries to edit -> 403 Forbidden
+    await expect(
+      taskService.updateTask(otherMemberCtx, projectId, task.id, {
+        version: 1,
+        title: "Hacked Title",
+      }),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("FR-13 c4: task in DONE status rejected with 403 ForbiddenError('Reopen the task to edit it') for everyone including leads", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    // Create a DONE status
+    const doneStatus = await taskStatusRepository.insert(leadCtx.db, {
+      id: crypto.randomUUID(),
+      name: `Done ${Date.now()}`,
+      category: "DONE",
+      position: 99,
+      isDefault: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Completed Work",
+    });
+
+    // Move task to DONE status directly via updateStatusStmt
+    await leadCtx.db.batch([
+      taskRepository.updateStatusStmt(leadCtx.db, {
+        id: task.id,
+        expectedVersion: 1,
+        statusId: doneStatus.id,
+        now: new Date(),
+      }),
+    ]);
+
+    // Lead tries to update frozen task
+    await expect(
+      taskService.updateTask(leadCtx, projectId, task.id, {
+        version: 2,
+        title: "Trying to edit completed work",
+      }),
+    ).rejects.toThrow("Reopen the task to edit it");
+  });
+
+  it("FR-36 c2: changing parent sprint cascades sprintId to subtasks", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    const sprint = await sprintRepository.insert(leadCtx.db, {
+      id: crypto.randomUUID(),
+      projectId,
+      name: "Sprint 1",
+      startDate: "2026-12-01",
+      endDate: "2026-12-14",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const parent = await taskService.createTask(leadCtx, projectId, {
+      title: "Parent with Subtasks",
+    });
+
+    const subtask = await taskService.createTask(leadCtx, projectId, {
+      title: "Subtask 1",
+      parentTaskId: parent.id,
+    });
+
+    expect(subtask.sprintId).toBeNull();
+
+    // Update parent sprint
+    await taskService.updateTask(leadCtx, projectId, parent.id, {
+      version: 1,
+      sprintId: sprint.id,
+    });
+
+    // Subtask should have received the sprint!
+    const updatedSubtask = await taskRepository.findById(leadCtx.db, subtask.id);
+    expect(updatedSubtask?.sprintId).toBe(sprint.id);
+  });
+
+  it("FR-36 c3: sprint from another project rejected with 400 ValidationError", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+    const { projectId: otherProjectId } = await createProjectWithMembers(leadCtx);
+
+    const foreignSprint = await sprintRepository.insert(leadCtx.db, {
+      id: crypto.randomUUID(),
+      projectId: otherProjectId,
+      name: "Foreign Sprint",
+      startDate: "2026-12-01",
+      endDate: "2026-12-14",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task with foreign sprint attempt",
+    });
+
+    await expect(
+      taskService.updateTask(leadCtx, projectId, task.id, {
+        version: 1,
+        sprintId: foreignSprint.id,
+      }),
+    ).rejects.toThrow("Sprint does not belong to this project");
+  });
+
+  it("rejects date order violation combining updated date with existing date", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    // Existing task has start date 2026-12-10
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task with start date",
+      startDate: "2026-12-10",
+    });
+
+    // Update only dueDate to 2026-12-05 (before existing startDate)
+    await expect(
+      taskService.updateTask(leadCtx, projectId, task.id, {
+        version: 1,
+        dueDate: "2026-12-05",
+      }),
+    ).rejects.toThrow("Due date must be on or after start date");
+  });
+
+  it("throws ForbiddenError when updating task in archived project", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminCtx.user?.id ?? "",
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Task to archive",
+    });
+
+    // Archive project
+    await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+
+    await expect(
+      taskService.updateTask(adminCtx, projectId, task.id, {
+        version: 1,
+        title: "Archived Project Edit",
+      }),
+    ).rejects.toThrow("This project is archived");
   });
 });

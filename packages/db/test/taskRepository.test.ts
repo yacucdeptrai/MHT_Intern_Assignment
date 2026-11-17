@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import { compactBatch } from "../src/batch";
+import { compactBatch, conflictGuardStmt, isVersionConflict } from "../src/batch";
 import { createDatabase } from "../src/client";
 import {
   projectRepository,
@@ -451,5 +451,209 @@ describe("taskRepository", () => {
       endOfWeekStr: "2026-11-24",
     });
     expect(weekRes.items.some((t) => t.id === tWeek)).toBe(true);
+  });
+
+  it("FR-13 c1 / A15: updateStmt updates fields, bumps version and succeeds with conflictGuardStmt", async () => {
+    const { db, now, user, projectA, status } = await createBaseFixtures();
+
+    const taskId = crypto.randomUUID();
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Original title",
+        description: "Original description",
+        priority: "MEDIUM",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const initial = await taskRepository.findById(db, taskId);
+    expect(initial?.version).toBe(1);
+
+    const updateTime = new Date(now.getTime() + 5000);
+    await db.batch([
+      taskRepository.updateStmt(db, {
+        id: taskId,
+        expectedVersion: 1,
+        title: "Updated title",
+        description: "New description",
+        priority: "URGENT",
+        startDate: "2026-11-20",
+        dueDate: "2026-11-25",
+        now: updateTime,
+      }),
+      conflictGuardStmt(db),
+    ]);
+
+    const updated = await taskRepository.findById(db, taskId);
+    expect(updated?.version).toBe(2);
+    expect(updated?.title).toBe("Updated title");
+    expect(updated?.description).toBe("New description");
+    expect(updated?.priority).toBe("URGENT");
+    expect(updated?.startDate).toBe("2026-11-20");
+    expect(updated?.dueDate).toBe("2026-11-25");
+  });
+
+  it("FR-13 c2 / A15: updateStmt fails with conflictGuardStmt when expectedVersion is stale", async () => {
+    const { db, now, user, projectA, status } = await createBaseFixtures();
+
+    const taskId = crypto.randomUUID();
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Task with version 1",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    // First update bumps version to 2
+    await db.batch([
+      taskRepository.updateStmt(db, {
+        id: taskId,
+        expectedVersion: 1,
+        title: "Version 2 title",
+        now: new Date(now.getTime() + 1000),
+      }),
+      conflictGuardStmt(db),
+    ]);
+
+    // Second update with stale version 1 must fail due to conflictGuardStmt
+    let conflictCaught = false;
+    try {
+      await db.batch([
+        taskRepository.updateStmt(db, {
+          id: taskId,
+          expectedVersion: 1, // Stale! Current is 2
+          title: "Conflicting title",
+          now: new Date(now.getTime() + 2000),
+        }),
+        conflictGuardStmt(db),
+      ]);
+    } catch (err) {
+      conflictCaught = isVersionConflict(err);
+    }
+
+    expect(conflictCaught).toBe(true);
+
+    const finalTask = await taskRepository.findById(db, taskId);
+    expect(finalTask?.version).toBe(2);
+    expect(finalTask?.title).toBe("Version 2 title");
+  });
+
+  it("A15: updateSubtasksSprintStmt updates sprint on sub-tasks", async () => {
+    const { db, now, user, projectA, status } = await createBaseFixtures();
+
+    const sprint = await sprintRepository.insert(db, {
+      id: crypto.randomUUID(),
+      projectId: projectA.id,
+      name: "Subtask Sprint",
+      startDate: "2026-12-01",
+      endDate: "2026-12-15",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const parentId = crypto.randomUUID();
+    const sub1Id = crypto.randomUUID();
+    const sub2Id = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: parentId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Parent Task",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: sub1Id,
+        projectId: projectA.id,
+        statusId: status.id,
+        parentTaskId: parentId,
+        title: "Subtask 1",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: sub2Id,
+        projectId: projectA.id,
+        statusId: status.id,
+        parentTaskId: parentId,
+        title: "Subtask 2",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    // Update parent's subtasks sprint
+    await db.batch([taskRepository.updateSubtasksSprintStmt(db, parentId, sprint.id, new Date())]);
+
+    const sub1 = await taskRepository.findById(db, sub1Id);
+    const sub2 = await taskRepository.findById(db, sub2Id);
+
+    expect(sub1?.sprintId).toBe(sprint.id);
+    expect(sub2?.sprintId).toBe(sprint.id);
+  });
+
+  it("FR-13 c1: findDetailsById and listSubtasks retrieve joined task detail and subtasks", async () => {
+    const { db, now, user, projectA, status } = await createBaseFixtures();
+
+    const parentId = crypto.randomUUID();
+    const childId = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: parentId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Parent Task",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: childId,
+        projectId: projectA.id,
+        statusId: status.id,
+        parentTaskId: parentId,
+        title: "Child Subtask",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const details = await taskRepository.findDetailsById(db, childId);
+    expect(details).toBeDefined();
+    expect(details?.id).toBe(childId);
+    expect(details?.projectCode).toBe(projectA.code);
+    expect(details?.projectName).toBe(projectA.name);
+    expect(details?.creatorName).toBe(user.fullName);
+    expect(details?.parentTaskId).toBe(parentId);
+    expect(details?.parentTaskTitle).toBe("Parent Task");
+
+    const subtasks = await taskRepository.listSubtasks(db, parentId);
+    expect(subtasks.length).toBe(1);
+    expect(subtasks[0]?.id).toBe(childId);
+    expect(subtasks[0]?.title).toBe("Child Subtask");
   });
 });
