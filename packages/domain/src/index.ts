@@ -23,3 +23,4 @@ export type * from "./types/invite";
 export type * from "./types/project";
 export type * from "./types/notification";
 export type * from "./types/task";
+export type * from "./types/sprint";
