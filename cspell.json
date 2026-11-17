@@ -29,6 +29,7 @@
     "xoxb",
     "nosniff",
     "unarchived",
-    "notused"
+    "notused",
+    "commitlint"
   ]
 }
