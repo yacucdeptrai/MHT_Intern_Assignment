@@ -138,7 +138,9 @@ export const taskRepository = {
     if (filter.priority) {
       conditions.push(eq(tasks.priority, filter.priority));
     }
-    if (filter.sprintId) {
+    if (filter.sprintId === "backlog") {
+      conditions.push(isNull(tasks.sprintId));
+    } else if (filter.sprintId) {
       conditions.push(eq(tasks.sprintId, filter.sprintId));
     }
     if (filter.assigneeId) {
