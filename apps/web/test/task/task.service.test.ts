@@ -1159,3 +1159,191 @@ describe("taskService.assignTask (FR-15)", () => {
     ).rejects.toMatchObject({ status: 403, message: "This project is archived" });
   });
 });
+
+describe("taskService.archiveTask", () => {
+  it("FR-14 c1 / A20: creator archives task with sub-tasks, soft-deleting both and auditing TASK_ARCHIVED", async () => {
+    const { ctx: creatorCtx, user: creatorUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+
+    await creatorCtx.db.batch([
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: creatorUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const parentTask = await taskService.createTask(creatorCtx, projectId, {
+      title: "Parent Task to Archive",
+    });
+
+    const childTask = await taskService.createTask(creatorCtx, projectId, {
+      title: "Child Subtask to Archive",
+      parentTaskId: parentTask.id,
+    });
+
+    await taskService.archiveTask(creatorCtx, projectId, parentTask.id, {
+      version: 1,
+    });
+
+    // Parent should be soft deleted
+    const foundParent = await taskRepository.findById(creatorCtx.db, parentTask.id);
+    expect(foundParent).toBeUndefined();
+
+    // Child should also be soft deleted
+    const foundChild = await taskRepository.findById(creatorCtx.db, childTask.id);
+    expect(foundChild).toBeUndefined();
+
+    // Audit log TASK_ARCHIVED should be recorded
+    const logs = await auditLogRepository.listByProject(creatorCtx.db, projectId);
+    const archiveLog = logs.find((l) => l.action === "TASK_ARCHIVED" && l.entityId === parentTask.id);
+    expect(archiveLog).toBeDefined();
+    expect(archiveLog?.actorId).toBe(creatorUser.id);
+  });
+
+  it("FR-14 c1: project TEAM_LEAD / PM / ADMIN can archive task created by someone else", async () => {
+    const { ctx: creatorCtx, user: creatorUser } = await createTestContext("MEMBER");
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+
+    await creatorCtx.db.batch([
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: creatorUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(creatorCtx, projectId, {
+      title: "Task to be archived by lead",
+    });
+
+    await taskService.archiveTask(leadCtx, projectId, task.id, {
+      version: 1,
+    });
+
+    const found = await taskRepository.findById(leadCtx.db, task.id);
+    expect(found).toBeUndefined();
+  });
+
+  it("FR-14 c2: member assignee who is not creator is forbidden from archiving (403)", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task assigned to member",
+      assigneeIds: [memberUser.id],
+    });
+
+    await expect(
+      taskService.archiveTask(memberCtx, projectId, task.id, {
+        version: 1,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: "You do not have permission to archive this task",
+    });
+  });
+
+  it("A20: rejects with 409 when version is stale", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task with stale version",
+    });
+
+    await expect(
+      taskService.archiveTask(leadCtx, projectId, task.id, {
+        version: 99,
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "This task was changed by someone else. Reload to see the latest version.",
+    });
+  });
+
+  it("rejects with 404 when non-member archives task", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task for non-member test",
+    });
+
+    await expect(
+      taskService.archiveTask(nonMemberCtx, projectId, task.id, {
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("rejects with 403 when archiving task in archived project", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminCtx.user?.id ?? "",
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Task in project to be archived",
+    });
+
+    await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+
+    await expect(
+      taskService.archiveTask(adminCtx, projectId, task.id, {
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ status: 403, message: "This project is archived" });
+  });
+});
