@@ -8,4 +8,4 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   esac
 done
 
-pnpm typecheck
+pnpm typecheck && pnpm deps:check
