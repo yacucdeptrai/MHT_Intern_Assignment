@@ -1,7 +1,14 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import { auditLogRepository, createDatabase, taskStatusRepository, userRepository } from "@pm/db";
+import {
+  auditLogRepository,
+  createDatabase,
+  projectRepository,
+  taskRepository,
+  taskStatusRepository,
+  userRepository,
+} from "@pm/db";
 import { ForbiddenError, ValidationError } from "@pm/domain";
 import { taskStatusService } from "../../app/services/taskStatus.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
@@ -187,6 +194,104 @@ describe("taskStatusService", () => {
       await expect(taskStatusService.deleteStatus(ctx, { statusId: defaultStatus.id })).rejects.toThrow(
         ValidationError,
       );
+    });
+
+    it("FR-20 c3: rejects deleting a status in use by existing tasks with 400 This status is in use by N tasks", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const status = await taskStatusService.createStatus(ctx, {
+        name: `InUseStatus-${Date.now()}`,
+        category: "TODO",
+      });
+
+      const now = new Date();
+      const project = {
+        id: crypto.randomUUID(),
+        code: `PRJ${Date.now().toString().slice(-6)}`,
+        name: "Test Project",
+        status: "ACTIVE" as const,
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        createdById: ctx.user?.id ?? "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      await ctx.db.batch([projectRepository.insertStmt(ctx.db, project)]);
+
+      // Create a task using this status
+      await ctx.db.batch([
+        taskRepository.insertStmt(ctx.db, {
+          id: crypto.randomUUID(),
+          projectId: project.id,
+          statusId: status.id,
+          title: "Task Using Status",
+          createdById: ctx.user?.id ?? "",
+          statusChangedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ]);
+
+      await expect(taskStatusService.deleteStatus(ctx, { statusId: status.id })).rejects.toThrow(
+        "This status is in use by 1 tasks",
+      );
+    });
+  });
+
+  describe("FR-20 c4: Change status category", () => {
+    it("FR-20 c4: allows changing category when no tasks use the status", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const status = await taskStatusService.createStatus(ctx, {
+        name: `ChangeCatEmpty-${Date.now()}`,
+        category: "TODO",
+      });
+
+      const updated = await taskStatusService.updateStatus(ctx, {
+        statusId: status.id,
+        category: "IN_PROGRESS",
+      });
+      expect(updated.category).toBe("IN_PROGRESS");
+    });
+
+    it("FR-20 c4: rejects category change if any task uses the status", async () => {
+      const ctx = await createMockContext("ADMIN");
+      const status = await taskStatusService.createStatus(ctx, {
+        name: `ChangeCatInUse-${Date.now()}`,
+        category: "TODO",
+      });
+
+      const now = new Date();
+      const project = {
+        id: crypto.randomUUID(),
+        code: `CAT${Date.now().toString().slice(-6)}`,
+        name: "Test Project",
+        status: "ACTIVE" as const,
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        createdById: ctx.user?.id ?? "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      await ctx.db.batch([projectRepository.insertStmt(ctx.db, project)]);
+
+      await ctx.db.batch([
+        taskRepository.insertStmt(ctx.db, {
+          id: crypto.randomUUID(),
+          projectId: project.id,
+          statusId: status.id,
+          title: "Task Using Status",
+          createdById: ctx.user?.id ?? "",
+          statusChangedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ]);
+
+      await expect(
+        taskStatusService.updateStatus(ctx, {
+          statusId: status.id,
+          category: "IN_PROGRESS",
+        }),
+      ).rejects.toThrow("Cannot change status category when tasks use this status");
     });
   });
 

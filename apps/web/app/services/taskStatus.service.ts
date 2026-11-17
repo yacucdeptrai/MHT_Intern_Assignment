@@ -3,6 +3,7 @@ import {
   compactBatch,
   conflictGuardStmt,
   isVersionConflict,
+  taskRepository,
   taskStatusRepository,
   type AppBatchItem,
   type TaskStatus,
@@ -153,7 +154,10 @@ export const taskStatusService = {
 
     if (category && category !== current.category) {
       // FR-20 c4: Changing category is rejected if any task uses the status. Otherwise allowed.
-      // TODO(M3-T2): check tasks count for statusId once tasks table exists (A26/FR-20 c4)
+      const taskCount = await taskRepository.countByStatusId(ctx.db, current.id);
+      if (taskCount > 0) {
+        throw new ValidationError("Cannot change status category when tasks use this status");
+      }
     }
 
     const now = ctx.clock.now();
@@ -307,7 +311,10 @@ export const taskStatusService = {
     }
 
     // FR-20 c3: "Given a status used by any task, including archived tasks, When the Admin deletes it, Then the request is rejected with 400 'This status is in use by N tasks'."
-    // TODO(M3-T2): check task count using statusId once tasks table exists (A26/FR-20 c3)
+    const taskCount = await taskRepository.countByStatusId(ctx.db, target.id);
+    if (taskCount > 0) {
+      throw new ValidationError(`This status is in use by ${taskCount} tasks`);
+    }
 
     const now = ctx.clock.now();
     const auditId = crypto.randomUUID();
