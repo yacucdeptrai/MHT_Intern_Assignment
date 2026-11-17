@@ -6,6 +6,7 @@ import { NotFoundError } from "@pm/domain";
 
 import { loader as projectLayoutLoader } from "../../app/routes/_app.projects.$projectId";
 import { loader as projectMembersRouteLoader } from "../../app/routes/_app.projects.$projectId.members";
+import { loader as projectSprintsRouteLoader } from "../../app/routes/_app.projects.$projectId.sprints";
 import { projectService } from "../../app/services/project/project.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 import { requestContextKey } from "../../app/utils/requestContext.server";
@@ -274,6 +275,22 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
 
     try {
       await projectMembersRouteLoader(args);
+      expect.fail("Should have thrown 404 Response");
+    } catch (err) {
+      expect(err).toBeInstanceOf(Response);
+      const res = err as Response;
+      expect(res.status).toBe(404);
+    }
+  });
+
+  it("throws 404 Response when non-member requests /projects/:projectId/sprints", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const ctx = contextFor(db, world.users.nonMember);
+    const args = await requestFor(`http://localhost/projects/${world.projectId}/sprints`, world.users.nonMember, ctx);
+
+    try {
+      await projectSprintsRouteLoader(args);
       expect.fail("Should have thrown 404 Response");
     } catch (err) {
       expect(err).toBeInstanceOf(Response);
