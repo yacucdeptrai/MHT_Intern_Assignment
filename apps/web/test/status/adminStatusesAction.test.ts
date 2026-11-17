@@ -265,9 +265,7 @@ describe("adminStatusesAction and Loader", () => {
         projectId,
         userId,
         projectRole: "PM",
-        joinedAt: now,
         createdAt: now,
-        updatedAt: now,
       }),
     ]);
 
