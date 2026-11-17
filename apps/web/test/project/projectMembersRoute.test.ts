@@ -263,5 +263,129 @@ describe("projectMembersLoader and projectMembersAction", () => {
       const res = await projectMembersAction(member.ctx, req, projectId);
       expect(res.status).toBe(403);
     });
+
+    it("FR-11 c1: changes member role successfully via projectMembersAction", async () => {
+      const { ctx, cookie, user } = await createTestContext("PM");
+      const { projectId } = await createProjectWithPM(ctx, user.id);
+
+      const target = await createTestContext("MEMBER");
+      await projectMemberRepository.insertStmt(ctx.db, {
+        projectId,
+        userId: target.user.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      });
+
+      const form = new FormData();
+      form.append("intent", "changeRole");
+      form.append("userId", target.user.id);
+      form.append("projectRole", "TEAM_LEAD");
+
+      const req = new Request(`http://localhost/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: form,
+      });
+
+      const res = await projectMembersAction(ctx, req, projectId);
+      expect(res.status).toBe(200);
+      const data = await res.json<{ success: boolean }>();
+      expect(data.success).toBe(true);
+
+      const updated = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, target.user.id);
+      expect(updated?.projectRole).toBe("TEAM_LEAD");
+    });
+
+    it("FR-11 c2: rejects demoting the last PM via changeRole with 400", async () => {
+      const { ctx, cookie, user } = await createTestContext("PM");
+      const { projectId } = await createProjectWithPM(ctx, user.id);
+
+      const form = new FormData();
+      form.append("intent", "changeRole");
+      form.append("userId", user.id);
+      form.append("projectRole", "MEMBER");
+
+      const req = new Request(`http://localhost/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: form,
+      });
+
+      const res = await projectMembersAction(ctx, req, projectId);
+      expect(res.status).toBe(400);
+      const data = await res.json<{ message: string }>();
+      expect(data.message).toBe("A project needs at least one PM");
+    });
+
+    it("FR-11 c3: rejects role change by TEAM_LEAD and MEMBER with 403", async () => {
+      const pm = await createTestContext("PM");
+      const { projectId } = await createProjectWithPM(pm.ctx, pm.user.id);
+
+      const lead = await createTestContext("TEAM_LEAD");
+      await projectMemberRepository.insertStmt(pm.ctx.db, {
+        projectId,
+        userId: lead.user.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      });
+
+      const form = new FormData();
+      form.append("intent", "changeRole");
+      form.append("userId", pm.user.id);
+      form.append("projectRole", "MEMBER");
+
+      const req = new Request(`http://localhost/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { Cookie: lead.cookie },
+        body: form,
+      });
+
+      const res = await projectMembersAction(lead.ctx, req, projectId);
+      expect(res.status).toBe(403);
+    });
+
+    it("FR-11: non-member receives 404 for role change", async () => {
+      const pm = await createTestContext("PM");
+      const { projectId } = await createProjectWithPM(pm.ctx, pm.user.id);
+
+      const nonMember = await createTestContext("MEMBER");
+
+      const form = new FormData();
+      form.append("intent", "changeRole");
+      form.append("userId", pm.user.id);
+      form.append("projectRole", "TEAM_LEAD");
+
+      const req = new Request(`http://localhost/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { Cookie: nonMember.cookie },
+        body: form,
+      });
+
+      const res = await projectMembersAction(nonMember.ctx, req, projectId);
+      expect(res.status).toBe(404);
+    });
+
+    it("FR-11: archived project rejects role change with 403", async () => {
+      const admin = await createTestContext("ADMIN");
+      const { projectId } = await createProjectWithPM(admin.ctx, admin.user.id);
+
+      await admin.ctx.db.batch([projectRepository.archiveStmt(admin.ctx.db, projectId, new Date())]);
+
+      const form = new FormData();
+      form.append("intent", "changeRole");
+      form.append("userId", admin.user.id);
+      form.append("projectRole", "TEAM_LEAD");
+
+      const req = new Request(`http://localhost/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { Cookie: admin.cookie },
+        body: form,
+      });
+
+      const res = await projectMembersAction(admin.ctx, req, projectId);
+      expect(res.status).toBe(403);
+      const data = await res.json<{ message: string }>();
+      expect(data.message).toBe("This project is archived");
+    });
   });
 });

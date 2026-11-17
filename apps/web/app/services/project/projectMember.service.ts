@@ -6,6 +6,7 @@ import {
   notificationRepository,
   projectMemberRepository,
   userRepository,
+  type AppDatabase,
 } from "@pm/db";
 import {
   canManageMembers,
@@ -32,6 +33,17 @@ import {
 import { loadProjectAccess } from "../../utils/auth.server";
 import type { RequestContext } from "../../utils/requestContext.server";
 import { inviteService } from "../invite.service";
+
+/**
+ * Shared last-PM guard for FR-10 c5 and FR-11 c2:
+ * Prevents removing or demoting the last PM in a project.
+ */
+export async function assertNotLastPm(db: AppDatabase, projectId: string): Promise<void> {
+  const pmCount = await projectMemberRepository.countByProjectAndRole(db, projectId, "PM");
+  if (pmCount <= 1) {
+    throw new ValidationError("A project needs at least one PM");
+  }
+}
 
 export const projectMemberService = {
   async getProjectMembers(
@@ -214,10 +226,7 @@ export const projectMemberService = {
     }
 
     if (member.projectRole === "PM") {
-      const pmCount = await projectMemberRepository.countByProjectAndRole(ctx.db, projectId, "PM");
-      if (pmCount <= 1) {
-        throw new ValidationError("A project needs at least one PM");
-      }
+      await assertNotLastPm(ctx.db, projectId);
     }
 
     const now = ctx.clock.now();
@@ -354,10 +363,7 @@ export const projectMemberService = {
     }
 
     if (member.projectRole === "PM" && projectRole !== "PM") {
-      const pmCount = await projectMemberRepository.countByProjectAndRole(ctx.db, projectId, "PM");
-      if (pmCount <= 1) {
-        throw new ValidationError("A project needs at least one PM");
-      }
+      await assertNotLastPm(ctx.db, projectId);
     }
 
     const now = ctx.clock.now();
