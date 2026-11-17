@@ -282,6 +282,15 @@ export const taskRepository = {
     return result[0]?.count ?? 0;
   },
 
+  countGroupedByStatusId: async (db: AppDatabase): Promise<Record<string, number>> => {
+    const rows = await db.select({ statusId: tasks.statusId, count: count() }).from(tasks).groupBy(tasks.statusId);
+    const result: Record<string, number> = {};
+    for (const row of rows) {
+      result[row.statusId] = row.count;
+    }
+    return result;
+  },
+
   listByProject: async (db: AppDatabase, projectId: string): Promise<TaskRow[]> => {
     return db.query.tasks.findMany({
       where: and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)),

@@ -16,12 +16,14 @@ export async function adminStatusesLoader(ctx: RequestContext, request: Request)
   const user = await requireUser(ctx, request);
   requireSystemRole(user, ["ADMIN"]);
 
-  const statuses = await taskStatusService.listStatuses(ctx);
+  const [statuses, taskCounts] = await Promise.all([
+    taskStatusService.listStatuses(ctx),
+    taskStatusService.getTaskCountsByStatus(ctx),
+  ]);
 
-  // TODO(M3-T2): aggregate actual taskCount per status once tasks table is created
   const statusesWithCount: StatusAdminRow[] = statuses.map((status) => ({
     ...status,
-    taskCount: 0,
+    taskCount: taskCounts[status.id] ?? 0,
   }));
 
   return {
