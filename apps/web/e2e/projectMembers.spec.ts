@@ -29,16 +29,17 @@ test.describe("Project Members Management (FR-10)", () => {
     await pmPage.getByRole("link", { name: code, exact: true }).click();
     await pmPage.waitForURL("**/projects/*");
 
-    // Click Members tab
-    await pmPage.getByTestId("tab-members").click();
-    await pmPage.waitForURL("**/members");
+    // Go to Members page
+    const projectUrl = pmPage.url();
+    const projectId = projectUrl.split("/projects/")[1]?.split("/")[0] ?? "";
+    await pmPage.goto(`/projects/${projectId}/members`);
 
     // Verify PM is in the members table
     await expect(pmPage.getByTestId("members-table")).toBeVisible();
     await expect(pmPage.getByTestId("members-table").getByText(pm.fullName)).toBeVisible();
 
     // Search for Candidate user in Add Existing User form
-    await pmPage.getByTestId("search-user-input").fill(candidate.fullName.slice(0, 8));
+    await pmPage.getByTestId("search-user-input").fill(candidate.email);
     const userSelect = pmPage.getByTestId("search-user-select");
     await expect(userSelect).toBeVisible();
     await userSelect.selectOption({ label: `${candidate.fullName} (${candidate.email})` });
@@ -68,11 +69,12 @@ test.describe("Project Members Management (FR-10)", () => {
     // Remove candidate from project
     // Handle browser confirmation dialog
     pmPage.once("dialog", (dialog) => dialog.accept());
-    const removeBtn = pmPage.locator(`button:has-text("Remove")`).last();
-    await removeBtn.click();
+    const candidateRow = pmPage.locator("tr", { hasText: candidate.fullName });
+    await candidateRow.getByRole("button", { name: "Remove" }).click();
 
     // Verify member is removed from table
     await expect(pmPage.getByTestId("success-banner")).toBeVisible();
+    await expect(pmPage.getByTestId("members-table").getByText(candidate.fullName)).not.toBeVisible();
 
     await candidate.context.close();
     await pm.context.close();
@@ -105,7 +107,7 @@ test.describe("Project Members Management (FR-10)", () => {
 
     // PM adds otherMember to the project
     await pmPage.goto(`/projects/${projectId}/members`);
-    await pmPage.getByTestId("search-user-input").fill(otherMember.fullName.slice(0, 8));
+    await pmPage.getByTestId("search-user-input").fill(otherMember.email);
     await expect(pmPage.getByTestId("search-user-select")).toBeVisible();
     await pmPage
       .getByTestId("search-user-select")

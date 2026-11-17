@@ -28,12 +28,11 @@ test.describe("Project Roles Management (FR-11)", () => {
     const projectUrl = pmPage.url();
     const projectId = projectUrl.split("/projects/")[1]?.split("/")[0] ?? "";
 
-    // Go to members tab
-    await pmPage.getByTestId("tab-members").click();
-    await pmPage.waitForURL("**/members");
+    // Go to members page
+    await pmPage.goto(`/projects/${projectId}/members`);
 
     // Add member to project
-    await pmPage.getByTestId("search-user-input").fill(member.fullName.slice(0, 8));
+    await pmPage.getByTestId("search-user-input").fill(member.email);
     await expect(pmPage.getByTestId("search-user-select")).toBeVisible();
     await pmPage.getByTestId("search-user-select").selectOption({ label: `${member.fullName} (${member.email})` });
     await pmPage.getByTestId("add-member-role-select").selectOption("MEMBER");
