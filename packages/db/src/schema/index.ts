@@ -6,3 +6,4 @@ export * from "./auditLogs";
 export * from "./outboxJobs";
 export * from "./oauthAccounts";
 export * from "./notifications";
+export * from "./taskStatuses";

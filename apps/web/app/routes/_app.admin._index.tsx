@@ -47,20 +47,35 @@ export default function AdminDashboardPage() {
         </div>
 
         {isAdmin ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">User Management</h2>
-            <p className="text-sm text-gray-600">
-              Invite new team members, manage account status, and assign system permissions.
-            </p>
-            <div className="pt-2">
-              <Link
-                to="/admin/users"
-                className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
-              >
-                Manage Users →
-              </Link>
+          <>
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
+              <h2 className="text-base font-semibold text-gray-900">User Management</h2>
+              <p className="text-sm text-gray-600">
+                Invite new team members, manage account status, and assign system permissions.
+              </p>
+              <div className="pt-2">
+                <Link
+                  to="/admin/users"
+                  className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                  Manage Users →
+                </Link>
+              </div>
             </div>
-          </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
+              <h2 className="text-base font-semibold text-gray-900">Task Statuses</h2>
+              <p className="text-sm text-gray-600">Configure system-wide workflow statuses and category defaults.</p>
+              <div className="pt-2">
+                <Link
+                  to="/admin/statuses"
+                  className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                  Configure Statuses →
+                </Link>
+              </div>
+            </div>
+          </>
         ) : null}
 
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">

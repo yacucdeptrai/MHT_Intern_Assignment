@@ -9,6 +9,7 @@ export * from "./schemas/invite";
 export * from "./schemas/dateOrder";
 export * from "./schemas/project";
 export * from "./schemas/projectMember";
+export * from "./schemas/status";
 export * from "./policies/types";
 export * from "./policies/user";
 export * from "./policies/project";
