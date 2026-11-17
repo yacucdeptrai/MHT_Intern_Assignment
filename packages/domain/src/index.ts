@@ -11,6 +11,7 @@ export * from "./schemas/project";
 export * from "./schemas/projectMember";
 export * from "./schemas/status";
 export * from "./schemas/task";
+export * from "./schemas/sprint";
 export * from "./dates";
 export * from "./policies/types";
 export * from "./policies/user";

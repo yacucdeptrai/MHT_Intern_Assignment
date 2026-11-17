@@ -782,4 +782,61 @@ describe("taskRepository", () => {
     }
     expect(isVersionConflict(caught)).toBe(true);
   });
+
+  it("FR-36 c4 / A13: clearSprintBySprintIdStmt unlinks sprint and increments version on tasks", async () => {
+    const { db, user, projectA, status, now } = await createBaseFixtures();
+    const sprintId = crypto.randomUUID();
+
+    await sprintRepository.insert(db, {
+      id: sprintId,
+      projectId: projectA.id,
+      name: "Sprint to Unlink",
+      startDate: "2026-11-01",
+      endDate: "2026-11-14",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const task1Id = crypto.randomUUID();
+    const task2Id = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: task1Id,
+        projectId: projectA.id,
+        statusId: status.id,
+        sprintId,
+        title: "Sprint Task 1",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: task2Id,
+        projectId: projectA.id,
+        statusId: status.id,
+        sprintId,
+        title: "Sprint Task 2",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const unlinkTime = new Date(now.getTime() + 5000);
+    await db.batch([taskRepository.clearSprintBySprintIdStmt(db, { sprintId, now: unlinkTime })]);
+
+    const t1 = await taskRepository.findById(db, task1Id);
+    const t2 = await taskRepository.findById(db, task2Id);
+
+    expect(t1?.sprintId).toBeNull();
+    expect(t1?.version).toBe(2);
+    expect(t1?.updatedAt).toEqual(unlinkTime);
+
+    expect(t2?.sprintId).toBeNull();
+    expect(t2?.version).toBe(2);
+    expect(t2?.updatedAt).toEqual(unlinkTime);
+  });
 });

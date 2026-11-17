@@ -212,6 +212,17 @@ export const taskRepository = {
       .where(and(eq(tasks.parentTaskId, parentTaskId), isNull(tasks.deletedAt)));
   },
 
+  clearSprintBySprintIdStmt: (db: AppDatabase, input: { sprintId: string; now: Date }) => {
+    return db
+      .update(tasks)
+      .set({
+        sprintId: null,
+        version: sql`${tasks.version} + 1`,
+        updatedAt: input.now,
+      })
+      .where(and(eq(tasks.sprintId, input.sprintId), isNull(tasks.deletedAt)));
+  },
+
   findDetailsById: async (db: AppDatabase, id: string): Promise<TaskDetailRow | undefined> => {
     const parentTasks = alias(tasks, "parent_tasks");
     const rows = await db
