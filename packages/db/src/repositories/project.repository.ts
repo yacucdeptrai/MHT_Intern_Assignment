@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import { projectMembers } from "../schema/projectMembers";
@@ -7,6 +7,23 @@ import { projects, type NewProject, type Project } from "../schema/projects";
 export const projectRepository = {
   insertStmt(db: AppDatabase, project: NewProject) {
     return db.insert(projects).values(project);
+  },
+
+  updateStmt(db: AppDatabase, id: string, patch: Partial<Omit<NewProject, "id" | "code">>) {
+    return db
+      .update(projects)
+      .set(patch)
+      .where(and(eq(projects.id, id), isNull(projects.deletedAt)));
+  },
+
+  archiveStmt(db: AppDatabase, id: string, deletedAt: Date = new Date()) {
+    return db
+      .update(projects)
+      .set({
+        deletedAt,
+        updatedAt: deletedAt,
+      })
+      .where(and(eq(projects.id, id), isNull(projects.deletedAt)));
   },
 
   async findById(db: AppDatabase, id: string): Promise<Project | null> {
@@ -38,6 +55,10 @@ export const projectRepository = {
       return db.select().from(projects).orderBy(desc(projects.createdAt));
     }
     return db.select().from(projects).where(isNull(projects.deletedAt)).orderBy(desc(projects.createdAt));
+  },
+
+  async listArchived(db: AppDatabase): Promise<Project[]> {
+    return db.select().from(projects).where(isNotNull(projects.deletedAt)).orderBy(desc(projects.deletedAt));
   },
 
   async listForUser(db: AppDatabase, userId: string): Promise<Array<Project & { projectRole: string }>> {

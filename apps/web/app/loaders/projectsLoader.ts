@@ -8,10 +8,18 @@ export async function projectsLoader(ctx: RequestContext, request: Request) {
   const user = await requireUser(ctx, request);
   const actor = toActor(user, null);
   const canCreate = canManageProject(actor, "create");
-  const projects = await projectService.listProjects(ctx);
+  const isAdmin = user.systemRole === "ADMIN";
+
+  const url = new URL(request.url);
+  const filter = url.searchParams.get("filter") ?? "active";
+  const archivedOnly = isAdmin && filter === "archived";
+
+  const projects = await projectService.listProjects(ctx, { archivedOnly });
 
   return {
     projects,
     canCreate,
+    filter,
+    isAdmin,
   };
 }

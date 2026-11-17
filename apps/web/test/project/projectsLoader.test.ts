@@ -114,5 +114,58 @@ describe("projectsLoader", () => {
     );
 
     expect(data.projects.some((p) => p.id === pId)).toBe(true);
+    expect(data.isAdmin).toBe(false);
+  });
+
+  it("FR-09 c5: Admin can filter by archived", async () => {
+    const admin = await createTestContext("ADMIN");
+    const now = new Date();
+    const activeId = crypto.randomUUID();
+    const archivedId = crypto.randomUUID();
+
+    await admin.ctx.db.batch([
+      projectRepository.insertStmt(admin.ctx.db, {
+        id: activeId,
+        code: `ACT-${Date.now().toString().slice(-4)}`,
+        name: "Active In Loader",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "ACTIVE",
+        createdById: admin.user.id,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      projectRepository.insertStmt(admin.ctx.db, {
+        id: archivedId,
+        code: `ARC-${Date.now().toString().slice(-4)}`,
+        name: "Archived In Loader",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "ACTIVE",
+        createdById: admin.user.id,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      }),
+    ]);
+
+    // Default request: active only
+    const activeData = await projectsLoader(
+      admin.ctx,
+      new Request("http://localhost/projects", { headers: { Cookie: admin.cookie } }),
+    );
+    expect(activeData.isAdmin).toBe(true);
+    expect(activeData.filter).toBe("active");
+    expect(activeData.projects.some((p) => p.id === activeId)).toBe(true);
+    expect(activeData.projects.some((p) => p.id === archivedId)).toBe(false);
+
+    // Archived filter request
+    const archivedData = await projectsLoader(
+      admin.ctx,
+      new Request("http://localhost/projects?filter=archived", { headers: { Cookie: admin.cookie } }),
+    );
+    expect(archivedData.filter).toBe("archived");
+    expect(archivedData.projects.some((p) => p.id === activeId)).toBe(false);
+    expect(archivedData.projects.some((p) => p.id === archivedId)).toBe(true);
   });
 });

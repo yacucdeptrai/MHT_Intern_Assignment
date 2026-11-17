@@ -1,8 +1,18 @@
-import { auditLogRepository, projectMemberRepository, projectRepository, type Project } from "@pm/db";
 import {
+  auditLogRepository,
+  conflictGuardStmt,
+  isVersionConflict,
+  projectMemberRepository,
+  projectRepository,
+  type NewProject,
+  type Project,
+} from "@pm/db";
+import {
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   ProjectCreateSchema,
+  ProjectUpdateSchema,
   UnauthorizedError,
   ValidationError,
   canManageProject,
@@ -12,6 +22,8 @@ import {
   type ProjectCreateInput,
   type ProjectHeaderDto,
   type ProjectPermissions,
+  type ProjectSettingsDto,
+  type ProjectUpdateInput,
 } from "@pm/domain";
 
 import { loadProjectAccess } from "../../utils/auth.server";
@@ -119,13 +131,183 @@ export const projectService = {
     };
   },
 
-  async listProjects(ctx: RequestContext) {
+  async updateProject(ctx: RequestContext, projectId: string, input: ProjectUpdateInput): Promise<Project> {
+    if (!ctx.user) {
+      throw new UnauthorizedError();
+    }
+
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const actor = toActor(ctx.user, access);
+    if (!canManageProject(actor, "update")) {
+      throw new ForbiddenError("You do not have permission to update this project");
+    }
+
+    const parsed = ProjectUpdateSchema.safeParse(input);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string") {
+          fieldErrors[field] = fieldErrors[field] ?? [];
+          fieldErrors[field].push(issue.message);
+        }
+      }
+      throw new ValidationError("Invalid project data", fieldErrors);
+    }
+
+    const data = parsed.data;
+
+    // Validate merged dates against existing project
+    const existing = access.project;
+    const effectiveStartDate = data.startDate ?? existing.startDate;
+    const effectiveEndDate = data.endDate ?? existing.endDate;
+    if (effectiveEndDate < effectiveStartDate) {
+      throw new ValidationError("End date must be on or after start date", {
+        endDate: ["End date must be on or after start date"],
+      });
+    }
+
+    const now = ctx.clock.now();
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    const patch: Partial<Omit<NewProject, "id" | "code">> = {};
+
+    if (data.name !== undefined && data.name !== existing.name) {
+      patch.name = data.name;
+      changes.name = { from: existing.name, to: data.name };
+    }
+    if (data.description !== undefined && data.description !== existing.description) {
+      patch.description = data.description;
+      changes.description = { from: existing.description, to: data.description };
+    }
+    if (data.budget !== undefined && data.budget !== existing.budget) {
+      patch.budget = data.budget;
+      changes.budget = { from: existing.budget, to: data.budget };
+    }
+    if (data.startDate !== undefined && data.startDate !== existing.startDate) {
+      patch.startDate = data.startDate;
+      changes.startDate = { from: existing.startDate, to: data.startDate };
+    }
+    if (data.endDate !== undefined && data.endDate !== existing.endDate) {
+      patch.endDate = data.endDate;
+      changes.endDate = { from: existing.endDate, to: data.endDate };
+    }
+    if (data.status !== undefined && data.status !== existing.status) {
+      patch.status = data.status;
+      changes.status = { from: existing.status, to: data.status };
+    }
+    if (data.slackChannelId !== undefined && data.slackChannelId !== existing.slackChannelId) {
+      patch.slackChannelId = data.slackChannelId;
+      changes.slackChannelId = { from: existing.slackChannelId, to: data.slackChannelId };
+    }
+
+    const auditId = crypto.randomUUID();
+
+    // Batch A2: update projects (where id, not deleted); guard; insert audit_logs PROJECT_UPDATED
+    try {
+      await ctx.db.batch([
+        projectRepository.updateStmt(ctx.db, projectId, {
+          ...patch,
+          updatedAt: now,
+        }),
+        conflictGuardStmt(ctx.db),
+        auditLogRepository.insertStmt(ctx.db, {
+          id: auditId,
+          actorId: ctx.user.id,
+          action: "PROJECT_UPDATED",
+          entityType: "PROJECT",
+          entityId: projectId,
+          projectId,
+          changes,
+          createdAt: now,
+        }),
+      ]);
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("Project was modified concurrently");
+      }
+      throw error;
+    }
+
+    ctx.logger.info("Project updated", {
+      projectId,
+      updatedBy: ctx.user.id,
+      changedFields: Object.keys(changes),
+    });
+
+    return {
+      ...existing,
+      ...patch,
+      updatedAt: now,
+    };
+  },
+
+  async archiveProject(ctx: RequestContext, projectId: string): Promise<void> {
+    if (!ctx.user) {
+      throw new UnauthorizedError();
+    }
+
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const actor = toActor(ctx.user, access);
+    if (!canManageProject(actor, "archive")) {
+      throw new ForbiddenError("You do not have permission to archive this project");
+    }
+
+    const now = ctx.clock.now();
+    const auditId = crypto.randomUUID();
+
+    // Batch A3: update projects.deleted_at; guard; insert audit_logs PROJECT_ARCHIVED
+    try {
+      await ctx.db.batch([
+        projectRepository.archiveStmt(ctx.db, projectId, now),
+        conflictGuardStmt(ctx.db),
+        auditLogRepository.insertStmt(ctx.db, {
+          id: auditId,
+          actorId: ctx.user.id,
+          action: "PROJECT_ARCHIVED",
+          entityType: "PROJECT",
+          entityId: projectId,
+          projectId,
+          changes: {
+            deletedAt: { from: null, to: now.toISOString() },
+          },
+          createdAt: now,
+        }),
+      ]);
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("Project was modified concurrently");
+      }
+      throw error;
+    }
+
+    ctx.logger.info("Project archived", {
+      projectId,
+      archivedBy: ctx.user.id,
+    });
+  },
+
+  async listProjects(ctx: RequestContext, options?: { archivedOnly?: boolean; includeArchived?: boolean }) {
     if (!ctx.user) {
       throw new UnauthorizedError();
     }
 
     if (ctx.user.systemRole === "ADMIN") {
-      return projectRepository.listAll(ctx.db);
+      if (options?.archivedOnly) {
+        return projectRepository.listArchived(ctx.db);
+      }
+      return projectRepository.listAll(ctx.db, options);
+    }
+
+    if (options?.archivedOnly) {
+      return [];
     }
 
     return projectRepository.listForUser(ctx.db, ctx.user.id);
@@ -156,6 +338,40 @@ export const projectService = {
         description: access.project.description,
         status: access.project.status,
         projectRole: access.projectRole,
+        isArchived: access.isArchived,
+      },
+      permissions,
+    };
+  },
+
+  async getProjectSettings(
+    ctx: RequestContext,
+    projectId: string,
+  ): Promise<{ project: ProjectSettingsDto; permissions: ProjectPermissions }> {
+    if (!ctx.user) {
+      throw new UnauthorizedError();
+    }
+
+    const access = await loadProjectAccess(ctx, projectId);
+    const actor = toActor(ctx.user, access);
+
+    if (actor.systemRole !== "ADMIN" && actor.projectRole !== "PM") {
+      throw new ForbiddenError("You do not have permission to view project settings");
+    }
+
+    const permissions = getProjectPermissions(actor);
+
+    return {
+      project: {
+        id: access.project.id,
+        code: access.project.code,
+        name: access.project.name,
+        description: access.project.description,
+        budget: access.project.budget,
+        startDate: access.project.startDate,
+        endDate: access.project.endDate,
+        status: access.project.status,
+        slackChannelId: access.project.slackChannelId,
         isArchived: access.isArchived,
       },
       permissions,
