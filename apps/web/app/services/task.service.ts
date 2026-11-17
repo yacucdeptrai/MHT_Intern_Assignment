@@ -114,7 +114,7 @@ export const taskService = {
     }
 
     // Validate parent task or sprint
-    let targetSprintId = data.sprintId;
+    let targetSprintId: string | null | undefined = data.sprintId;
     if (data.parentTaskId) {
       const parent = await taskRepository.findById(ctx.db, data.parentTaskId);
       if (!parent || parent.projectId !== projectId) {
@@ -128,7 +128,7 @@ export const taskService = {
         });
       }
       // FR-17 c1: Sub-tasks inherit parent's sprint; any user-supplied sprintId is ignored
-      targetSprintId = parent.sprintId ?? undefined;
+      targetSprintId = parent.sprintId ?? null;
     } else if (data.sprintId) {
       const sprint = await sprintRepository.findById(ctx.db, data.sprintId);
       if (!sprint || sprint.projectId !== projectId) {
@@ -157,7 +157,7 @@ export const taskService = {
         id: taskId,
         projectId,
         parentTaskId: data.parentTaskId,
-        sprintId: targetSprintId,
+        sprintId: targetSprintId ?? null,
         statusId: defaultStatus.id,
         title: data.title,
         description: data.description,

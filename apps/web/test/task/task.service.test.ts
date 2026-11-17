@@ -393,7 +393,6 @@ describe("taskService.createTask", () => {
       name: "Sprint 1",
       startDate: "2026-11-01",
       endDate: "2026-11-15",
-      status: "ACTIVE",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
