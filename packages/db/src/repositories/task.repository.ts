@@ -216,7 +216,11 @@ export const taskRepository = {
       .from(taskAssignees)
       .where(eq(taskAssignees.userId, filter.userId));
 
-    const conditions = [inArray(tasks.id, assignedSubquery), isNull(tasks.deletedAt), isNull(projects.deletedAt)];
+    const conditions = [
+      inArray(tasks.id, assignedSubquery),
+      isNull(tasks.deletedAt),
+      isNull(projects.deletedAt),
+    ];
 
     if (filter.allowedProjectIds) {
       if (filter.allowedProjectIds.length === 0) {
