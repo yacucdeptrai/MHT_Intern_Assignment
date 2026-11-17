@@ -4,6 +4,7 @@ import {
   notificationRepository,
   outboxJobRepository,
   projectMemberRepository,
+  projectRepository,
   sprintRepository,
   taskAssigneeRepository,
   taskRepository,
@@ -15,11 +16,26 @@ import {
   canAssignTask,
   canCreateTask,
   ForbiddenError,
+  getTodayDateString,
+  isDueSoon,
+  isOverdue,
+  isTodayPriority,
+  MyTaskFiltersSchema,
+  ProjectTaskFiltersSchema,
   TaskCreateSchema,
   toActor,
   UnauthorizedError,
   ValidationError,
+  type MemberOption,
+  type MyTasksLoaderData,
+  type Page,
+  type ProjectOption,
+  type ProjectTaskFilters,
+  type SprintOption,
+  type StatusOption,
+  type TaskAssigneeInfo,
   type TaskCreateInput,
+  type TaskListItem,
 } from "@pm/domain";
 
 import { loadProjectAccess } from "../utils/auth.server";
@@ -190,6 +206,230 @@ export const taskService = {
     return {
       ...created,
       assignees: assigneeIds,
+    };
+  },
+
+  async listProjectTasks(
+    ctx: RequestContext,
+    projectId: string,
+    rawFilters: unknown,
+  ): Promise<{
+    tasks: Page<TaskListItem>;
+    filters: ProjectTaskFilters;
+    statuses: StatusOption[];
+    members: MemberOption[];
+    sprints: SprintOption[];
+    canCreate: boolean;
+    canAssign: boolean;
+  }> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const filters = ProjectTaskFiltersSchema.parse(rawFilters ?? {});
+    const now = ctx.clock.now();
+
+    const [dbResult, statuses, members, sprints] = await Promise.all([
+      taskRepository.listProjectTasks(ctx.db, {
+        projectId,
+        statusId: filters.statusId,
+        assigneeId: filters.assigneeId,
+        priority: filters.priority,
+        sprintId: filters.sprintId,
+        page: filters.page,
+        pageSize: filters.pageSize,
+      }),
+      taskStatusRepository.list(ctx.db),
+      projectMemberRepository.listByProjectWithUser(ctx.db, projectId),
+      sprintRepository.listByProject(ctx.db, projectId),
+    ]);
+
+    const taskIds = dbResult.items.map((t) => t.id);
+    const assignees = await taskAssigneeRepository.findByTaskIdsWithUser(ctx.db, taskIds);
+    const assigneesByTaskId = new Map<string, TaskAssigneeInfo[]>();
+    for (const a of assignees) {
+      const list = assigneesByTaskId.get(a.taskId) ?? [];
+      list.push({ id: a.userId, fullName: a.fullName, avatarKey: a.avatarKey });
+      assigneesByTaskId.set(a.taskId, list);
+    }
+
+    const items: TaskListItem[] = dbResult.items.map((task) => ({
+      id: task.id,
+      projectId: task.projectId,
+      number: task.number,
+      title: task.title,
+      priority: task.priority,
+      statusId: task.statusId,
+      statusName: task.statusName,
+      statusCategory: task.statusCategory,
+      dueDate: task.dueDate,
+      startDate: task.startDate,
+      assignees: assigneesByTaskId.get(task.id) ?? [],
+      parentTaskId: task.parentTaskId,
+      sprintId: task.sprintId,
+      sprintName: task.sprintName,
+      isOverdue: isOverdue(
+        { dueDate: task.dueDate, statusCategory: task.statusCategory, deletedAt: task.deletedAt },
+        now,
+      ),
+      isDueSoon: isDueSoon(
+        { dueDate: task.dueDate, statusCategory: task.statusCategory, deletedAt: task.deletedAt },
+        now,
+      ),
+      isTodayPriority: isTodayPriority(
+        {
+          dueDate: task.dueDate,
+          statusCategory: task.statusCategory,
+          deletedAt: task.deletedAt,
+          priority: task.priority,
+        },
+        now,
+      ),
+      createdAt: typeof task.createdAt === "number" ? task.createdAt : task.createdAt.getTime(),
+      updatedAt: typeof task.updatedAt === "number" ? task.updatedAt : task.updatedAt.getTime(),
+    }));
+
+    const actor = toActor(ctx.user, access);
+
+    return {
+      tasks: {
+        items,
+        total: dbResult.total,
+        page: dbResult.page,
+        pageSize: dbResult.pageSize,
+        totalPages: dbResult.totalPages,
+      },
+      filters,
+      statuses: statuses.map((s) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        isDefault: s.isDefault,
+      })),
+      members: members.map((m) => ({
+        id: m.userId,
+        fullName: m.fullName,
+        email: m.email,
+      })),
+      sprints: sprints.map((s) => ({
+        id: s.id,
+        name: s.name,
+      })),
+      canCreate: canCreateTask(actor),
+      canAssign: canAssignTask(actor),
+    };
+  },
+
+  async listMyTasks(ctx: RequestContext, rawFilters: unknown): Promise<MyTasksLoaderData> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const filters = MyTaskFiltersSchema.parse(rawFilters ?? {});
+    const now = ctx.clock.now();
+    const isAdmin = ctx.user.systemRole === "ADMIN";
+
+    let allowedProjectIds: string[] | undefined;
+    let accessibleProjects: ProjectOption[];
+
+    if (isAdmin) {
+      const allProjects = await projectRepository.listAll(ctx.db);
+      accessibleProjects = allProjects.map((p) => ({ id: p.id, code: p.code, name: p.name }));
+    } else {
+      const memberships = await projectMemberRepository.listByUser(ctx.db, ctx.user.id);
+      const userProjects = await projectRepository.listForUser(ctx.db, ctx.user.id);
+      allowedProjectIds = memberships.map((m) => m.projectId);
+      accessibleProjects = userProjects.map((p) => ({ id: p.id, code: p.code, name: p.name }));
+    }
+
+    const todayStr = getTodayDateString(now);
+    const endOfWeekDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const endOfWeekStr = getTodayDateString(endOfWeekDate);
+
+    const [dbResult, statuses] = await Promise.all([
+      taskRepository.listMyTasks(ctx.db, {
+        userId: ctx.user.id,
+        allowedProjectIds,
+        projectId: filters.projectId,
+        statusId: filters.statusId,
+        priority: filters.priority,
+        dueRange: filters.dueRange,
+        todayStr,
+        endOfWeekStr,
+        page: filters.page,
+        pageSize: filters.pageSize,
+      }),
+      taskStatusRepository.list(ctx.db),
+    ]);
+
+    const taskIds = dbResult.items.map((t) => t.id);
+    const assignees = await taskAssigneeRepository.findByTaskIdsWithUser(ctx.db, taskIds);
+    const assigneesByTaskId = new Map<string, TaskAssigneeInfo[]>();
+    for (const a of assignees) {
+      const list = assigneesByTaskId.get(a.taskId) ?? [];
+      list.push({ id: a.userId, fullName: a.fullName, avatarKey: a.avatarKey });
+      assigneesByTaskId.set(a.taskId, list);
+    }
+
+    const items: TaskListItem[] = dbResult.items.map((task) => ({
+      id: task.id,
+      projectId: task.projectId,
+      projectCode: task.projectCode,
+      projectName: task.projectName,
+      number: task.number,
+      title: task.title,
+      priority: task.priority,
+      statusId: task.statusId,
+      statusName: task.statusName,
+      statusCategory: task.statusCategory,
+      dueDate: task.dueDate,
+      startDate: task.startDate,
+      assignees: assigneesByTaskId.get(task.id) ?? [],
+      parentTaskId: task.parentTaskId,
+      sprintId: task.sprintId,
+      sprintName: task.sprintName,
+      isOverdue: isOverdue(
+        { dueDate: task.dueDate, statusCategory: task.statusCategory, deletedAt: task.deletedAt },
+        now,
+      ),
+      isDueSoon: isDueSoon(
+        { dueDate: task.dueDate, statusCategory: task.statusCategory, deletedAt: task.deletedAt },
+        now,
+      ),
+      isTodayPriority: isTodayPriority(
+        {
+          dueDate: task.dueDate,
+          statusCategory: task.statusCategory,
+          deletedAt: task.deletedAt,
+          priority: task.priority,
+        },
+        now,
+      ),
+      createdAt: typeof task.createdAt === "number" ? task.createdAt : task.createdAt.getTime(),
+      updatedAt: typeof task.updatedAt === "number" ? task.updatedAt : task.updatedAt.getTime(),
+    }));
+
+    return {
+      tasks: {
+        items,
+        total: dbResult.total,
+        page: dbResult.page,
+        pageSize: dbResult.pageSize,
+        totalPages: dbResult.totalPages,
+      },
+      filters,
+      projects: accessibleProjects,
+      statuses: statuses.map((s) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        isDefault: s.isDefault,
+      })),
     };
   },
 };

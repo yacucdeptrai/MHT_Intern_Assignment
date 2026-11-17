@@ -13,7 +13,7 @@ import {
   taskStatusRepository,
   userRepository,
 } from "@pm/db";
-import { NotFoundError, ValidationError } from "@pm/domain";
+import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@pm/domain";
 
 import { taskService } from "../../app/services/task.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
@@ -331,6 +331,68 @@ describe("taskService.createTask", () => {
     ).rejects.toThrow("Sprint does not belong to this project");
   });
 
+  it("unauthenticated user throws UnauthorizedError", async () => {
+    const { ctx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(ctx);
+    const unauthCtx = { ...ctx, user: null };
+
+    await expect(
+      taskService.createTask(unauthCtx, projectId, {
+        title: "Unauth task",
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("non-member on active project throws NotFoundError (never 403)", async () => {
+    const { ctx: creatorCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+    await expect(
+      taskService.createTask(nonMemberCtx, projectId, {
+        title: "Non-member task",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("parent task from another project throws ValidationError", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId: projectA } = await createProjectWithMembers(adminCtx);
+    const { projectId: projectB } = await createProjectWithMembers(adminCtx);
+
+    const parentTask = await taskService.createTask(adminCtx, projectB, {
+      title: "Parent in Project B",
+    });
+
+    await expect(
+      taskService.createTask(adminCtx, projectA, {
+        title: "Child in Project A",
+        parentTaskId: parentTask.id,
+      }),
+    ).rejects.toThrow("Parent task not found in this project");
+  });
+
+  it("sub-task of a sub-task throws ValidationError (only one level deep)", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+
+    const topTask = await taskService.createTask(adminCtx, projectId, {
+      title: "Top task",
+    });
+
+    const subTask = await taskService.createTask(adminCtx, projectId, {
+      title: "Sub-task",
+      parentTaskId: topTask.id,
+    });
+
+    await expect(
+      taskService.createTask(adminCtx, projectId, {
+        title: "Grandchild task",
+        parentTaskId: subTask.id,
+      }),
+    ).rejects.toThrow("Sub-tasks can only be one level deep");
+  });
+
   it("archived project rejects task creation with 403 This project is archived", async () => {
     const { ctx: adminCtx } = await createTestContext("ADMIN");
     const { projectId } = await createProjectWithMembers(adminCtx);
@@ -343,5 +405,112 @@ describe("taskService.createTask", () => {
         title: "Task on archived project",
       }),
     ).rejects.toThrow("This project is archived");
+  });
+});
+
+describe("taskService.listProjectTasks", () => {
+  it("unauthenticated user throws UnauthorizedError", async () => {
+    const { ctx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(ctx);
+    const unauthCtx = { ...ctx, user: null };
+
+    await expect(taskService.listProjectTasks(unauthCtx, projectId, {})).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("non-member on active project throws NotFoundError", async () => {
+    const { ctx: creatorCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+    await expect(taskService.listProjectTasks(nonMemberCtx, projectId, {})).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("archived project throws ForbiddenError", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+
+    await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+
+    await expect(taskService.listProjectTasks(adminCtx, projectId, {})).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("lists project tasks with filters", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+
+    const sprint = await sprintRepository.insert(adminCtx.db, {
+      id: crypto.randomUUID(),
+      projectId,
+      name: "Sprint 1",
+      startDate: "2026-11-01",
+      endDate: "2026-11-14",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Sprint Task",
+      sprintId: sprint.id,
+      priority: "HIGH",
+    });
+
+    const result = await taskService.listProjectTasks(adminCtx, projectId, {
+      sprintId: sprint.id,
+      priority: "HIGH",
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.tasks.items.length).toBe(1);
+    expect(result.tasks.items[0]?.id).toBe(task.id);
+    expect(result.sprints.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("taskService.listMyTasks", () => {
+  it("unauthenticated user throws UnauthorizedError", async () => {
+    const { ctx } = await createTestContext("MEMBER");
+    const unauthCtx = { ...ctx, user: null };
+
+    await expect(taskService.listMyTasks(unauthCtx, {})).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("non-admin with 0 memberships returns empty items", async () => {
+    const { ctx: memberCtx } = await createTestContext("MEMBER");
+
+    const result = await taskService.listMyTasks(memberCtx, {});
+    expect(result.tasks.items).toEqual([]);
+    expect(result.tasks.total).toBe(0);
+    expect(result.projects).toEqual([]);
+  });
+
+  it("admin lists accessible projects and personal tasks with dueRange filter", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+    const adminId = adminCtx.user?.id ?? "";
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminId,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Admin Assigned Task",
+      assigneeIds: [adminId],
+      dueDate: "2026-11-20",
+      priority: "URGENT",
+    });
+
+    const result = await taskService.listMyTasks(adminCtx, {
+      dueRange: "all",
+      priority: "URGENT",
+    });
+
+    expect(result.projects.length).toBeGreaterThanOrEqual(1);
+    expect(result.tasks.items.some((t) => t.id === task.id)).toBe(true);
   });
 });

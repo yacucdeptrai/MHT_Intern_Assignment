@@ -28,6 +28,7 @@
     "wrangler",
     "xoxb",
     "nosniff",
-    "unarchived"
+    "unarchived",
+    "notused"
   ]
 }

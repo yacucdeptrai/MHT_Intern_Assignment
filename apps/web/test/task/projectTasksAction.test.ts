@@ -240,7 +240,7 @@ describe("projectTasksAction & loader", () => {
     expect(res.status).toBe(403);
   });
 
-  it("projectTasksLoader returns tasks, members, statuses for project member", async () => {
+  it("FR-16 c2: projectTasksLoader returns tasks, members, statuses, and pagination", async () => {
     const { ctx, user, cookie } = await createTestContext("MEMBER");
     const { projectId } = await createProject(ctx);
 
@@ -258,14 +258,37 @@ describe("projectTasksAction & loader", () => {
     });
     const data = await projectTasksLoader(ctx, projectId, req);
 
-    expect(data.tasks).toBeDefined();
+    expect(data.tasks.items).toBeDefined();
+    expect(data.tasks.pageSize).toBe(50);
     expect(data.members.length).toBe(1);
     expect(data.statuses.length).toBeGreaterThanOrEqual(1);
     expect(data.canCreate).toBe(true);
     expect(data.canAssign).toBe(false);
   });
 
-  it("projectTasksLoader throws 404 for non-member", async () => {
+  it("FR-16 c3: URL filter parameters apply to projectTasksLoader", async () => {
+    const { ctx, user, cookie } = await createTestContext("MEMBER");
+    const { projectId } = await createProject(ctx);
+
+    await ctx.db.batch([
+      projectMemberRepository.insertStmt(ctx.db, {
+        projectId,
+        userId: user.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const req = new Request(`http://localhost/projects/${projectId}?priority=HIGH&page=2`, {
+      headers: { Cookie: cookie },
+    });
+    const data = await projectTasksLoader(ctx, projectId, req);
+
+    expect(data.filters.priority).toBe("HIGH");
+    expect(data.filters.page).toBe(2);
+  });
+
+  it("FR-16 c4: projectTasksLoader throws 404 for non-member", async () => {
     const { ctx, cookie } = await createTestContext("MEMBER");
     const { projectId } = await createProject(ctx);
 
@@ -273,5 +296,26 @@ describe("projectTasksAction & loader", () => {
       headers: { Cookie: cookie },
     });
     await expect(projectTasksLoader(ctx, projectId, req)).rejects.toThrow(NotFoundError);
+  });
+
+  it("projectTasksAction throws 403 when creating task in archived project", async () => {
+    const { ctx, cookie } = await createTestContext("ADMIN");
+    const { projectId } = await createProject(ctx);
+
+    await ctx.db.batch([projectRepository.archiveStmt(ctx.db, projectId, new Date())]);
+
+    const formData = new FormData();
+    formData.append("intent", "createTask");
+    formData.append("title", "Task in archived project");
+
+    const req = new Request("http://localhost/projects/" + projectId, {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: formData,
+    });
+    const res = await projectTasksAction(ctx, projectId, req);
+    expect(res.status).toBe(403);
+    const body = await res.json<{ success: boolean; errors: Record<string, string[]>; message?: string }>();
+    expect(body.message).toContain("This project is archived");
   });
 });

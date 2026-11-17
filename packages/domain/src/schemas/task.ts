@@ -70,4 +70,63 @@ export const TaskIdSchema = z.object({
   taskId: z.string().min(1, "Task ID is required"),
 });
 
+export const ProjectTaskFiltersSchema = z.object({
+  statusId: z
+    .string()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  assigneeId: z
+    .string()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  priority: z
+    .enum(TASK_PRIORITIES)
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  sprintId: z
+    .string()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(50),
+});
+
+export const MyTaskFiltersSchema = z.object({
+  projectId: z
+    .string()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  statusId: z
+    .string()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  priority: z
+    .enum(TASK_PRIORITIES)
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? undefined : val)),
+  dueRange: z
+    .enum(["all", "overdue", "today", "week"])
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => (val === "" || !val ? ("all" as const) : val))
+    .default("all"),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(50),
+});
+
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;

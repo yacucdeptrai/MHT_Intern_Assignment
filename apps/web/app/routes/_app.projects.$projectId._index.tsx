@@ -1,6 +1,14 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, Link, useActionData, useLoaderData, useNavigation, useRouteLoaderData } from "react-router";
+import {
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useRouteLoaderData,
+  useSearchParams,
+} from "react-router";
 
 import { APP_NAME, TASK_PRIORITIES, type TaskPriority } from "@pm/domain";
 
@@ -34,15 +42,30 @@ interface ActionData {
 
 export default function ProjectIndexPage() {
   const headerData = useRouteLoaderData<ProjectHeaderLoaderData>("routes/_app.projects.$projectId");
-  const { tasks, members, statuses, canCreate, canAssign } = useLoaderData<ProjectTasksLoaderData>();
+  const { tasks, members, statuses, sprints, filters, canCreate, canAssign } = useLoaderData<ProjectTasksLoaderData>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const [searchParams] = useSearchParams();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const isSubmitting = navigation.state === "submitting";
+  const [prevActionData, setPrevActionData] = useState(actionData);
 
-  const isOpen = isModalOpen && !actionData?.success;
-  const statusMap = new Map(statuses.map((s) => [s.id, s.name]));
+  if (actionData !== prevActionData) {
+    setPrevActionData(actionData);
+    if (actionData?.success) {
+      setIsModalOpen(false);
+    }
+  }
+
+  const isSubmitting = navigation.state === "submitting";
+  const isOpen = isModalOpen;
+  const projectCode = headerData?.project.code ?? "TASK";
+
+  function makePageUrl(newPage: number): string {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", String(newPage));
+    return `?${next.toString()}`;
+  }
 
   return (
     <div className="space-y-6">
@@ -51,7 +74,7 @@ export default function ProjectIndexPage() {
         <div>
           <h2 className="text-xl font-bold text-gray-900">Project Tasks</h2>
           <p className="mt-1 text-sm text-gray-500">
-            {tasks.length} {tasks.length === 1 ? "task" : "tasks"} in this project
+            {tasks.total} {tasks.total === 1 ? "task" : "tasks"} in this project
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -76,12 +99,114 @@ export default function ProjectIndexPage() {
         </div>
       ) : null}
 
+      {/* Filter Bar */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="project-tasks-filters">
+        <Form method="get" className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end">
+          <div>
+            <label htmlFor="filter-status" className="block text-xs font-medium text-gray-700">
+              Status
+            </label>
+            <select
+              id="filter-status"
+              name="statusId"
+              defaultValue={filters.statusId ?? ""}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+              data-testid="filter-status-select"
+            >
+              <option value="">All Statuses</option>
+              {statuses.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="filter-assignee" className="block text-xs font-medium text-gray-700">
+              Assignee
+            </label>
+            <select
+              id="filter-assignee"
+              name="assigneeId"
+              defaultValue={filters.assigneeId ?? ""}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+              data-testid="filter-assignee-select"
+            >
+              <option value="">All Assignees</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="filter-priority" className="block text-xs font-medium text-gray-700">
+              Priority
+            </label>
+            <select
+              id="filter-priority"
+              name="priority"
+              defaultValue={filters.priority ?? ""}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+              data-testid="filter-priority-select"
+            >
+              <option value="">All Priorities</option>
+              {TASK_PRIORITIES.map((p: TaskPriority) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="filter-sprint" className="block text-xs font-medium text-gray-700">
+              Sprint
+            </label>
+            <select
+              id="filter-sprint"
+              name="sprintId"
+              defaultValue={filters.sprintId ?? ""}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+              data-testid="filter-sprint-select"
+            >
+              <option value="">All Sprints</option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm"
+              data-testid="apply-filters-button"
+            >
+              Apply
+            </button>
+            <Link
+              to=""
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-center"
+              data-testid="reset-filters-link"
+            >
+              Reset
+            </Link>
+          </div>
+        </Form>
+      </div>
+
       {/* Task list */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {tasks.length === 0 ? (
+        {tasks.items.length === 0 ? (
           <div className="p-12 text-center" data-testid="empty-tasks">
             <h3 className="text-base font-medium text-gray-900">No tasks yet</h3>
-            <p className="mt-1 text-sm text-gray-500">Create the first task for this project to get started.</p>
+            <p className="mt-1 text-sm text-gray-500">No tasks match your criteria in this project.</p>
             {canCreate ? (
               <div className="mt-6">
                 <button
@@ -118,8 +243,7 @@ export default function ProjectIndexPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {tasks.map((task) => {
-                const projectCode = headerData?.project.code ?? "TASK";
+              {tasks.items.map((task) => {
                 return (
                   <tr key={task.id} className="hover:bg-gray-50" data-testid={`task-row-${task.id}`}>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-blue-600">
@@ -151,16 +275,73 @@ export default function ProjectIndexPage() {
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                        {statusMap.get(task.statusId) ?? "Unknown"}
+                        {task.statusName}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{task.dueDate ?? "—"}</td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      <div className="flex items-center gap-2">
+                        <span>{task.dueDate ?? "—"}</span>
+                        {task.isOverdue ? (
+                          <span className="inline-flex rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                            OVERDUE
+                          </span>
+                        ) : task.isDueSoon ? (
+                          <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                            DUE SOON
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         )}
+
+        {/* Pagination Bar */}
+        {tasks.totalPages > 1 ? (
+          <div
+            className="flex items-center justify-between border-t border-gray-200 px-6 py-3"
+            data-testid="pagination-bar"
+          >
+            <div className="text-sm text-gray-500">
+              Showing {(tasks.page - 1) * tasks.pageSize + 1} to {Math.min(tasks.page * tasks.pageSize, tasks.total)} of{" "}
+              {tasks.total} tasks
+            </div>
+            <div className="flex items-center gap-2">
+              {tasks.page > 1 ? (
+                <Link
+                  to={makePageUrl(tasks.page - 1)}
+                  className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  data-testid="prev-page-button"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
+                  Previous
+                </span>
+              )}
+              <span className="text-sm font-medium text-gray-700" data-testid="page-indicator">
+                Page {tasks.page} of {tasks.totalPages}
+              </span>
+              {tasks.page < tasks.totalPages ? (
+                <Link
+                  to={makePageUrl(tasks.page + 1)}
+                  className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  data-testid="next-page-button"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
+                  Next
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Create Task Modal */}
@@ -269,42 +450,36 @@ export default function ProjectIndexPage() {
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   data-testid="task-start-date-input"
                 />
-                {actionData?.errors?.startDate ? (
-                  <p className="mt-1 text-xs text-red-600">{actionData.errors.startDate.join(", ")}</p>
-                ) : null}
               </div>
 
               {canAssign && members.length > 0 ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Assignees</label>
-                  <div
-                    className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2"
-                    data-testid="task-assignees-container"
-                  >
-                    {members.map((m) => (
-                      <label key={m.userId} className="flex items-center gap-2 text-sm text-gray-700">
+                  <div className="mt-2 max-h-36 overflow-y-auto space-y-1 rounded-lg border border-gray-200 p-2">
+                    {members.map((member) => (
+                      <label key={member.id} className="flex items-center gap-2 text-sm text-gray-700">
                         <input
                           type="checkbox"
                           name="assigneeIds"
-                          value={m.userId}
+                          value={member.id}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          data-testid={`assignee-checkbox-${m.userId}`}
                         />
-                        <span>{m.fullName}</span>
-                        <span className="text-xs text-gray-400">({m.projectRole})</span>
+                        <span>
+                          {member.fullName} ({member.email})
+                        </span>
                       </label>
                     ))}
                   </div>
                 </div>
               ) : null}
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setIsModalOpen(false);
                   }}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
                 </button>

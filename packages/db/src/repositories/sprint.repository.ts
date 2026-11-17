@@ -23,4 +23,11 @@ export const sprintRepository = {
       where: eq(sprints.id, id),
     });
   },
+
+  listByProject: async (db: AppDatabase, projectId: string): Promise<SprintRow[]> => {
+    return db.query.sprints.findMany({
+      where: and(eq(sprints.projectId, projectId), isNull(sprints.deletedAt)),
+      orderBy: (table, { asc }) => [asc(table.startDate)],
+    });
+  },
 };

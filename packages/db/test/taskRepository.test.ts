@@ -291,4 +291,165 @@ describe("taskRepository", () => {
     expect(assigneesA2.length).toBe(1); // Archived task assignment UNTOUCHED
     expect(assigneesB1.length).toBe(1); // Project B task assignment UNTOUCHED
   });
+
+  it("FR-16 c1 / c3: listProjectTasks supports filters (sprintId, backlog, status, priority, assignee) and sort orders", async () => {
+    const { db, now, user, projectA, status } = await createBaseFixtures();
+
+    const sprint = await sprintRepository.insert(db, {
+      id: crypto.randomUUID(),
+      projectId: projectA.id,
+      name: "Repo Sprint 1",
+      startDate: "2026-11-01",
+      endDate: "2026-11-14",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const t1 = crypto.randomUUID();
+    const t2 = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: t1,
+        projectId: projectA.id,
+        statusId: status.id,
+        sprintId: sprint.id,
+        title: "Sprint task with due date",
+        priority: "HIGH",
+        dueDate: "2026-11-20",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: new Date(now.getTime() - 1000),
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: t2,
+        projectId: projectA.id,
+        statusId: status.id,
+        sprintId: null,
+        title: "Backlog task without due date",
+        priority: "LOW",
+        dueDate: null,
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(db, t1, [user.id], now),
+    ]);
+
+    // Test sprintId filter
+    const sprintRes = await taskRepository.listProjectTasks(db, {
+      projectId: projectA.id,
+      sprintId: sprint.id,
+    });
+    expect(sprintRes.items.length).toBe(1);
+    expect(sprintRes.items[0]?.id).toBe(t1);
+
+    // Test backlog filter
+    const backlogRes = await taskRepository.listProjectTasks(db, {
+      projectId: projectA.id,
+      sprintId: "backlog",
+    });
+    expect(backlogRes.items.length).toBe(1);
+    expect(backlogRes.items[0]?.id).toBe(t2);
+
+    // Test assignee filter
+    const assigneeRes = await taskRepository.listProjectTasks(db, {
+      projectId: projectA.id,
+      assigneeId: user.id,
+    });
+    expect(assigneeRes.items.length).toBe(1);
+    expect(assigneeRes.items[0]?.id).toBe(t1);
+
+    // Test status and priority filters
+    const statusRes = await taskRepository.listProjectTasks(db, {
+      projectId: projectA.id,
+      statusId: status.id,
+    });
+    expect(statusRes.items.length).toBe(2);
+
+    const priorityRes = await taskRepository.listProjectTasks(db, {
+      projectId: projectA.id,
+      priority: "HIGH",
+    });
+    expect(priorityRes.items.length).toBe(1);
+    expect(priorityRes.items[0]?.id).toBe(t1);
+  });
+
+  it("FR-16 c1 / c4: listMyTasks supports dueRange filters (today, week, overdue) and empty allowedProjectIds", async () => {
+    const { db, now, user, projectA, status } = await createBaseFixtures();
+
+    const emptyRes = await taskRepository.listMyTasks(db, {
+      userId: user.id,
+      allowedProjectIds: [],
+    });
+    expect(emptyRes.items).toEqual([]);
+    expect(emptyRes.total).toBe(0);
+
+    const tOverdue = crypto.randomUUID();
+    const tToday = crypto.randomUUID();
+    const tWeek = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: tOverdue,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Overdue task",
+        dueDate: "2026-11-10",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: tToday,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Today task",
+        dueDate: "2026-11-17",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: tWeek,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Week task",
+        dueDate: "2026-11-20",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(db, tOverdue, [user.id], now),
+      ...taskAssigneeRepository.insertBatchStmt(db, tToday, [user.id], now),
+      ...taskAssigneeRepository.insertBatchStmt(db, tWeek, [user.id], now),
+    ]);
+
+    const overdueRes = await taskRepository.listMyTasks(db, {
+      userId: user.id,
+      dueRange: "overdue",
+      todayStr: "2026-11-17",
+    });
+    expect(overdueRes.items.some((t) => t.id === tOverdue)).toBe(true);
+
+    const todayRes = await taskRepository.listMyTasks(db, {
+      userId: user.id,
+      dueRange: "today",
+      todayStr: "2026-11-17",
+    });
+    expect(todayRes.items.some((t) => t.id === tToday)).toBe(true);
+
+    const weekRes = await taskRepository.listMyTasks(db, {
+      userId: user.id,
+      dueRange: "week",
+      todayStr: "2026-11-17",
+      endOfWeekStr: "2026-11-24",
+    });
+    expect(weekRes.items.some((t) => t.id === tWeek)).toBe(true);
+  });
 });
