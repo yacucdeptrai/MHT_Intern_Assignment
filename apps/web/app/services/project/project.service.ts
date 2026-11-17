@@ -1,14 +1,20 @@
 import { auditLogRepository, projectMemberRepository, projectRepository, type Project } from "@pm/db";
 import {
   ForbiddenError,
+  NotFoundError,
   ProjectCreateSchema,
   UnauthorizedError,
   ValidationError,
   canManageProject,
+  canViewProject,
+  getProjectPermissions,
   toActor,
   type ProjectCreateInput,
+  type ProjectHeaderDto,
+  type ProjectPermissions,
 } from "@pm/domain";
 
+import { loadProjectAccess } from "../../utils/auth.server";
 import type { RequestContext } from "../../utils/requestContext.server";
 
 export const projectService = {
@@ -123,5 +129,36 @@ export const projectService = {
     }
 
     return projectRepository.listForUser(ctx.db, ctx.user.id);
+  },
+
+  async getProjectHeader(
+    ctx: RequestContext,
+    projectId: string,
+  ): Promise<{ project: ProjectHeaderDto; permissions: ProjectPermissions }> {
+    if (!ctx.user) {
+      throw new UnauthorizedError();
+    }
+
+    const access = await loadProjectAccess(ctx, projectId);
+    const actor = toActor(ctx.user, access);
+
+    if (!canViewProject(actor)) {
+      throw new NotFoundError("Project not found");
+    }
+
+    const permissions = getProjectPermissions(actor);
+
+    return {
+      project: {
+        id: access.project.id,
+        code: access.project.code,
+        name: access.project.name,
+        description: access.project.description,
+        status: access.project.status,
+        projectRole: access.projectRole,
+        isArchived: access.isArchived,
+      },
+      permissions,
+    };
   },
 };

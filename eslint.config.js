@@ -27,6 +27,8 @@ export default tseslint.config(
       "**/coverage/**",
       "**/.react-router/**",
       "**/.wrangler/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
       "**/worker-configuration.d.ts",
       "docs/**",
     ],

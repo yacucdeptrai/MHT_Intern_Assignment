@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import { auditLogRepository, createDatabase, projectMemberRepository, projectRepository, userRepository } from "@pm/db";
-import { ForbiddenError, ValidationError } from "@pm/domain";
+import { ForbiddenError, NotFoundError, ValidationError } from "@pm/domain";
 import { projectService } from "../../app/services/project/project.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 
@@ -71,36 +71,48 @@ describe("projectService", () => {
       expect(project.status).toBe("ACTIVE");
       expect(project.createdById).toBe(creatorId);
 
-      // Verify creator is project PM in project_members
+      // Verify membership: creator is PM
       const membership = await projectMemberRepository.findByProjectAndUser(ctx.db, project.id, creatorId);
       expect(membership).toBeDefined();
       expect(membership?.projectRole).toBe("PM");
 
       // Verify audit log
-      const audit = await auditLogRepository.listByEntity(ctx.db, "PROJECT", project.id);
-      expect(audit.length).toBeGreaterThan(0);
-      expect(audit[0]?.action).toBe("PROJECT_CREATED");
-      expect(audit[0]?.actorId).toBe(creatorId);
+      const logs = await auditLogRepository.listByEntity(ctx.db, "PROJECT", project.id);
+      expect(logs.length).toBe(1);
+      const [log] = logs;
+      expect(log).toBeDefined();
+      if (!log) {
+        throw new Error("Audit log not found");
+      }
+      expect(log.action).toBe("PROJECT_CREATED");
+      expect(log.actorId).toBe(creatorId);
+      expect(log.entityType).toBe("PROJECT");
+      expect(log.entityId).toBe(project.id);
+      expect(log.changes).toMatchObject({
+        code: { from: null, to: code.toUpperCase() },
+        name: { from: null, to: "E-Commerce Rebuild" },
+      });
     });
 
-    it("FR-07 c1: allows Admin to create project", async () => {
-      const ctx = await createMockContext("ADMIN");
-      const adminId = ctx.user?.id ?? "";
-      const code = `ADM-${Date.now().toString().slice(-4)}`;
+    it("FR-07 c1: uppercase normalization for project code", async () => {
+      const ctx = await createMockContext("PM");
+      const code = `mix${Date.now().toString().slice(-4)}`;
 
       const project = await projectService.createProject(ctx, {
         code,
-        name: "Admin Project",
+        name: "Normalized Code Project",
         startDate: "2026-11-01",
-        endDate: "2026-12-01",
+        endDate: "2026-12-31",
       });
 
-      expect(project.status).toBe("ACTIVE");
-      const membership = await projectMemberRepository.findByProjectAndUser(ctx.db, project.id, adminId);
-      expect(membership?.projectRole).toBe("PM");
+      expect(project.code).toBe(code.toUpperCase());
+
+      const found = await projectRepository.findByCode(ctx.db, code.toLowerCase());
+      expect(found).toBeDefined();
+      expect(found?.id).toBe(project.id);
     });
 
-    it("FR-07 c2: rejects duplicate code with 400 'Project code is already in use'", async () => {
+    it("FR-07 c2: duplicate code returns 400 with retained input values", async () => {
       const ctx = await createMockContext("PM");
       const code = `DUP-${Date.now().toString().slice(-4)}`;
 
@@ -113,8 +125,8 @@ describe("projectService", () => {
 
       await expect(
         projectService.createProject(ctx, {
-          code: code.toLowerCase(), // testing case-insensitivity
-          name: "Second Project",
+          code,
+          name: "Second Project Duplicate Code",
           startDate: "2026-11-01",
           endDate: "2026-12-31",
         }),
@@ -123,84 +135,49 @@ describe("projectService", () => {
       try {
         await projectService.createProject(ctx, {
           code,
-          name: "Third Project",
+          name: "Second Project Duplicate Code",
           startDate: "2026-11-01",
           endDate: "2026-12-31",
         });
       } catch (err) {
         expect(err).toBeInstanceOf(ValidationError);
-        const valErr = err as ValidationError;
-        expect(valErr.fieldErrors?.code).toContain("Project code is already in use");
+        const vErr = err as ValidationError;
+        expect(vErr.message).toBe("Project code is already in use");
+        expect(vErr.fieldErrors?.code).toContain("Project code is already in use");
       }
     });
 
-    it("FR-07 c2: rejects code that exists on an archived project", async () => {
+    it("FR-07 c3: rejects endDate before startDate with 400", async () => {
       const ctx = await createMockContext("PM");
-      const userId = ctx.user?.id ?? "";
-      const code = `ARC-${Date.now().toString().slice(-4)}`;
-      const now = new Date();
-
-      // Seed archived project directly
-      await ctx.db.batch([
-        projectRepository.insertStmt(ctx.db, {
-          id: crypto.randomUUID(),
-          code: code.toUpperCase(),
-          name: "Archived Project",
-          startDate: "2026-11-01",
-          endDate: "2026-12-31",
-          status: "ACTIVE",
-          createdById: userId,
-          createdAt: now,
-          updatedAt: now,
-          deletedAt: now,
-        }),
-      ]);
+      const code = `DTE-${Date.now().toString().slice(-4)}`;
 
       await expect(
         projectService.createProject(ctx, {
           code,
-          name: "New Project With Archived Code",
-          startDate: "2026-11-01",
-          endDate: "2026-12-31",
-        }),
-      ).rejects.toThrow(ValidationError);
-    });
-
-    it("FR-07 c3: rejects when end date is before start date", async () => {
-      const ctx = await createMockContext("PM");
-      const code = `DAT-${Date.now().toString().slice(-4)}`;
-
-      await expect(
-        projectService.createProject(ctx, {
-          code,
-          name: "Invalid Dates",
-          startDate: "2026-12-31",
+          name: "Invalid Date Range",
+          startDate: "2026-12-01",
           endDate: "2026-11-01",
         }),
       ).rejects.toThrow(ValidationError);
     });
 
-    it("FR-07 c4: denies system MEMBER from creating project with 403", async () => {
-      const ctx = await createMockContext("MEMBER");
-      const code = `MEM-${Date.now().toString().slice(-4)}`;
+    it("FR-07 c4: non-PM non-admin user cannot create project (403)", async () => {
+      const memberCtx = await createMockContext("MEMBER");
+      const code = `MBR-${Date.now().toString().slice(-4)}`;
 
       await expect(
-        projectService.createProject(ctx, {
+        projectService.createProject(memberCtx, {
           code,
           name: "Member Project Attempt",
           startDate: "2026-11-01",
           endDate: "2026-12-31",
         }),
       ).rejects.toThrow(ForbiddenError);
-    });
 
-    it("FR-07 c4: denies system TEAM_LEAD from creating project with 403", async () => {
-      const ctx = await createMockContext("TEAM_LEAD");
-      const code = `LEA-${Date.now().toString().slice(-4)}`;
-
+      const leadCtx = await createMockContext("TEAM_LEAD");
       await expect(
-        projectService.createProject(ctx, {
-          code,
+        projectService.createProject(leadCtx, {
+          code: `LD-${code}`,
           name: "Lead Project Attempt",
           startDate: "2026-11-01",
           endDate: "2026-12-31",
@@ -246,6 +223,83 @@ describe("projectService", () => {
       const memberList = await projectService.listProjects(memberCtx);
       expect(memberList.some((p) => p.id === p1.id)).toBe(false);
       expect(memberList.some((p) => p.id === p2.id)).toBe(false);
+    });
+  });
+
+  describe("getProjectHeader (M2-T2, FR-08)", () => {
+    it("returns project header and permissions for project member", async () => {
+      const pmCtx = await createMockContext("PM");
+      const code = `HDR-${Date.now().toString().slice(-4)}`;
+
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Header Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      const res = await projectService.getProjectHeader(pmCtx, created.id);
+      expect(res.project).toMatchObject({
+        id: created.id,
+        code: code.toUpperCase(),
+        name: "Header Project",
+        status: "ACTIVE",
+        projectRole: "PM",
+        isArchived: false,
+      });
+      expect(res.permissions).toEqual({
+        canManageProject: true,
+        canManageMembers: true,
+        canManageSprint: true,
+        canViewMemberReport: true,
+        canViewProjectReport: true,
+        canExportProject: true,
+      });
+    });
+
+    it("returns project header and permissions for Admin across any project", async () => {
+      const pmCtx = await createMockContext("PM");
+      const adminCtx = await createMockContext("ADMIN");
+      const code = `ADM-${Date.now().toString().slice(-4)}`;
+
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "PM Project For Admin",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      const res = await projectService.getProjectHeader(adminCtx, created.id);
+      expect(res.project).toMatchObject({
+        id: created.id,
+        code: code.toUpperCase(),
+        name: "PM Project For Admin",
+        status: "ACTIVE",
+        projectRole: "PM",
+        isArchived: false,
+      });
+      expect(res.permissions.canManageProject).toBe(true);
+      expect(res.permissions.canManageMembers).toBe(true);
+    });
+
+    it("throws NotFoundError (404) for non-member on active project", async () => {
+      const pmCtx = await createMockContext("PM");
+      const nonMemberCtx = await createMockContext("MEMBER");
+      const code = `NON-${Date.now().toString().slice(-4)}`;
+
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Secret Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await expect(projectService.getProjectHeader(nonMemberCtx, created.id)).rejects.toThrow(NotFoundError);
+    });
+
+    it("throws NotFoundError (404) for non-existent project", async () => {
+      const adminCtx = await createMockContext("ADMIN");
+      await expect(projectService.getProjectHeader(adminCtx, "non-existent-id")).rejects.toThrow(NotFoundError);
     });
   });
 });

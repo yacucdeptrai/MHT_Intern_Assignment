@@ -91,9 +91,15 @@ export default function ProjectsIndexPage() {
                       className="hover:bg-gray-50 transition-colors"
                       data-testid={`project-row-${project.code}`}
                     >
-                      <td className="px-6 py-4 font-mono font-medium text-blue-600">{project.code}</td>
+                      <td className="px-6 py-4 font-mono font-medium text-blue-600">
+                        <Link to={`/projects/${project.id}`} className="hover:underline">
+                          {project.code}
+                        </Link>
+                      </td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">{project.name}</div>
+                        <Link to={`/projects/${project.id}`} className="font-medium text-gray-900 hover:text-blue-600">
+                          {project.name}
+                        </Link>
                         {project.description ? (
                           <div className="text-xs text-gray-500 line-clamp-1">{project.description}</div>
                         ) : null}
