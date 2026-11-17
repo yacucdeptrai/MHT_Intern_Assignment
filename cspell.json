@@ -29,6 +29,11 @@
     "xoxb",
     "nosniff",
     "unarchived",
-    "notused"
+    "notused",
+    "commitlint",
+    "bradlc",
+    "dbaeumer",
+    "esbenp",
+    "lintstagedrc"
   ]
 }

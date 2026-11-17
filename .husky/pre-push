@@ -1,0 +1,11 @@
+# develop, staging, and main change only through pull requests (AGENTS.md §3).
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/develop | refs/heads/staging | refs/heads/main)
+      echo "Direct pushes to ${remote_ref#refs/heads/} are not allowed. Open a pull request instead." >&2
+      exit 1
+      ;;
+  esac
+done
+
+pnpm typecheck
