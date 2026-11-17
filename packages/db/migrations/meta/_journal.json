@@ -43,6 +43,13 @@
       "when": 1794824230583,
       "tag": "0005_project_members",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794824230584,
+      "tag": "0006_notifications",
+      "breakpoints": true
     }
   ]
 }

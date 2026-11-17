@@ -1,8 +1,9 @@
-import { and, desc, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, like, notInArray, or, sql } from "drizzle-orm";
 
 import type { Page, SystemRole, UserStatus } from "@pm/domain";
 
 import type { AppDatabase } from "../client";
+import { projectMembers } from "../schema/projectMembers";
 import { users, type NewUser, type User } from "../schema/users";
 
 export interface FindUserOptions {
@@ -181,5 +182,47 @@ export const userRepository = {
         updatedAt: now,
       })
       .where(eq(users.id, id));
+  },
+
+  async searchActiveNonMembers(
+    db: AppDatabase,
+    projectId: string,
+    query: string,
+    limit = 20,
+  ): Promise<Array<Pick<User, "id" | "fullName" | "email" | "avatarKey">>> {
+    const trimmed = query.trim();
+    const projectMemberUserIds = db
+      .select({ userId: projectMembers.userId })
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, projectId));
+
+    const conditions = [
+      eq(users.status, "ACTIVE"),
+      isNull(users.deletedAt),
+      notInArray(users.id, projectMemberUserIds),
+    ];
+
+    if (trimmed.length > 0) {
+      const searchPattern = `%${trimmed.toLowerCase()}%`;
+      const match = or(
+        like(sql`lower(${users.fullName})`, searchPattern),
+        like(sql`lower(${users.email})`, searchPattern),
+      );
+      if (match) {
+        conditions.push(match);
+      }
+    }
+
+    return db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+        avatarKey: users.avatarKey,
+      })
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(asc(users.fullName))
+      .limit(limit);
   },
 };
