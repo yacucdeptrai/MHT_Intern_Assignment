@@ -909,6 +909,84 @@ describe("taskService.updateTask", () => {
     expect(updatedSubtask?.sprintId).toBe(sprint.id);
   });
 
+  describe("FR-36 c2: sprint assignment rules", () => {
+    async function setupLeadWithSprints() {
+      const { ctx, user } = await createTestContext("PM");
+      const { projectId } = await createProjectWithMembers(ctx);
+      await ctx.db.batch([
+        projectMemberRepository.insertStmt(ctx.db, {
+          projectId,
+          userId: user.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+      ]);
+      const makeSprint = (name: string, deletedAt: Date | null = null) =>
+        sprintRepository.insert(ctx.db, {
+          id: crypto.randomUUID(),
+          projectId,
+          name,
+          startDate: "2026-12-01",
+          endDate: "2026-12-14",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt,
+        });
+      return { ctx, projectId, makeSprint };
+    }
+
+    it("FR-36 c2: rejects an archived sprint of the same project with 400 'Sprint is archived'", async () => {
+      const { ctx, projectId, makeSprint } = await setupLeadWithSprints();
+      const archived = await makeSprint("Archived Sprint", new Date());
+      const task = await taskService.createTask(ctx, projectId, { title: "Needs a sprint" });
+
+      await expect(
+        taskService.updateTask(ctx, projectId, task.id, { version: 1, sprintId: archived.id }),
+      ).rejects.toMatchObject({ name: "ValidationError", fieldErrors: { sprintId: ["Sprint is archived"] } });
+      await expect(
+        taskService.createTask(ctx, projectId, { title: "Created into archived", sprintId: archived.id }),
+      ).rejects.toMatchObject({ name: "ValidationError", fieldErrors: { sprintId: ["Sprint is archived"] } });
+
+      const unchanged = await taskRepository.findById(ctx.db, task.id);
+      expect(unchanged?.sprintId).toBeNull();
+      expect(unchanged?.version).toBe(1);
+    });
+
+    it("FR-36 c2: clearing a parent task's sprint saves and clears it on its sub-tasks", async () => {
+      const { ctx, projectId, makeSprint } = await setupLeadWithSprints();
+      const sprint = await makeSprint("Sprint 1");
+      const parent = await taskService.createTask(ctx, projectId, { title: "Parent", sprintId: sprint.id });
+      const subtask = await taskService.createTask(ctx, projectId, { title: "Child", parentTaskId: parent.id });
+      expect(subtask.sprintId).toBe(sprint.id);
+
+      await taskService.updateTask(ctx, projectId, parent.id, { version: 1, sprintId: "" });
+
+      const clearedParent = await taskRepository.findById(ctx.db, parent.id);
+      const clearedSubtask = await taskRepository.findById(ctx.db, subtask.id);
+      expect(clearedParent?.sprintId).toBeNull();
+      expect(clearedParent?.version).toBe(2);
+      expect(clearedSubtask?.sprintId).toBeNull();
+    });
+
+    it("FR-36 c2: a sprint posted when updating a sub-task is ignored; it keeps its parent's sprint", async () => {
+      const { ctx, projectId, makeSprint } = await setupLeadWithSprints();
+      const parentSprint = await makeSprint("Parent Sprint");
+      const otherSprint = await makeSprint("Other Sprint");
+      const parent = await taskService.createTask(ctx, projectId, { title: "Parent", sprintId: parentSprint.id });
+      const subtask = await taskService.createTask(ctx, projectId, { title: "Child", parentTaskId: parent.id });
+
+      await taskService.updateTask(ctx, projectId, subtask.id, {
+        version: 1,
+        title: "Child renamed",
+        sprintId: otherSprint.id,
+      });
+
+      const updated = await taskRepository.findById(ctx.db, subtask.id);
+      expect(updated?.title).toBe("Child renamed");
+      expect(updated?.sprintId).toBe(parentSprint.id);
+    });
+  });
+
   it("FR-36 c3: sprint from another project rejected with 400 ValidationError", async () => {
     const { ctx: leadCtx, user: leadUser } = await createTestContext("PM");
     const { projectId } = await createProjectWithMembers(leadCtx);
