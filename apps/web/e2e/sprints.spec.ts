@@ -19,9 +19,13 @@ test.describe("Sprint Management Journey (FR-36)", () => {
 
     await page.waitForURL("**/projects");
     await page.getByRole("link", { name: `Sprints E2E Project ${code}` }).click();
+    await page.waitForURL("**/projects/*");
+
+    const projectUrl = page.url();
+    const projectId = projectUrl.split("/projects/")[1]?.split("/")[0]?.split("?")[0] ?? "";
 
     // 2. Navigate to Sprints page
-    await page.getByRole("link", { name: "Sprints" }).click();
+    await page.goto(`/projects/${projectId}/sprints`);
     await page.waitForURL("**/sprints");
 
     await expect(page.getByTestId("sprints-page")).toBeVisible();
@@ -49,20 +53,28 @@ test.describe("Sprint Management Journey (FR-36)", () => {
 
     await expect(page.getByTestId("sprint-name")).toHaveText("Sprint 1 Renamed");
 
-    // 6. Create a task assigned to this sprint
-    await page.getByRole("link", { name: "Tasks" }).click();
-    await page.waitForURL("**/projects/*");
+    // 6. Create a task and assign it to the sprint
+    await page.goto(`/projects/${projectId}`);
+    await page.waitForURL(`**/projects/${projectId}`);
 
     await page.getByTestId("create-task-button").click();
     await page.getByTestId("task-title-input").fill("Task in Sprint 1");
-    await page.getByTestId("task-sprint-select").selectOption({ label: "Sprint 1 Renamed" });
     await page.getByTestId("task-submit-button").click();
 
     await expect(page.getByTestId("tasks-table")).toBeVisible();
-    await expect(page.getByTestId("tasks-table")).toContainText("Task in Sprint 1");
+    await page.getByRole("link", { name: "Task in Sprint 1" }).click();
+    await page.waitForURL("**/tasks/*");
+
+    // Open task edit form and link to sprint
+    await page.getByTestId("edit-task-button").click();
+    await expect(page.getByTestId("edit-task-form")).toBeVisible();
+    await page.getByTestId("edit-sprint-select").selectOption({ label: "Sprint 1 Renamed" });
+    await page.getByTestId("save-task-button").click();
+
+    await expect(page.getByTestId("sidebar-sprint")).toHaveText("Sprint 1 Renamed");
 
     // 7. Verify Sprints page reflects task completion rate: 0% (0/1 done)
-    await page.getByRole("link", { name: "Sprints" }).click();
+    await page.goto(`/projects/${projectId}/sprints`);
     await page.waitForURL("**/sprints");
     await expect(page.getByTestId("sprint-completion")).toContainText("0%");
     await expect(page.getByTestId("sprint-completion")).toContainText("0/1 done");
@@ -74,8 +86,8 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     await expect(page.getByTestId("empty-sprints")).toBeVisible();
 
     // 9. Verify task detail page shows Backlog (no sprint)
-    await page.getByRole("link", { name: "Tasks" }).click();
-    await page.waitForURL("**/projects/*");
+    await page.goto(`/projects/${projectId}`);
+    await page.waitForURL(`**/projects/${projectId}`);
     await page.getByRole("link", { name: "Task in Sprint 1" }).click();
     await page.waitForURL("**/tasks/*");
 
