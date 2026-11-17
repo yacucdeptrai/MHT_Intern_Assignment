@@ -17,7 +17,7 @@ export type SprintCreateInput = z.infer<typeof SprintCreateSchema>;
 
 export const SprintUpdateSchema = withDateOrder(
   SprintBaseSchema.partial().extend({
-    sprintId: z.string().uuid("Invalid sprint ID"),
+    sprintId: z.string().min(1, "Sprint ID is required"),
   }),
   "startDate",
   "endDate",
@@ -25,7 +25,7 @@ export const SprintUpdateSchema = withDateOrder(
 export type SprintUpdateInput = z.infer<typeof SprintUpdateSchema>;
 
 export const SprintArchiveSchema = z.object({
-  sprintId: z.string().uuid("Invalid sprint ID"),
+  sprintId: z.string().min(1, "Sprint ID is required"),
 });
 export type SprintArchiveInput = z.infer<typeof SprintArchiveSchema>;
 
@@ -42,4 +42,3 @@ export function computeSprintStatus(
   }
   return "ACTIVE";
 }
-

@@ -77,7 +77,7 @@ describe("SprintUpdateSchema (FR-36)", () => {
   it("rejects invalid sprintId or date ordering violation in update", () => {
     expect(
       SprintUpdateSchema.safeParse({
-        sprintId: "not-a-uuid",
+        sprintId: "",
         name: "Test",
       }).success,
     ).toBe(false);
@@ -93,7 +93,7 @@ describe("SprintUpdateSchema (FR-36)", () => {
 });
 
 describe("SprintArchiveSchema (FR-36 c4)", () => {
-  it("accepts valid uuid sprintId", () => {
+  it("accepts valid sprintId", () => {
     expect(
       SprintArchiveSchema.safeParse({
         sprintId: "11111111-1111-4111-8111-111111111111",
@@ -101,37 +101,21 @@ describe("SprintArchiveSchema (FR-36 c4)", () => {
     ).toBe(true);
   });
 
-  it("rejects invalid uuid", () => {
-    expect(SprintArchiveSchema.safeParse({ sprintId: "invalid" }).success).toBe(false);
+  it("rejects empty sprintId", () => {
+    expect(SprintArchiveSchema.safeParse({ sprintId: "" }).success).toBe(false);
   });
 });
 
 describe("computeSprintStatus", () => {
   it("computes PLANNED when today is before startDate", () => {
-    expect(
-      computeSprintStatus(
-        { startDate: "2026-12-01", endDate: "2026-12-15" },
-        "2026-11-17",
-      ),
-    ).toBe("PLANNED");
+    expect(computeSprintStatus({ startDate: "2026-12-01", endDate: "2026-12-15" }, "2026-11-17")).toBe("PLANNED");
   });
 
   it("computes ACTIVE when today is between startDate and endDate", () => {
-    expect(
-      computeSprintStatus(
-        { startDate: "2026-11-10", endDate: "2026-11-25" },
-        "2026-11-17",
-      ),
-    ).toBe("ACTIVE");
+    expect(computeSprintStatus({ startDate: "2026-11-10", endDate: "2026-11-25" }, "2026-11-17")).toBe("ACTIVE");
   });
 
   it("computes COMPLETED when today is after endDate", () => {
-    expect(
-      computeSprintStatus(
-        { startDate: "2026-11-01", endDate: "2026-11-15" },
-        "2026-11-17",
-      ),
-    ).toBe("COMPLETED");
+    expect(computeSprintStatus({ startDate: "2026-11-01", endDate: "2026-11-15" }, "2026-11-17")).toBe("COMPLETED");
   });
 });
-
