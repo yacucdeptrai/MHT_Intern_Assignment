@@ -161,7 +161,12 @@ export default function MyTasksPage() {
                       <span className="font-mono text-xs font-medium text-gray-500">
                         {task.projectCode ? `${task.projectCode}-${task.number}` : `#${task.number}`}
                       </span>
-                      <span className="font-medium text-gray-900">{task.title}</span>
+                      <Link
+                        to={`/projects/${task.projectId}/tasks/${task.id}`}
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        {task.title}
+                      </Link>
                     </div>
                   </td>
                   <td className="px-6 py-4">

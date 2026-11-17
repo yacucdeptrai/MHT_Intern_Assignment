@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import type { StatusCategory, TaskPriority } from "@pm/domain";
 
 import type { AppDatabase } from "../client";
@@ -7,6 +8,7 @@ import { sprints } from "../schema/sprints";
 import { taskAssignees } from "../schema/taskAssignees";
 import { tasks, type TaskRow } from "../schema/tasks";
 import { taskStatuses } from "../schema/taskStatuses";
+import { users } from "../schema/users";
 
 export interface CreateTaskInput {
   id: string;
@@ -23,6 +25,48 @@ export interface CreateTaskInput {
   statusChangedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface UpdateTaskInput {
+  id: string;
+  expectedVersion: number;
+  title?: string;
+  description?: string | null;
+  priority?: TaskPriority;
+  startDate?: string | null;
+  dueDate?: string | null;
+  sprintId?: string | null;
+  now: Date;
+}
+
+export interface TaskDetailRow {
+  id: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  number: number;
+  title: string;
+  description: string | null;
+  priority: TaskPriority;
+  statusId: string;
+  statusName: string;
+  statusCategory: StatusCategory;
+  startDate: string | null;
+  dueDate: string | null;
+  sprintId: string | null;
+  sprintName: string | null;
+  parentTaskId: string | null;
+  parentTaskTitle: string | null;
+  parentTaskNumber: number | null;
+  createdById: string;
+  creatorName: string;
+  creatorAvatarKey: string | null;
+  version: number;
+  statusChangedAt: Date;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
 }
 
 export interface ListProjectTasksFilter {
@@ -92,6 +136,127 @@ export const taskRepository = {
         updatedAt: deletedAt,
       })
       .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)));
+  },
+
+  updateStmt: (db: AppDatabase, input: UpdateTaskInput) => {
+    const setValues: Record<string, unknown> = {
+      version: sql`${tasks.version} + 1`,
+      updatedAt: input.now,
+    };
+    if (input.title !== undefined) setValues.title = input.title;
+    if (input.description !== undefined) setValues.description = input.description;
+    if (input.priority !== undefined) setValues.priority = input.priority;
+    if (input.startDate !== undefined) setValues.startDate = input.startDate;
+    if (input.dueDate !== undefined) setValues.dueDate = input.dueDate;
+    if (input.sprintId !== undefined) setValues.sprintId = input.sprintId;
+
+    return db
+      .update(tasks)
+      .set(setValues)
+      .where(and(eq(tasks.id, input.id), eq(tasks.version, input.expectedVersion), isNull(tasks.deletedAt)));
+  },
+
+  updateStatusStmt: (
+    db: AppDatabase,
+    input: { id: string; expectedVersion: number; statusId: string; completedAt?: Date | null; now: Date },
+  ) => {
+    return db
+      .update(tasks)
+      .set({
+        statusId: input.statusId,
+        statusChangedAt: input.now,
+        completedAt: input.completedAt,
+        version: sql`${tasks.version} + 1`,
+        updatedAt: input.now,
+      })
+      .where(and(eq(tasks.id, input.id), eq(tasks.version, input.expectedVersion), isNull(tasks.deletedAt)));
+  },
+
+  updateSubtasksSprintStmt: (db: AppDatabase, parentTaskId: string, sprintId: string | null, now: Date) => {
+    return db
+      .update(tasks)
+      .set({
+        sprintId,
+        updatedAt: now,
+      })
+      .where(and(eq(tasks.parentTaskId, parentTaskId), isNull(tasks.deletedAt)));
+  },
+
+  findDetailsById: async (db: AppDatabase, id: string): Promise<TaskDetailRow | undefined> => {
+    const parentTasks = alias(tasks, "parent_tasks");
+    const rows = await db
+      .select({
+        id: tasks.id,
+        projectId: tasks.projectId,
+        projectCode: projects.code,
+        projectName: projects.name,
+        number: tasks.number,
+        title: tasks.title,
+        description: tasks.description,
+        priority: tasks.priority,
+        statusId: tasks.statusId,
+        statusName: taskStatuses.name,
+        statusCategory: taskStatuses.category,
+        startDate: tasks.startDate,
+        dueDate: tasks.dueDate,
+        sprintId: tasks.sprintId,
+        sprintName: sprints.name,
+        parentTaskId: tasks.parentTaskId,
+        parentTaskTitle: parentTasks.title,
+        parentTaskNumber: parentTasks.number,
+        createdById: tasks.createdById,
+        creatorName: users.fullName,
+        creatorAvatarKey: users.avatarKey,
+        version: tasks.version,
+        statusChangedAt: tasks.statusChangedAt,
+        completedAt: tasks.completedAt,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        deletedAt: tasks.deletedAt,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+      .innerJoin(users, eq(tasks.createdById, users.id))
+      .leftJoin(sprints, eq(tasks.sprintId, sprints.id))
+      .leftJoin(parentTasks, eq(tasks.parentTaskId, parentTasks.id))
+      .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)))
+      .limit(1);
+
+    return rows[0];
+  },
+
+  listSubtasks: async (db: AppDatabase, parentTaskId: string): Promise<TaskWithMetaRow[]> => {
+    return db
+      .select({
+        id: tasks.id,
+        projectId: tasks.projectId,
+        number: tasks.number,
+        parentTaskId: tasks.parentTaskId,
+        sprintId: tasks.sprintId,
+        statusId: tasks.statusId,
+        title: tasks.title,
+        description: tasks.description,
+        priority: tasks.priority,
+        startDate: tasks.startDate,
+        dueDate: tasks.dueDate,
+        createdById: tasks.createdById,
+        slackThreadTs: tasks.slackThreadTs,
+        statusChangedAt: tasks.statusChangedAt,
+        completedAt: tasks.completedAt,
+        version: tasks.version,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        deletedAt: tasks.deletedAt,
+        statusName: taskStatuses.name,
+        statusCategory: taskStatuses.category,
+        sprintName: sprints.name,
+      })
+      .from(tasks)
+      .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+      .leftJoin(sprints, eq(tasks.sprintId, sprints.id))
+      .where(and(eq(tasks.parentTaskId, parentTaskId), isNull(tasks.deletedAt)))
+      .orderBy(asc(tasks.number));
   },
 
   findById: async (db: AppDatabase, id: string): Promise<TaskRow | undefined> => {

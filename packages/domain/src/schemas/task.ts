@@ -130,3 +130,23 @@ export const MyTaskFiltersSchema = z.object({
 });
 
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
+
+export const TaskUpdateSchema = TaskCreateBaseSchema.omit({
+  parentTaskId: true,
+  assigneeIds: true,
+})
+  .partial()
+  .extend({
+    version: z.coerce.number().int().positive("Version must be a positive integer"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.startDate && data.dueDate && data.dueDate < data.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Due date must be on or after start date",
+        path: ["dueDate"],
+      });
+    }
+  });
+
+export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;

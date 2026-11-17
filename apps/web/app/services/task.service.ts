@@ -1,6 +1,8 @@
 import {
   auditLogRepository,
   compactBatch,
+  conflictGuardStmt,
+  isVersionConflict,
   notificationRepository,
   outboxJobRepository,
   projectMemberRepository,
@@ -13,16 +15,23 @@ import {
   type TaskRow,
 } from "@pm/db";
 import {
+  canApproveTask,
+  canArchiveTask,
   canAssignTask,
   canCreateTask,
+  canEditTask,
+  canReopenTask,
+  ConflictError,
   ForbiddenError,
   getTodayDateString,
   isDueSoon,
   isOverdue,
   isTodayPriority,
   MyTaskFiltersSchema,
+  NotFoundError,
   ProjectTaskFiltersSchema,
   TaskCreateSchema,
+  TaskUpdateSchema,
   toActor,
   UnauthorizedError,
   ValidationError,
@@ -35,7 +44,12 @@ import {
   type StatusOption,
   type TaskAssigneeInfo,
   type TaskCreateInput,
+  type TaskDetailDto,
+  type TaskDetailLoaderData,
   type TaskListItem,
+  type TaskPermissions,
+  type TaskPolicyTarget,
+  type TaskUpdateInput,
 } from "@pm/domain";
 
 import { loadProjectAccess } from "../utils/auth.server";
@@ -431,5 +445,294 @@ export const taskService = {
         isDefault: s.isDefault,
       })),
     };
+  },
+
+  async getTaskDetails(ctx: RequestContext, projectId: string, taskId: string): Promise<TaskDetailLoaderData> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const access = await loadProjectAccess(ctx, projectId);
+    const taskRow = await taskRepository.findDetailsById(ctx.db, taskId);
+    if (!taskRow || taskRow.projectId !== projectId || taskRow.deletedAt !== null) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const now = ctx.clock.now();
+    const assignees = await taskAssigneeRepository.findByTaskIdsWithUser(ctx.db, [taskId]);
+    const assigneeInfos: TaskAssigneeInfo[] = assignees.map((a) => ({
+      id: a.userId,
+      fullName: a.fullName,
+      avatarKey: a.avatarKey,
+    }));
+
+    const subtaskRows = await taskRepository.listSubtasks(ctx.db, taskId);
+    const subtaskIds = subtaskRows.map((s) => s.id);
+    const subtaskAssignees =
+      subtaskIds.length > 0 ? await taskAssigneeRepository.findByTaskIdsWithUser(ctx.db, subtaskIds) : [];
+    const subtaskAssigneesByTaskId = new Map<string, TaskAssigneeInfo[]>();
+    for (const sa of subtaskAssignees) {
+      const list = subtaskAssigneesByTaskId.get(sa.taskId) ?? [];
+      list.push({ id: sa.userId, fullName: sa.fullName, avatarKey: sa.avatarKey });
+      subtaskAssigneesByTaskId.set(sa.taskId, list);
+    }
+
+    const subTasks: TaskListItem[] = subtaskRows.map((st) => ({
+      id: st.id,
+      projectId: st.projectId,
+      number: st.number,
+      title: st.title,
+      priority: st.priority,
+      statusId: st.statusId,
+      statusName: st.statusName,
+      statusCategory: st.statusCategory,
+      dueDate: st.dueDate,
+      startDate: st.startDate,
+      assignees: subtaskAssigneesByTaskId.get(st.id) ?? [],
+      parentTaskId: st.parentTaskId,
+      sprintId: st.sprintId,
+      sprintName: st.sprintName,
+      isOverdue: isOverdue({ dueDate: st.dueDate, statusCategory: st.statusCategory, deletedAt: st.deletedAt }, now),
+      isDueSoon: isDueSoon({ dueDate: st.dueDate, statusCategory: st.statusCategory, deletedAt: st.deletedAt }, now),
+      isTodayPriority: isTodayPriority(
+        {
+          dueDate: st.dueDate,
+          statusCategory: st.statusCategory,
+          deletedAt: st.deletedAt,
+          priority: st.priority,
+        },
+        now,
+      ),
+      createdAt: typeof st.createdAt === "number" ? st.createdAt : st.createdAt.getTime(),
+      updatedAt: typeof st.updatedAt === "number" ? st.updatedAt : st.updatedAt.getTime(),
+    }));
+
+    const [statuses, members, sprints] = await Promise.all([
+      taskStatusRepository.list(ctx.db),
+      projectMemberRepository.listByProjectWithUser(ctx.db, projectId),
+      sprintRepository.listByProject(ctx.db, projectId),
+    ]);
+
+    const actor = toActor(ctx.user, access);
+    const target: TaskPolicyTarget = {
+      createdById: taskRow.createdById,
+      assigneeIds: assigneeInfos.map((a) => a.id),
+      category: taskRow.statusCategory,
+    };
+
+    const permissions: TaskPermissions = {
+      canEdit: canEditTask(actor, target),
+      canArchive: canArchiveTask(actor, target),
+      canAssign: canAssignTask(actor),
+      canApprove: canApproveTask(actor),
+      canReopen: canReopenTask(actor),
+    };
+
+    const task: TaskDetailDto = {
+      id: taskRow.id,
+      projectId: taskRow.projectId,
+      projectCode: taskRow.projectCode,
+      projectName: taskRow.projectName,
+      number: taskRow.number,
+      title: taskRow.title,
+      description: taskRow.description,
+      priority: taskRow.priority,
+      statusId: taskRow.statusId,
+      statusName: taskRow.statusName,
+      statusCategory: taskRow.statusCategory,
+      startDate: taskRow.startDate,
+      dueDate: taskRow.dueDate,
+      sprintId: taskRow.sprintId,
+      sprintName: taskRow.sprintName,
+      parentTaskId: taskRow.parentTaskId,
+      parentTaskTitle: taskRow.parentTaskTitle,
+      parentTaskNumber: taskRow.parentTaskNumber,
+      createdById: taskRow.createdById,
+      creatorName: taskRow.creatorName,
+      creatorAvatarKey: taskRow.creatorAvatarKey,
+      assignees: assigneeInfos,
+      version: taskRow.version,
+      statusChangedAt:
+        typeof taskRow.statusChangedAt === "number" ? taskRow.statusChangedAt : taskRow.statusChangedAt.getTime(),
+      completedAt: taskRow.completedAt
+        ? typeof taskRow.completedAt === "number"
+          ? taskRow.completedAt
+          : taskRow.completedAt.getTime()
+        : null,
+      createdAt: typeof taskRow.createdAt === "number" ? taskRow.createdAt : taskRow.createdAt.getTime(),
+      updatedAt: typeof taskRow.updatedAt === "number" ? taskRow.updatedAt : taskRow.updatedAt.getTime(),
+      isOverdue: isOverdue(
+        { dueDate: taskRow.dueDate, statusCategory: taskRow.statusCategory, deletedAt: taskRow.deletedAt },
+        now,
+      ),
+      isDueSoon: isDueSoon(
+        { dueDate: taskRow.dueDate, statusCategory: taskRow.statusCategory, deletedAt: taskRow.deletedAt },
+        now,
+      ),
+      isTodayPriority: isTodayPriority(
+        {
+          dueDate: taskRow.dueDate,
+          statusCategory: taskRow.statusCategory,
+          deletedAt: taskRow.deletedAt,
+          priority: taskRow.priority,
+        },
+        now,
+      ),
+    };
+
+    return {
+      task,
+      subTasks,
+      members: members.map((m) => ({
+        id: m.userId,
+        fullName: m.fullName,
+        email: m.email,
+      })),
+      sprints: sprints.map((s) => ({
+        id: s.id,
+        name: s.name,
+      })),
+      statuses: statuses.map((s) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        isDefault: s.isDefault,
+      })),
+      permissions,
+    };
+  },
+
+  async updateTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const parsed = TaskUpdateSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string") {
+          fieldErrors[field] = fieldErrors[field] ?? [];
+          fieldErrors[field].push(issue.message);
+        }
+      }
+      throw new ValidationError("Invalid task update data", fieldErrors);
+    }
+
+    const data: TaskUpdateInput = parsed.data;
+
+    // Load project access (throws NotFoundError 404 for non-members)
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const existing = await taskRepository.findDetailsById(ctx.db, taskId);
+    if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
+      throw new NotFoundError("Task not found");
+    }
+
+    // FR-13 c4: Tasks in DONE status are frozen
+    if (existing.statusCategory === "DONE") {
+      throw new ForbiddenError("Reopen the task to edit it");
+    }
+
+    // Check editor permission
+    const currentAssignees = await taskAssigneeRepository.findByTaskId(ctx.db, taskId);
+    const assigneeIds = currentAssignees.map((a) => a.userId);
+    const actor = toActor(ctx.user, access);
+    if (!canEditTask(actor, { createdById: existing.createdById, assigneeIds, category: existing.statusCategory })) {
+      throw new ForbiddenError("You do not have permission to edit this task");
+    }
+
+    // Check dates order against existing values
+    const startDate = data.startDate !== undefined ? data.startDate : existing.startDate;
+    const dueDate = data.dueDate !== undefined ? data.dueDate : existing.dueDate;
+    if (startDate && dueDate && dueDate < startDate) {
+      throw new ValidationError("Due date must be on or after start date", {
+        dueDate: ["Due date must be on or after start date"],
+      });
+    }
+
+    // Validate sprint if provided (FR-36 c2 & c3)
+    let sprintIdToSet = data.sprintId;
+    if (existing.parentTaskId) {
+      // Sub-tasks follow parent sprint; sprint posted for sub-task is ignored
+      sprintIdToSet = undefined;
+    } else if (sprintIdToSet) {
+      const sprint = await sprintRepository.findById(ctx.db, sprintIdToSet);
+      if (!sprint || sprint.projectId !== projectId) {
+        throw new ValidationError("Sprint does not belong to this project", {
+          sprintId: ["Sprint does not belong to this project"],
+        });
+      }
+    }
+
+    // Compute changes for audit log
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (data.title !== undefined && data.title !== existing.title) {
+      changes.title = { from: existing.title, to: data.title };
+    }
+    if (data.description !== undefined && data.description !== existing.description) {
+      changes.description = { from: existing.description, to: data.description };
+    }
+    if (data.priority !== undefined && data.priority !== existing.priority) {
+      changes.priority = { from: existing.priority, to: data.priority };
+    }
+    if (data.startDate !== undefined && data.startDate !== existing.startDate) {
+      changes.startDate = { from: existing.startDate, to: data.startDate };
+    }
+    if (data.dueDate !== undefined && data.dueDate !== existing.dueDate) {
+      changes.dueDate = { from: existing.dueDate, to: data.dueDate };
+    }
+    if (sprintIdToSet !== undefined && sprintIdToSet !== existing.sprintId) {
+      changes.sprintId = { from: existing.sprintId, to: sprintIdToSet };
+    }
+
+    const now = ctx.clock.now();
+    const batchItems: (AppBatchItem | null)[] = [
+      taskRepository.updateStmt(ctx.db, {
+        id: taskId,
+        expectedVersion: data.version,
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        startDate: data.startDate,
+        dueDate: data.dueDate,
+        sprintId: sprintIdToSet,
+        now,
+      }),
+      conflictGuardStmt(ctx.db),
+    ];
+
+    if (!existing.parentTaskId && sprintIdToSet !== undefined && sprintIdToSet !== existing.sprintId) {
+      batchItems.push(taskRepository.updateSubtasksSprintStmt(ctx.db, taskId, sprintIdToSet, now));
+    }
+
+    batchItems.push(
+      auditLogRepository.insertStmt(ctx.db, {
+        id: crypto.randomUUID(),
+        actorId: ctx.user.id,
+        action: "TASK_UPDATED",
+        entityType: "TASK",
+        entityId: taskId,
+        projectId,
+        changes,
+        createdAt: now,
+      }),
+    );
+
+    try {
+      await ctx.db.batch(compactBatch(batchItems));
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+      }
+      throw error;
+    }
+
+    const detailData = await this.getTaskDetails(ctx, projectId, taskId);
+    return detailData.task;
   },
 };
