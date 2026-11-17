@@ -69,6 +69,10 @@ export const taskStatusService = {
     return taskStatusRepository.list(ctx.db);
   },
 
+  async getTaskCountsByStatus(ctx: RequestContext): Promise<Record<string, number>> {
+    return taskRepository.countGroupedByStatusId(ctx.db);
+  },
+
   async createStatus(ctx: RequestContext, input: StatusCreateInput): Promise<TaskStatus> {
     const currentUser = requireStatusAdmin(ctx);
 

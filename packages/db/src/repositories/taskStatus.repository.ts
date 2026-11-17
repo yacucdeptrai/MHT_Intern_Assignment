@@ -1,6 +1,7 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, notExists, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
+import { tasks } from "../schema/tasks";
 import { taskStatuses, type NewTaskStatus, type TaskStatus } from "../schema/taskStatuses";
 
 export const taskStatusRepository = {
@@ -67,7 +68,14 @@ export const taskStatusRepository = {
 
   deleteStmt(db: AppDatabase, id: string) {
     // A26: delete from task_statuses where id and NOT EXISTS (SELECT 1 FROM tasks WHERE status_id = ?) and not default
-    // TODO(M3-T2): add NOT EXISTS (SELECT 1 FROM tasks WHERE status_id = ?) once tasks table exists
-    return db.delete(taskStatuses).where(and(eq(taskStatuses.id, id), eq(taskStatuses.isDefault, false)));
+    return db
+      .delete(taskStatuses)
+      .where(
+        and(
+          eq(taskStatuses.id, id),
+          eq(taskStatuses.isDefault, false),
+          notExists(db.select().from(tasks).where(eq(tasks.statusId, id))),
+        ),
+      );
   },
 };

@@ -1,7 +1,14 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import { createDatabase, taskStatusRepository, userRepository } from "@pm/db";
+import {
+  createDatabase,
+  projectMemberRepository,
+  projectRepository,
+  taskRepository,
+  taskStatusRepository,
+  userRepository,
+} from "@pm/db";
 import { adminStatusesAction } from "../../app/actions/adminStatusesAction";
 import { adminStatusesLoader } from "../../app/loaders/adminStatusesLoader";
 import { commitSession, getSession } from "../../app/utils/session.server";
@@ -235,6 +242,95 @@ describe("adminStatusesAction and Loader", () => {
     if (first) {
       expect(typeof first.taskCount).toBe("number");
     }
+  });
+
+  it("FR-20 c3: adminStatusesLoader aggregates taskCount (a status with 2 tasks, one archived, shows 2; a status with none shows 0)", async () => {
+    const { request, ctx, userId } = await createAuthenticatedRequest("https://example.com/admin/statuses", "ADMIN");
+    const now = new Date();
+    const projectId = crypto.randomUUID();
+    const projectCode = `PRJ-${projectId.slice(0, 4).toUpperCase()}`;
+
+    await ctx.db.batch([
+      projectRepository.insertStmt(ctx.db, {
+        id: projectId,
+        code: projectCode,
+        name: "Test Project for Status Task Count",
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+        createdById: userId,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      projectMemberRepository.insertStmt(ctx.db, {
+        projectId,
+        userId,
+        projectRole: "PM",
+        createdAt: now,
+      }),
+    ]);
+
+    const statusWithTasks = await taskStatusRepository.insert(ctx.db, {
+      id: crypto.randomUUID(),
+      name: `StatusWithTasks-${crypto.randomUUID()}`,
+      category: "TODO",
+      position: 99,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const statusEmpty = await taskStatusRepository.insert(ctx.db, {
+      id: crypto.randomUUID(),
+      name: `StatusEmpty-${crypto.randomUUID()}`,
+      category: "TODO",
+      position: 100,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const activeTaskId = crypto.randomUUID();
+    const archivedTaskId = crypto.randomUUID();
+
+    // 2 tasks under statusWithTasks: 1 active, 1 archived
+    await ctx.db.batch([
+      taskRepository.insertStmt(ctx.db, {
+        id: activeTaskId,
+        projectId,
+        statusId: statusWithTasks.id,
+        title: "Active task",
+        priority: "MEDIUM",
+        createdById: userId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(ctx.db, {
+        id: archivedTaskId,
+        projectId,
+        statusId: statusWithTasks.id,
+        title: "Archived task",
+        priority: "LOW",
+        createdById: userId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    // Archive the second task
+    const allTasks = await taskRepository.listByProject(ctx.db, projectId);
+    const archivedTask = allTasks.find((t) => t.id === archivedTaskId);
+    if (archivedTask) {
+      await taskRepository.archiveStmt(ctx.db, archivedTask.id, now);
+    }
+
+    const data = await adminStatusesLoader(ctx, request);
+    const targetWithTasks = data.statuses.find((s) => s.id === statusWithTasks.id);
+    const targetEmpty = data.statuses.find((s) => s.id === statusEmpty.id);
+
+    expect(targetWithTasks?.taskCount).toBe(2);
+    expect(targetEmpty?.taskCount).toBe(0);
   });
 
   it("adminStatusesLoader throws 403 for non-Admin", async () => {
