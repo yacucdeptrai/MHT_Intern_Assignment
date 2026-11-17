@@ -914,3 +914,248 @@ describe("taskService.updateTask", () => {
     ).rejects.toThrow("This project is archived");
   });
 });
+
+describe("taskService.assignTask (FR-15)", () => {
+  it("FR-15 c1 / A17: project TEAM_LEAD assigns task atomically, increments version, audits TASK_ASSIGNED, and creates notifications for newly added assignees", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { ctx: memberACtx, user: memberA } = await createTestContext("MEMBER");
+    const { user: memberB } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    const now = new Date();
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: now,
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: memberA.id,
+        projectRole: "MEMBER",
+        createdAt: now,
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: memberB.id,
+        projectRole: "MEMBER",
+        createdAt: now,
+      }),
+    ]);
+
+    const task = await taskService.createTask(memberACtx, projectId, {
+      title: "Task for assignment test",
+    });
+    expect(task.version).toBe(1);
+    expect(task.assignees).toEqual([]);
+
+    // 1. Assign to memberA
+    const assigned1 = await taskService.assignTask(leadCtx, projectId, task.id, {
+      version: 1,
+      assigneeIds: [memberA.id],
+    });
+
+    expect(assigned1.version).toBe(2);
+    expect(assigned1.assignees.map((a) => a.id)).toEqual([memberA.id]);
+
+    // Check DB state for first assignment
+    const assigneesInDb1 = await taskAssigneeRepository.findUserIdsByTaskId(leadCtx.db, task.id);
+    expect(assigneesInDb1).toEqual([memberA.id]);
+
+    const notifications1 = await notificationRepository.listByUser(leadCtx.db, memberA.id);
+    const assignNotification1 = notifications1.find((n) => n.entityId === task.id && n.type === "TASK_ASSIGNED");
+    expect(assignNotification1).toBeDefined();
+
+    // 2. Assign to memberA and memberB (memberB is newly added)
+    const assigned2 = await taskService.assignTask(leadCtx, projectId, task.id, {
+      version: 2,
+      assigneeIds: [memberA.id, memberB.id],
+    });
+
+    expect(assigned2.version).toBe(3);
+    expect(assigned2.assignees.map((a) => a.id)).toEqual(expect.arrayContaining([memberA.id, memberB.id]));
+
+    // Check notifications: memberB receives notification, memberA does not receive a second one
+    const notificationsB = await notificationRepository.listByUser(leadCtx.db, memberB.id);
+    const assignNotificationB = notificationsB.find((n) => n.entityId === task.id && n.type === "TASK_ASSIGNED");
+    expect(assignNotificationB).toBeDefined();
+
+    const notificationsAAfter = await notificationRepository.listByUser(leadCtx.db, memberA.id);
+    const assignNotificationsA = notificationsAAfter.filter(
+      (n) => n.entityId === task.id && n.type === "TASK_ASSIGNED",
+    );
+    expect(assignNotificationsA.length).toBe(1);
+  });
+
+  it("FR-15 c1: clearing all assignees removes task assignees and increments version", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { user: member } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    const now = new Date();
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: now,
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: member.id,
+        projectRole: "MEMBER",
+        createdAt: now,
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task with assignee to clear",
+      assigneeIds: [member.id],
+    });
+    expect(task.assignees).toEqual([member.id]);
+
+    const unassigned = await taskService.assignTask(leadCtx, projectId, task.id, {
+      version: 1,
+      assigneeIds: [],
+    });
+    expect(unassigned.version).toBe(2);
+    expect(unassigned.assignees).toEqual([]);
+
+    const dbAssignees = await taskAssigneeRepository.findUserIdsByTaskId(leadCtx.db, task.id);
+    expect(dbAssignees).toEqual([]);
+  });
+
+  it("FR-15 c2: rejects non-member assignee with 400 'Assignees must be project members'", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { user: nonMember } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task for non-member test",
+    });
+
+    await expect(
+      taskService.assignTask(leadCtx, projectId, task.id, {
+        version: 1,
+        assigneeIds: [nonMember.id],
+      }),
+    ).rejects.toThrow("Assignees must be project members");
+  });
+
+  it("FR-15 c3: rejects project MEMBER with 403", async () => {
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(memberCtx);
+
+    await memberCtx.db.batch([
+      projectMemberRepository.insertStmt(memberCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(memberCtx, projectId, {
+      title: "Task for permission test",
+    });
+
+    await expect(
+      taskService.assignTask(memberCtx, projectId, task.id, {
+        version: 1,
+        assigneeIds: [memberUser.id],
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("A17: returns ConflictError 409 when stale version is provided", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task for conflict test",
+    });
+
+    // Provide stale version 99
+    await expect(
+      taskService.assignTask(leadCtx, projectId, task.id, {
+        version: 99,
+        assigneeIds: [],
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "This task was changed by someone else. Reload to see the latest version.",
+    });
+  });
+
+  it("rejects with 404 when non-member calls assignTask", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task for 404 test",
+    });
+
+    await expect(
+      taskService.assignTask(nonMemberCtx, projectId, task.id, {
+        version: 1,
+        assigneeIds: [],
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("rejects with 403 when assigning task in archived project", async () => {
+    const { ctx: adminCtx } = await createTestContext("ADMIN");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminCtx.user?.id ?? "",
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, {
+      title: "Task in archived project",
+    });
+
+    await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+
+    await expect(
+      taskService.assignTask(adminCtx, projectId, task.id, {
+        version: 1,
+        assigneeIds: [],
+      }),
+    ).rejects.toMatchObject({ status: 403, message: "This project is archived" });
+  });
+});

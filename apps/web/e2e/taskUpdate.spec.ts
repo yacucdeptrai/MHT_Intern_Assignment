@@ -190,4 +190,65 @@ test.describe("Task Update Journey (FR-13)", () => {
     expect(response?.status()).toBe(404);
     await nonMember.context.close();
   });
+
+  test("FR-15 c1: project lead assigns task to project member, version increments", async ({ browser }) => {
+    const adminContext = await browser.newContext();
+    const adminPage = await adminContext.newPage();
+    await signInAsAdmin(adminPage);
+
+    // Create project
+    await adminPage.goto("/projects/new");
+    const code = `ASN${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    await adminPage.getByLabel("Project Code").fill(code);
+    await adminPage.getByLabel("Project Name").fill(`Assign Task Project ${code}`);
+    await adminPage.getByLabel("Start Date").fill("2026-11-01");
+    await adminPage.getByLabel("End Date").fill("2026-12-31");
+    await adminPage.getByRole("button", { name: "Create Project" }).click();
+
+    await adminPage.waitForURL("**/projects");
+    await adminPage.getByRole("link", { name: `Assign Task Project ${code}` }).click();
+    await adminPage.waitForURL("**/projects/*");
+
+    const projectUrl = adminPage.url();
+    const projectId = projectUrl.split("/projects/")[1]?.split("/")[0] ?? "";
+
+    // Add a member
+    const member = await createSignedInMember(browser, "MEMBER");
+    await adminPage.goto(`/projects/${projectId}/members`);
+    await expect(adminPage.getByTestId("members-table")).toBeVisible();
+    await adminPage.getByTestId("search-user-input").fill(member.email);
+    const userSelect = adminPage.getByTestId("search-user-select");
+    await expect(userSelect).toBeVisible();
+    await userSelect.selectOption({ label: `${member.fullName} (${member.email})` });
+    await adminPage.getByTestId("add-member-role-select").selectOption("MEMBER");
+    await adminPage.getByTestId("add-member-submit-btn").click();
+    await expect(adminPage.getByTestId("members-table")).toContainText(member.email);
+
+    // Go to project tasks and create task
+    await adminPage.goto(`/projects/${projectId}`);
+    await adminPage.getByTestId("create-task-button").click();
+    await adminPage.getByTestId("task-title-input").fill("Task to Assign");
+    await adminPage.getByTestId("task-submit-button").click();
+
+    await adminPage.getByRole("link", { name: "Task to Assign" }).click();
+    await adminPage.waitForURL("**/tasks/*");
+
+    await expect(adminPage.getByTestId("display-task-version")).toHaveText("1");
+    await expect(adminPage.getByTestId("sidebar-assignees")).toContainText("Unassigned");
+
+    // Click Change assignees
+    await adminPage.getByTestId("btn-toggle-assign").click();
+    await expect(adminPage.getByTestId("form-assign")).toBeVisible();
+
+    // Check member
+    await adminPage.getByLabel(member.fullName).check();
+    await adminPage.getByTestId("btn-save-assign").click();
+
+    // Verify assigned
+    await expect(adminPage.getByTestId("display-task-version")).toHaveText("2");
+    await expect(adminPage.getByTestId("sidebar-assignees")).toContainText(member.fullName);
+
+    await adminContext.close();
+    await member.context.close();
+  });
 });
