@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ProjectCreateSchema } from "../src";
+import { ProjectCreateSchema, ProjectUpdateSchema } from "../src";
 
 describe("ProjectCreateSchema", () => {
   const validPayload = {
@@ -94,5 +94,59 @@ describe("ProjectCreateSchema", () => {
       startDate: "invalid-date",
     });
     expect(badDate.success).toBe(false);
+  });
+});
+
+describe("ProjectUpdateSchema (FR-08)", () => {
+  it("FR-08 c1: parses valid partial updates", () => {
+    const result = ProjectUpdateSchema.safeParse({
+      name: "Updated Project Name",
+      description: "Updated description",
+      status: "ON_HOLD",
+      budget: 80000000,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.name).toBe("Updated Project Name");
+      expect(result.data.description).toBe("Updated description");
+      expect(result.data.status).toBe("ON_HOLD");
+      expect(result.data.budget).toBe(80000000);
+    }
+  });
+
+  it("FR-08 c2: omits / ignores code if supplied in input", () => {
+    const result = ProjectUpdateSchema.safeParse({
+      name: "New Name",
+      code: "ATTEMPTED_CODE_CHANGE",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("code");
+    }
+  });
+
+  it("validates status enum strictly", () => {
+    const validActive = ProjectUpdateSchema.safeParse({ status: "ACTIVE" });
+    const validCompleted = ProjectUpdateSchema.safeParse({ status: "COMPLETED" });
+    const invalid = ProjectUpdateSchema.safeParse({ status: "DELETED" });
+
+    expect(validActive.success).toBe(true);
+    expect(validCompleted.success).toBe(true);
+    expect(invalid.success).toBe(false);
+  });
+
+  it("rejects when updated endDate is before updated startDate", () => {
+    const result = ProjectUpdateSchema.safeParse({
+      startDate: "2026-12-31",
+      endDate: "2026-11-01",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts single date update without failing date order check", () => {
+    const result = ProjectUpdateSchema.safeParse({
+      startDate: "2026-11-15",
+    });
+    expect(result.success).toBe(true);
   });
 });

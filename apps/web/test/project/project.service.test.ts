@@ -302,4 +302,300 @@ describe("projectService", () => {
       await expect(projectService.getProjectHeader(adminCtx, "non-existent-id")).rejects.toThrow(NotFoundError);
     });
   });
+
+  describe("FR-08: Update Project", () => {
+    it("FR-08 c1: PM updates project fields and audits PROJECT_UPDATED atomically (A2)", async () => {
+      const pmCtx = await createMockContext("PM");
+      const code = `U${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Initial Project Name",
+        description: "Initial description",
+        budget: 10000000,
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      const updated = await projectService.updateProject(pmCtx, created.id, {
+        name: "Renamed Project",
+        description: "Updated description",
+        status: "ON_HOLD",
+        budget: 15000000,
+      });
+
+      expect(updated.name).toBe("Renamed Project");
+      expect(updated.description).toBe("Updated description");
+      expect(updated.status).toBe("ON_HOLD");
+      expect(updated.budget).toBe(15000000);
+
+      // Verify DB record
+      const dbProject = await projectRepository.findById(pmCtx.db, created.id);
+      expect(dbProject?.name).toBe("Renamed Project");
+      expect(dbProject?.status).toBe("ON_HOLD");
+
+      // Verify audit log
+      const logs = await auditLogRepository.listByEntity(pmCtx.db, "PROJECT", created.id);
+      const updateLog = logs.find((l) => l.action === "PROJECT_UPDATED");
+      expect(updateLog).toBeDefined();
+      expect(updateLog?.changes).toMatchObject({
+        name: { from: "Initial Project Name", to: "Renamed Project" },
+        status: { from: "ACTIVE", to: "ON_HOLD" },
+        budget: { from: 10000000, to: 15000000 },
+      });
+    });
+
+    it("FR-08 c2: ignores code if provided in input and code is unchanged", async () => {
+      const pmCtx = await createMockContext("PM");
+      const code = `U${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Original Name",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      // Pass code in input (which should be stripped by schema / not updated)
+      const updated = await projectService.updateProject(pmCtx, created.id, {
+        name: "New Name",
+        // @ts-expect-error - testing client posting code
+        code: "HACKED_CODE",
+      });
+
+      expect(updated.code).toBe(code.toUpperCase());
+      const dbProject = await projectRepository.findById(pmCtx.db, created.id);
+      expect(dbProject?.code).toBe(code.toUpperCase());
+    });
+
+    it("FR-08 c3: non-PM member receives 403 Forbidden", async () => {
+      const pmCtx = await createMockContext("PM");
+      const memberCtx = await createMockContext("MEMBER");
+      const code = `U${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "PM Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      // Add user as regular member
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId: created.id,
+          userId: memberCtx.user?.id ?? "",
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      await expect(
+        projectService.updateProject(memberCtx, created.id, {
+          name: "Attempted Member Edit",
+        }),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("FR-08: non-member receives 404 NotFound", async () => {
+      const pmCtx = await createMockContext("PM");
+      const nonMemberCtx = await createMockContext("MEMBER");
+      const code = `U${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Private Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await expect(
+        projectService.updateProject(nonMemberCtx, created.id, {
+          name: "Non-member edit",
+        }),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("FR-08 c4: rejects when updated endDate is before existing startDate", async () => {
+      const pmCtx = await createMockContext("PM");
+      const code = `U${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Dated Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await expect(
+        projectService.updateProject(pmCtx, created.id, {
+          endDate: "2026-10-01",
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe("FR-09: Archive Project", () => {
+    it("FR-09 c1: PM archives project, hides it from active list, and audits PROJECT_ARCHIVED atomically (A3)", async () => {
+      const pmCtx = await createMockContext("PM");
+      const code = `A${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "To Be Archived",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await projectService.archiveProject(pmCtx, created.id);
+
+      // Verify active list does not include it
+      const activeProjects = await projectService.listProjects(pmCtx);
+      expect(activeProjects.some((p) => p.id === created.id)).toBe(false);
+
+      // Verify audit log
+      const logs = await auditLogRepository.listByEntity(pmCtx.db, "PROJECT", created.id);
+      const archiveLog = logs.find((l) => l.action === "PROJECT_ARCHIVED");
+      expect(archiveLog).toBeDefined();
+    });
+
+    it("FR-09 c2: former member receives 404 NotFound on archived project URL", async () => {
+      const pmCtx = await createMockContext("PM");
+      const memberCtx = await createMockContext("MEMBER");
+      const code = `A${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Archived For Member",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId: created.id,
+          userId: memberCtx.user?.id ?? "",
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      await projectService.archiveProject(pmCtx, created.id);
+
+      await expect(projectService.getProjectHeader(memberCtx, created.id)).rejects.toThrow(NotFoundError);
+    });
+
+    it("FR-09 c2: Admin can view archived project via archivedOnly filter", async () => {
+      const pmCtx = await createMockContext("PM");
+      const adminCtx = await createMockContext("ADMIN");
+      const code = `A${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Archived Admin View",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await projectService.archiveProject(pmCtx, created.id);
+
+      // Admin header load succeeds
+      const header = await projectService.getProjectHeader(adminCtx, created.id);
+      expect(header.project.isArchived).toBe(true);
+
+      // Admin archived list includes it
+      const archivedProjects = await projectService.listProjects(adminCtx, { archivedOnly: true });
+      expect(archivedProjects.some((p) => p.id === created.id)).toBe(true);
+
+      // Non-admin archived list returns empty
+      const memberArchived = await projectService.listProjects(pmCtx, { archivedOnly: true });
+      expect(memberArchived.some((p) => p.id === created.id)).toBe(false);
+    });
+
+    it("FR-09 c3: non-PM member receives 403 Forbidden when attempting to archive", async () => {
+      const pmCtx = await createMockContext("PM");
+      const leadCtx = await createMockContext("TEAM_LEAD");
+      const code = `A${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Lead Cannot Archive",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId: created.id,
+          userId: leadCtx.user?.id ?? "",
+          projectRole: "TEAM_LEAD",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      await expect(projectService.archiveProject(leadCtx, created.id)).rejects.toThrow(ForbiddenError);
+    });
+
+    it("FR-09 c4: Admin receives 403 Forbidden ('This project is archived') when updating an archived project", async () => {
+      const pmCtx = await createMockContext("PM");
+      const adminCtx = await createMockContext("ADMIN");
+      const code = `A${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Archived Read-Only",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await projectService.archiveProject(pmCtx, created.id);
+
+      await expect(
+        projectService.updateProject(adminCtx, created.id, {
+          name: "Attempt Admin Update on Archived",
+        }),
+      ).rejects.toThrow("This project is archived");
+    });
+  });
+
+  describe("getProjectSettings", () => {
+    it("returns project settings for project PM", async () => {
+      const pmCtx = await createMockContext("PM");
+      const code = `S${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Settings Project",
+        description: "For settings test",
+        budget: 50000,
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        slackChannelId: "C123456",
+      });
+
+      const res = await projectService.getProjectSettings(pmCtx, created.id);
+      expect(res.project).toMatchObject({
+        id: created.id,
+        code: code.toUpperCase(),
+        name: "Settings Project",
+        description: "For settings test",
+        budget: 50000,
+        slackChannelId: "C123456",
+        isArchived: false,
+      });
+      expect(res.permissions.canManageProject).toBe(true);
+    });
+
+    it("throws ForbiddenError (403) for non-PM member", async () => {
+      const pmCtx = await createMockContext("PM");
+      const memberCtx = await createMockContext("MEMBER");
+      const code = `S${Date.now().toString().slice(-6)}`;
+      const created = await projectService.createProject(pmCtx, {
+        code,
+        name: "Member Blocked Settings",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId: created.id,
+          userId: memberCtx.user?.id ?? "",
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      await expect(projectService.getProjectSettings(memberCtx, created.id)).rejects.toThrow(ForbiddenError);
+    });
+  });
 });

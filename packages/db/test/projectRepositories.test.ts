@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
+import { conflictGuardStmt, isVersionConflict } from "../src/batch";
 import { createDatabase } from "../src/client";
 import { auditLogRepository, projectMemberRepository, projectRepository, userRepository } from "../src/index";
 
@@ -193,5 +194,103 @@ describe("Project and ProjectMember repositories", () => {
     const allProjects = await projectRepository.listAll(db);
     expect(allProjects.some((p) => p.id === p1)).toBe(true);
     expect(allProjects.some((p) => p.id === p2)).toBe(true);
+  });
+
+  it("FR-08: updateStmt updates project fields with conflict guard", async () => {
+    const db = createDatabase(env.DB);
+    const now = new Date();
+    const creator = await userRepository.insert(db, {
+      id: crypto.randomUUID(),
+      email: `creator-upd-${Date.now()}@example.com`,
+      fullName: "Updater",
+      systemRole: "PM",
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const projectId = crypto.randomUUID();
+    await projectRepository.insertStmt(db, {
+      id: projectId,
+      code: "PRJ-UPD",
+      name: "Initial Name",
+      description: "Initial description",
+      budget: 5000000,
+      startDate: "2026-11-01",
+      endDate: "2026-12-31",
+      status: "ACTIVE",
+      createdById: creator.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const updateTime = new Date(now.getTime() + 1000);
+    await db.batch([
+      projectRepository.updateStmt(db, projectId, {
+        name: "Updated Name",
+        description: "New description",
+        status: "ON_HOLD",
+        updatedAt: updateTime,
+      }),
+      conflictGuardStmt(db),
+    ]);
+
+    const updated = await projectRepository.findById(db, projectId);
+    expect(updated?.name).toBe("Updated Name");
+    expect(updated?.description).toBe("New description");
+    expect(updated?.status).toBe("ON_HOLD");
+  });
+
+  it("FR-09: archiveStmt soft deletes project and listArchived lists it", async () => {
+    const db = createDatabase(env.DB);
+    const now = new Date();
+    const creator = await userRepository.insert(db, {
+      id: crypto.randomUUID(),
+      email: `creator-arc-${Date.now()}@example.com`,
+      fullName: "Archiver",
+      systemRole: "PM",
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const projectId = crypto.randomUUID();
+    await projectRepository.insertStmt(db, {
+      id: projectId,
+      code: "PRJ-ARC2",
+      name: "To Be Archived",
+      startDate: "2026-11-01",
+      endDate: "2026-12-31",
+      status: "ACTIVE",
+      createdById: creator.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const archiveTime = new Date();
+    await db.batch([projectRepository.archiveStmt(db, projectId, archiveTime), conflictGuardStmt(db)]);
+
+    // Active findById returns null
+    const notFoundActive = await projectRepository.findById(db, projectId);
+    expect(notFoundActive).toBeNull();
+
+    // findByIdIncludingArchived finds it
+    const foundArchived = await projectRepository.findByIdIncludingArchived(db, projectId);
+    expect(foundArchived).toBeDefined();
+    expect(foundArchived?.deletedAt).not.toBeNull();
+
+    // listArchived returns it
+    const archivedList = await projectRepository.listArchived(db);
+    expect(archivedList.some((p) => p.id === projectId)).toBe(true);
+
+    // Repeated archive fails conflict guard (already deleted)
+    let failed = false;
+    try {
+      await db.batch([projectRepository.archiveStmt(db, projectId, new Date()), conflictGuardStmt(db)]);
+    } catch (err) {
+      failed = true;
+      expect(isVersionConflict(err)).toBe(true);
+    }
+    expect(failed).toBe(true);
   });
 });

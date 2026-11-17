@@ -26,3 +26,16 @@ export interface ProjectHeaderDto {
   projectRole: ProjectRole;
   isArchived: boolean;
 }
+
+export interface ProjectSettingsDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  budget: number | null;
+  startDate: string;
+  endDate: string;
+  status: ProjectStatus;
+  slackChannelId: string | null;
+  isArchived: boolean;
+}

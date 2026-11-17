@@ -16,7 +16,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export default function ProjectsIndexPage() {
-  const { projects, canCreate } = useLoaderData<typeof loader>();
+  const { projects, canCreate, filter, isAdmin } = useLoaderData<typeof loader>();
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-10">
@@ -38,17 +38,47 @@ export default function ProjectsIndexPage() {
           ) : null}
         </div>
 
+        {/* Admin Filter Tabs */}
+        {isAdmin ? (
+          <div className="flex border-b border-gray-200 gap-4" data-testid="projects-filter-tabs">
+            <Link
+              to="/projects"
+              data-testid="filter-active"
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                filter !== "archived"
+                  ? "border-blue-600 text-blue-600 font-semibold"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Active
+            </Link>
+            <Link
+              to="/projects?filter=archived"
+              data-testid="filter-archived"
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                filter === "archived"
+                  ? "border-blue-600 text-blue-600 font-semibold"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Archived
+            </Link>
+          </div>
+        ) : null}
+
         {/* Projects List */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           {projects.length === 0 ? (
             <div className="p-12 text-center" data-testid="empty-projects">
               <p className="text-base font-semibold text-gray-900">No projects found</p>
               <p className="mt-1 text-sm text-gray-500">
-                {canCreate
-                  ? "Get started by creating your first project."
-                  : "You are not currently assigned to any project."}
+                {filter === "archived"
+                  ? "There are no archived projects."
+                  : canCreate
+                    ? "Get started by creating your first project."
+                    : "You are not currently assigned to any project."}
               </p>
-              {canCreate ? (
+              {canCreate && filter !== "archived" ? (
                 <div className="mt-6">
                   <Link
                     to="/projects/new"
@@ -107,14 +137,16 @@ export default function ProjectsIndexPage() {
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            project.status === "ACTIVE"
-                              ? "bg-green-100 text-green-800"
-                              : project.status === "ON_HOLD"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-gray-100 text-gray-800"
+                            project.deletedAt
+                              ? "bg-gray-200 text-gray-700"
+                              : project.status === "ACTIVE"
+                                ? "bg-green-100 text-green-800"
+                                : project.status === "ON_HOLD"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-gray-100 text-gray-800"
                           }`}
                         >
-                          {project.status}
+                          {project.deletedAt ? "ARCHIVED" : project.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-xs text-gray-600 whitespace-nowrap">
