@@ -699,4 +699,87 @@ describe("taskRepository", () => {
       ]),
     ).rejects.toThrow();
   });
+
+  it("FR-14 c1 / A20: archives task with expected version and cascades soft delete to sub-tasks", async () => {
+    const { db, user, projectA, status, now } = await createBaseFixtures();
+    const parentId = crypto.randomUUID();
+    const childId = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: parentId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Parent Task to Archive",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: childId,
+        projectId: projectA.id,
+        statusId: status.id,
+        parentTaskId: parentId,
+        title: "Child Subtask to Archive",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const archiveTime = new Date(now.getTime() + 2000);
+
+    // Batch A20: archiveWithVersionStmt + conflictGuardStmt + archiveSubtasksStmt
+    await db.batch([
+      taskRepository.archiveWithVersionStmt(db, { id: parentId, expectedVersion: 1, now: archiveTime }),
+      conflictGuardStmt(db),
+      taskRepository.archiveSubtasksStmt(db, { parentTaskId: parentId, now: archiveTime }),
+    ]);
+
+    // Parent should be soft-deleted
+    const parent = await taskRepository.findById(db, parentId);
+    expect(parent).toBeUndefined();
+    const rawParent = await db.query.tasks.findFirst({ where: eq(tasks.id, parentId) });
+    expect(rawParent?.deletedAt).toEqual(archiveTime);
+
+    // Child should also be soft-deleted
+    const child = await taskRepository.findById(db, childId);
+    expect(child).toBeUndefined();
+    const rawChild = await db.query.tasks.findFirst({ where: eq(tasks.id, childId) });
+    expect(rawChild?.deletedAt).toEqual(archiveTime);
+  });
+
+  it("FR-14 c1 / A20: fails with conflict guard when archiving with stale version", async () => {
+    const { db, user, projectA, status, now } = await createBaseFixtures();
+    const taskId = crypto.randomUUID();
+
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Task with Version 1",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const archiveTime = new Date(now.getTime() + 2000);
+
+    // Archiving with expectedVersion: 99 should fail conflictGuardStmt
+    let caught: unknown = null;
+    try {
+      await db.batch([
+        taskRepository.archiveWithVersionStmt(db, { id: taskId, expectedVersion: 99, now: archiveTime }),
+        conflictGuardStmt(db),
+      ]);
+    } catch (err) {
+      caught = err;
+    }
+    expect(isVersionConflict(caught)).toBe(true);
+  });
 });
