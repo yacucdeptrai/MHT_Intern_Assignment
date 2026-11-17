@@ -12,7 +12,7 @@ async function createTestContext(
   const db = createDatabase(env.DB);
   const now = new Date();
   const id = crypto.randomUUID();
-  const email = `${role.toLowerCase()}-${id.slice(0, 4)}-${Date.now()}@example.com`;
+  const email = `${role.toLowerCase()}-${id}-${Date.now()}@example.com`;
 
   const user = await userRepository.insert(db, {
     id,

@@ -12,7 +12,7 @@ async function createMockContext(): Promise<RequestContext> {
   const db = createDatabase(env.DB);
   const now = new Date();
   const actorId = crypto.randomUUID();
-  const email = `admin-${actorId.slice(0, 6)}@example.com`;
+  const email = `admin-${actorId}@example.com`;
 
   await userRepository.insert(db, {
     id: actorId,

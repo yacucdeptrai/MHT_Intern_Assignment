@@ -24,7 +24,7 @@ async function buildTestWorld(db: ReturnType<typeof createDatabase>): Promise<Te
   const now = new Date();
   const makeUser = async (role: "ADMIN" | "PM" | "TEAM_LEAD" | "MEMBER", prefix: string) => {
     const id = crypto.randomUUID();
-    const email = `${prefix}-${id.slice(0, 4)}@example.com`;
+    const email = `${prefix}-${id}@example.com`;
     await userRepository.insert(db, {
       id,
       email,

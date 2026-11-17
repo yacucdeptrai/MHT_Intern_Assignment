@@ -69,7 +69,7 @@ async function createAvatarTestContext(options?: { avatarKey?: string; unauthent
   const db = createDatabase(env.DB);
   const now = new Date();
   const userId = crypto.randomUUID();
-  const email = `avatar-test-${userId.slice(0, 6)}@example.com`;
+  const email = `avatar-test-${userId}@example.com`;
   const storage = createMockStorage();
 
   if (options?.avatarKey) {

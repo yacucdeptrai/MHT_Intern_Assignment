@@ -17,7 +17,7 @@ async function createMockContext(role: "ADMIN" | "PM" | "TEAM_LEAD" | "MEMBER" =
   const id = crypto.randomUUID();
   const db = createDatabase(env.DB);
   const now = new Date();
-  const email = `${role.toLowerCase()}-${id.slice(0, 4)}@example.com`;
+  const email = `${role.toLowerCase()}-${id}@example.com`;
   const fullName = `${role} User`;
 
   await userRepository.insert(db, {

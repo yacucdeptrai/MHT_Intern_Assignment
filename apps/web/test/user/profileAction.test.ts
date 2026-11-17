@@ -21,7 +21,7 @@ async function createAuthenticatedRequest(
   const db = createDatabase(env.DB);
   const now = new Date();
   const userId = crypto.randomUUID();
-  const email = `test-${userId.slice(0, 6)}@example.com`;
+  const email = `test-${userId}@example.com`;
 
   let passwordHash: string | null = null;
   let passwordIterations: number | null = null;

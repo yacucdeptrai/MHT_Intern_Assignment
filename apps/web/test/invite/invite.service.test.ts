@@ -13,7 +13,7 @@ describe("invite.service", () => {
 
   async function createTestContext(now: Date = new Date()): Promise<RequestContext> {
     const actorId = crypto.randomUUID();
-    const email = `admin-${actorId.slice(0, 6)}@example.com`;
+    const email = `admin-${actorId}@example.com`;
     await userRepository.insert(db, {
       id: actorId,
       email,
