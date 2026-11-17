@@ -5,3 +5,4 @@ export * from "./invites";
 export * from "./auditLogs";
 export * from "./outboxJobs";
 export * from "./oauthAccounts";
+export * from "./notifications";

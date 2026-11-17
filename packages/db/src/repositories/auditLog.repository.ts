@@ -25,4 +25,8 @@ export const auditLogRepository = {
       .where(and(eq(auditLogs.entityType, entityType), eq(auditLogs.entityId, entityId)))
       .orderBy(desc(auditLogs.createdAt));
   },
+
+  async listByProject(db: AppDatabase, projectId: string): Promise<AuditLog[]> {
+    return db.select().from(auditLogs).where(eq(auditLogs.projectId, projectId)).orderBy(desc(auditLogs.createdAt));
+  },
 };

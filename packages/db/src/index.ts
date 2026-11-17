@@ -3,6 +3,7 @@ export * from "./client";
 export * from "./repositories/user.repository";
 export * from "./repositories/project.repository";
 export * from "./repositories/projectMember.repository";
+export * from "./repositories/notification.repository";
 export * from "./repositories/invite.repository";
 export * from "./repositories/auditLog.repository";
 export * from "./repositories/outboxJob.repository";

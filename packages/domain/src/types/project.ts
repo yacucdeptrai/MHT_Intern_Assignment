@@ -39,3 +39,20 @@ export interface ProjectSettingsDto {
   slackChannelId: string | null;
   isArchived: boolean;
 }
+
+export interface MemberRow {
+  userId: string;
+  fullName: string;
+  email: string;
+  avatarKey: string | null;
+  projectRole: ProjectRole;
+  createdAt: Date;
+}
+
+export interface InviteRow {
+  id: string;
+  email: string;
+  projectRole: ProjectRole;
+  createdAt: Date;
+  expiresAt: Date;
+}

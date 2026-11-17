@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import { invites, type Invite, type NewInvite } from "../schema/invites";
@@ -31,5 +31,13 @@ export const inviteRepository = {
   async findByTokenHash(db: AppDatabase, tokenHash: string): Promise<Invite | null> {
     const [invite] = await db.select().from(invites).where(eq(invites.tokenHash, tokenHash)).limit(1);
     return invite ?? null;
+  },
+
+  async listPendingByProject(db: AppDatabase, projectId: string, now: Date): Promise<Invite[]> {
+    return db
+      .select()
+      .from(invites)
+      .where(and(eq(invites.projectId, projectId), isNull(invites.acceptedAt), gt(invites.expiresAt, now)))
+      .orderBy(desc(invites.createdAt));
   },
 };

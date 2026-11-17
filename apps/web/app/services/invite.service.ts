@@ -1,5 +1,11 @@
 import type { AppDatabase } from "@pm/db";
-import { conflictGuardStmt, inviteRepository, outboxJobRepository, userRepository } from "@pm/db";
+import {
+  conflictGuardStmt,
+  inviteRepository,
+  outboxJobRepository,
+  projectMemberRepository,
+  userRepository,
+} from "@pm/db";
 import type { CreateInviteInput, SessionUser } from "@pm/domain";
 import { TOKEN_INVITE_EXPIRY_MS, ValidationError } from "@pm/domain";
 
@@ -150,8 +156,21 @@ export const inviteService = {
           updatedAt: now,
         });
 
-    // Execute atomic batch A8: accept invite, version guard, create/update user
-    await ctx.db.batch([inviteRepository.acceptStmt(ctx.db, invite.id, now), conflictGuardStmt(ctx.db), userMutation]);
+    // Execute atomic batch A8: accept invite, version guard, create/update user, optional project_member
+    const batchStmts = [inviteRepository.acceptStmt(ctx.db, invite.id, now), conflictGuardStmt(ctx.db), userMutation];
+
+    if (invite.projectId && invite.projectRole) {
+      batchStmts.push(
+        projectMemberRepository.insertStmt(ctx.db, {
+          projectId: invite.projectId,
+          userId,
+          projectRole: invite.projectRole,
+          createdAt: now,
+        }),
+      );
+    }
+
+    await ctx.db.batch(batchStmts as [(typeof batchStmts)[0], ...typeof batchStmts]);
 
     return {
       id: userId,
