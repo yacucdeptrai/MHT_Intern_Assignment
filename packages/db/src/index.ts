@@ -8,4 +8,5 @@ export * from "./repositories/invite.repository";
 export * from "./repositories/auditLog.repository";
 export * from "./repositories/outboxJob.repository";
 export * from "./repositories/oauthAccount.repository";
+export * from "./repositories/taskStatus.repository";
 export * from "./schema";
