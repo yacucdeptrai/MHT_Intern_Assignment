@@ -679,4 +679,113 @@ describe("taskDetailAction", () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe("taskDetailAction addSubTask intent (FR-17)", () => {
+    it("FR-17 c1: member adding sub-task via action succeeds and returns 200 with new sub-task", async () => {
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(memberCtx);
+
+      await memberCtx.db.batch([
+        projectMemberRepository.insertStmt(memberCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const parentTask = await taskService.createTask(memberCtx, projectId, {
+        title: "Parent for sub-task",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "addSubTask");
+      formData.append("title", "New Sub-task via Action");
+      formData.append("priority", "HIGH");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${parentTask.id}`, {
+        method: "POST",
+        headers: { Cookie: memberCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(memberCtx, projectId, parentTask.id, req);
+      expect(res.status).toBe(200);
+      const data = await res.json<{ success: boolean; subTask: { id: string; parentTaskId: string; title: string } }>();
+      expect(data.success).toBe(true);
+      expect(data.subTask.parentTaskId).toBe(parentTask.id);
+      expect(data.subTask.title).toBe("New Sub-task via Action");
+    });
+
+    it("FR-17 c2: attempting to add sub-task to a sub-task returns 400 'Sub-tasks cannot have sub-tasks'", async () => {
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(memberCtx);
+
+      await memberCtx.db.batch([
+        projectMemberRepository.insertStmt(memberCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const parentTask = await taskService.createTask(memberCtx, projectId, {
+        title: "Parent Task",
+      });
+
+      const subTask = await taskService.createTask(memberCtx, projectId, {
+        title: "Sub-task",
+        parentTaskId: parentTask.id,
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "addSubTask");
+      formData.append("title", "Illegal Grandchild Sub-task");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${subTask.id}`, {
+        method: "POST",
+        headers: { Cookie: memberCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(memberCtx, projectId, subTask.id, req);
+      expect(res.status).toBe(400);
+      const data = await res.json<{ success: boolean; message?: string }>();
+      expect(data.success).toBe(false);
+      expect(data.message).toBe("Sub-tasks cannot have sub-tasks");
+    });
+
+    it("non-member adding sub-task returns 404", async () => {
+      const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+      const { ctx: nonMemberCtx, cookie: nonMemberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const parentTask = await taskService.createTask(pmCtx, projectId, {
+        title: "Parent for non-member sub-task",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "addSubTask");
+      formData.append("title", "Non-member Sub-task");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${parentTask.id}`, {
+        method: "POST",
+        headers: { Cookie: nonMemberCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(nonMemberCtx, projectId, parentTask.id, req);
+      expect(res.status).toBe(404);
+    });
+  });
 });

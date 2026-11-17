@@ -34,7 +34,14 @@ export async function taskDetailAction(
       return redirect(`/projects/${projectId}`);
     }
 
-    // TODO(M3-T7): addSubTask intent
+    if (intent === "addSubTask") {
+      const subTask = await taskService.createTask(ctx, projectId, {
+        ...rawData,
+        parentTaskId: taskId,
+      });
+      return Response.json({ success: true, subTask }, { status: 200 });
+    }
+
     // TODO(M4): changeStatus, approve, reject, reopen intents
     // TODO(M5): comment, deleteComment, deleteAttachment intents
 
