@@ -183,8 +183,6 @@ async function requestFor(
   } as unknown as Parameters<typeof projectLayoutLoader>[0];
 }
 
-type LoaderFunctionArgs = Parameters<typeof projectLayoutLoader>[0];
-
 describe("Service-Level Permission & Visibility Sweep (docs/09 §3.1)", () => {
   const viewCases: Array<[Actor, Expected]> = [
     ["admin", "allow"],
