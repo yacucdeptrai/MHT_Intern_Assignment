@@ -1,1 +1,2 @@
-pnpm exec lint-staged
+# Tasks run one after another so ESLint and Vitest do not compete for memory.
+pnpm exec lint-staged --concurrent false
