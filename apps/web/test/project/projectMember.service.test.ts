@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   auditLogRepository,
@@ -9,7 +9,7 @@ import {
   projectRepository,
   userRepository,
 } from "@pm/db";
-import { ForbiddenError, NotFoundError, ValidationError } from "@pm/domain";
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@pm/domain";
 import { projectMemberService } from "../../app/services/project/projectMember.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 
@@ -429,5 +429,264 @@ describe("projectMemberService (FR-10)", () => {
         projectRole: "MEMBER",
       }),
     ).rejects.toThrow("This project is archived");
+  });
+
+  describe("projectMemberService error handling and edge cases", () => {
+    it("throws UnauthorizedError when ctx.user is null", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+      const unauthCtx = { ...pmCtx, user: null };
+
+      await expect(projectMemberService.searchUsers(unauthCtx, projectId, { q: "" })).rejects.toThrow(
+        UnauthorizedError,
+      );
+      await expect(
+        projectMemberService.addMember(unauthCtx, projectId, { userId: crypto.randomUUID(), projectRole: "MEMBER" }),
+      ).rejects.toThrow(UnauthorizedError);
+      await expect(
+        projectMemberService.removeMember(unauthCtx, projectId, { userId: crypto.randomUUID() }),
+      ).rejects.toThrow(UnauthorizedError);
+      await expect(
+        projectMemberService.inviteMember(unauthCtx, projectId, { email: "a@b.com", projectRole: "MEMBER" }),
+      ).rejects.toThrow(UnauthorizedError);
+      await expect(
+        projectMemberService.changeRole(unauthCtx, projectId, {
+          userId: crypto.randomUUID(),
+          projectRole: "TEAM_LEAD",
+        }),
+      ).rejects.toThrow(UnauthorizedError);
+    });
+
+    it("throws ValidationError on invalid schema inputs", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+
+      await expect(
+        projectMemberService.addMember(pmCtx, projectId, {
+          userId: "",
+          // @ts-expect-error invalid role
+          projectRole: "INVALID",
+        }),
+      ).rejects.toThrow(ValidationError);
+
+      await expect(projectMemberService.removeMember(pmCtx, projectId, { userId: "" })).rejects.toThrow(
+        ValidationError,
+      );
+
+      await expect(
+        projectMemberService.inviteMember(pmCtx, projectId, {
+          email: "not-an-email",
+          projectRole: "MEMBER",
+        }),
+      ).rejects.toThrow(ValidationError);
+
+      await expect(
+        projectMemberService.changeRole(pmCtx, projectId, {
+          userId: "",
+          // @ts-expect-error invalid role
+          projectRole: "INVALID",
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("throws ValidationError when adding non-existent or inactive user", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+
+      // Non-existent user
+      await expect(
+        projectMemberService.addMember(pmCtx, projectId, { userId: crypto.randomUUID(), projectRole: "MEMBER" }),
+      ).rejects.toThrow("User not found or inactive");
+
+      // Inactive (LOCKED) user
+      const lockedUser = await userRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        email: `locked-${Date.now()}@example.com`,
+        fullName: "Locked Person",
+        systemRole: "MEMBER",
+        status: "LOCKED",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await expect(
+        projectMemberService.addMember(pmCtx, projectId, { userId: lockedUser.id, projectRole: "MEMBER" }),
+      ).rejects.toThrow("User not found or inactive");
+    });
+
+    it("throws NotFoundError when target member is not in project for remove or changeRole", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+      const otherUser = await userRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        email: `other-${Date.now()}@example.com`,
+        fullName: "Other Person",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await expect(projectMemberService.removeMember(pmCtx, projectId, { userId: otherUser.id })).rejects.toThrow(
+        "Member not found in project",
+      );
+
+      await expect(
+        projectMemberService.changeRole(pmCtx, projectId, { userId: otherUser.id, projectRole: "TEAM_LEAD" }),
+      ).rejects.toThrow("Member not found in project");
+    });
+
+    it("changes member role, rejects demoting last PM, and audits MEMBER_ROLE_CHANGED (A6)", async () => {
+      const pmCtx = await createMockContext("PM");
+      const pmId = pmCtx.user?.id ?? "";
+      const { projectId } = await createTestProject(pmCtx, pmId);
+
+      const target = await userRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        email: `role-target-${Date.now()}@example.com`,
+        fullName: "Role Target",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: target.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      });
+
+      // Change role from MEMBER to TEAM_LEAD
+      const res = await projectMemberService.changeRole(pmCtx, projectId, {
+        userId: target.id,
+        projectRole: "TEAM_LEAD",
+      });
+      expect(res.success).toBe(true);
+
+      const updatedMember = await projectMemberRepository.findByProjectAndUser(pmCtx.db, projectId, target.id);
+      expect(updatedMember?.projectRole).toBe("TEAM_LEAD");
+
+      // Verify audit log
+      const logs = await auditLogRepository.listByProject(pmCtx.db, projectId);
+      const roleLog = logs.find((l) => l.action === "MEMBER_ROLE_CHANGED");
+      expect(roleLog).toBeDefined();
+      expect(roleLog?.changes).toEqual({
+        projectRole: { from: "MEMBER", to: "TEAM_LEAD" },
+      });
+
+      // Try demoting the last PM (pmId) to MEMBER -> rejects with 400
+      await expect(
+        projectMemberService.changeRole(pmCtx, projectId, { userId: pmId, projectRole: "MEMBER" }),
+      ).rejects.toThrow("A project needs at least one PM");
+    });
+
+    it("rejects changeRole for non-lead members and archived projects", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+
+      const memberCtx = await createMockContext("MEMBER");
+      await projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: memberCtx.user?.id ?? "",
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      });
+
+      // Member cannot change role (403)
+      await expect(
+        projectMemberService.changeRole(memberCtx, projectId, {
+          userId: pmCtx.user?.id ?? "",
+          projectRole: "TEAM_LEAD",
+        }),
+      ).rejects.toThrow(ForbiddenError);
+
+      // Archived project rejects changeRole
+      const adminCtx = await createMockContext("ADMIN");
+      await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+      await expect(
+        projectMemberService.changeRole(adminCtx, projectId, {
+          userId: memberCtx.user?.id ?? "",
+          projectRole: "TEAM_LEAD",
+        }),
+      ).rejects.toThrow("This project is archived");
+    });
+
+    it("handles version conflict and database errors in removeMember and changeRole", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+      const member = await userRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        email: `conflict-${Date.now()}@example.com`,
+        fullName: "Conflict Member",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: member.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      });
+
+      const originalBatch = pmCtx.db.batch.bind(pmCtx.db);
+
+      // Version conflict in removeMember
+      pmCtx.db.batch = vi.fn().mockRejectedValueOnce(new Error("CHECK constraint failed: version_conflict"));
+      await expect(projectMemberService.removeMember(pmCtx, projectId, { userId: member.id })).rejects.toThrow(
+        ConflictError,
+      );
+
+      // Unexpected error in removeMember
+      pmCtx.db.batch = vi.fn().mockRejectedValueOnce(new Error("Database connection dropped"));
+      await expect(projectMemberService.removeMember(pmCtx, projectId, { userId: member.id })).rejects.toThrow(
+        "Database connection dropped",
+      );
+
+      // Version conflict in changeRole
+      pmCtx.db.batch = vi.fn().mockRejectedValueOnce(new Error("CHECK constraint failed: version_conflict"));
+      await expect(
+        projectMemberService.changeRole(pmCtx, projectId, { userId: member.id, projectRole: "TEAM_LEAD" }),
+      ).rejects.toThrow(ConflictError);
+
+      // Unexpected error in changeRole
+      pmCtx.db.batch = vi.fn().mockRejectedValueOnce(new Error("Database connection dropped"));
+      await expect(
+        projectMemberService.changeRole(pmCtx, projectId, { userId: member.id, projectRole: "TEAM_LEAD" }),
+      ).rejects.toThrow("Database connection dropped");
+
+      pmCtx.db.batch = originalBatch;
+    });
+
+    it("handles unique constraint and unexpected errors in addMember", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+      const user = await userRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        email: `add-err-${Date.now()}@example.com`,
+        fullName: "Add Err User",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const originalBatch = pmCtx.db.batch.bind(pmCtx.db);
+
+      // Race condition duplicate insert
+      pmCtx.db.batch = vi.fn().mockRejectedValueOnce(new Error("UNIQUE constraint failed: project_members.project_id"));
+      await expect(
+        projectMemberService.addMember(pmCtx, projectId, { userId: user.id, projectRole: "MEMBER" }),
+      ).rejects.toThrow("Already a member");
+
+      // Unexpected error
+      pmCtx.db.batch = vi.fn().mockRejectedValueOnce(new Error("Disk quota exceeded"));
+      await expect(
+        projectMemberService.addMember(pmCtx, projectId, { userId: user.id, projectRole: "MEMBER" }),
+      ).rejects.toThrow("Disk quota exceeded");
+
+      pmCtx.db.batch = originalBatch;
+    });
   });
 });
