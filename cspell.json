@@ -30,6 +30,10 @@
     "nosniff",
     "unarchived",
     "notused",
-    "commitlint"
+    "commitlint",
+    "bradlc",
+    "dbaeumer",
+    "esbenp",
+    "lintstagedrc"
   ]
 }
