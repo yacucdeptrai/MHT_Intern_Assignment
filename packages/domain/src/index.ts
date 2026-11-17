@@ -10,6 +10,7 @@ export * from "./schemas/dateOrder";
 export * from "./schemas/project";
 export * from "./schemas/projectMember";
 export * from "./schemas/status";
+export * from "./schemas/task";
 export * from "./policies/types";
 export * from "./policies/user";
 export * from "./policies/project";

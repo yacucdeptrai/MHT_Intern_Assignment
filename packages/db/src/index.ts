@@ -9,4 +9,7 @@ export * from "./repositories/auditLog.repository";
 export * from "./repositories/outboxJob.repository";
 export * from "./repositories/oauthAccount.repository";
 export * from "./repositories/taskStatus.repository";
+export * from "./repositories/task.repository";
+export * from "./repositories/taskAssignee.repository";
+export * from "./repositories/sprint.repository";
 export * from "./schema";

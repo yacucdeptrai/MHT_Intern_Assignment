@@ -1,0 +1,46 @@
+import { and, eq, inArray, isNull } from "drizzle-orm";
+
+import type { AppDatabase } from "../client";
+import { taskAssignees, type TaskAssigneeRow } from "../schema/taskAssignees";
+import { tasks } from "../schema/tasks";
+
+export const taskAssigneeRepository = {
+  insertBatchStmt: (db: AppDatabase, taskId: string, userIds: string[], assignedAt: Date) => {
+    return userIds.map((userId) =>
+      db.insert(taskAssignees).values({
+        taskId,
+        userId,
+        assignedAt,
+      }),
+    );
+  },
+
+  deleteByMemberOnUnarchivedTasksStmt: (db: AppDatabase, projectId: string, userId: string) => {
+    return db.delete(taskAssignees).where(
+      and(
+        eq(taskAssignees.userId, userId),
+        inArray(
+          taskAssignees.taskId,
+          db
+            .select({ id: tasks.id })
+            .from(tasks)
+            .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt))),
+        ),
+      ),
+    );
+  },
+
+  findByTaskId: async (db: AppDatabase, taskId: string): Promise<TaskAssigneeRow[]> => {
+    return db.query.taskAssignees.findMany({
+      where: eq(taskAssignees.taskId, taskId),
+    });
+  },
+
+  findUserIdsByTaskId: async (db: AppDatabase, taskId: string): Promise<string[]> => {
+    const rows = await db.query.taskAssignees.findMany({
+      where: eq(taskAssignees.taskId, taskId),
+      columns: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  },
+};

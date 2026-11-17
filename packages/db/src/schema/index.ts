@@ -7,3 +7,6 @@ export * from "./outboxJobs";
 export * from "./oauthAccounts";
 export * from "./notifications";
 export * from "./taskStatuses";
+export * from "./sprints";
+export * from "./tasks";
+export * from "./taskAssignees";

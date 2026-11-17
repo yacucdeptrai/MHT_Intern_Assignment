@@ -5,6 +5,7 @@ import {
   isVersionConflict,
   notificationRepository,
   projectMemberRepository,
+  taskAssigneeRepository,
   userRepository,
   type AppDatabase,
 } from "@pm/db";
@@ -237,7 +238,7 @@ export const projectMemberService = {
       await ctx.db.batch([
         projectMemberRepository.deleteStmt(ctx.db, projectId, userId),
         conflictGuardStmt(ctx.db),
-        // TODO(M3-T2): add the task_assignees delete for this member's unarchived tasks (A5, FR-10 c4)
+        taskAssigneeRepository.deleteByMemberOnUnarchivedTasksStmt(ctx.db, projectId, userId),
         auditLogRepository.insertStmt(ctx.db, {
           id: auditId,
           actorId: currentUser.id,

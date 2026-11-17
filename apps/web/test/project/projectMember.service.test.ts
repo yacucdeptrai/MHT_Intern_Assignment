@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   auditLogRepository,
+  compactBatch,
   createDatabase,
   notificationRepository,
   projectMemberRepository,
   projectRepository,
+  taskAssigneeRepository,
+  taskRepository,
+  taskStatusRepository,
   userRepository,
 } from "@pm/db";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@pm/domain";
@@ -267,7 +271,105 @@ describe("projectMemberService (FR-10)", () => {
     });
   });
 
-  it.todo("FR-10 c4: removes the member's assignments on unarchived tasks in the same batch");
+  it("FR-10 c4: removes the member's assignments on unarchived tasks in the same batch while keeping archived tasks and other projects untouched", async () => {
+    const pmCtx = await createMockContext("PM");
+    const pmId = pmCtx.user?.id ?? "";
+    const { projectId } = await createTestProject(pmCtx, pmId);
+    const otherProject = await createTestProject(pmCtx, pmId);
+
+    const targetUser = await userRepository.insert(pmCtx.db, {
+      id: crypto.randomUUID(),
+      email: `member-${Date.now()}@example.com`,
+      fullName: "Assigned Member",
+      systemRole: "MEMBER",
+      status: "ACTIVE",
+      passwordHash: "hash",
+      passwordIterations: 100000,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: targetUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const status = await taskStatusRepository.insert(pmCtx.db, {
+      id: crypto.randomUUID(),
+      name: `Status-${Date.now()}-${Math.random()}`,
+      category: "TODO",
+      position: 1,
+      isDefault: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const now = new Date();
+    const taskUnarchivedId = crypto.randomUUID();
+    const taskArchivedId = crypto.randomUUID();
+    const otherProjectTaskId = crypto.randomUUID();
+
+    await pmCtx.db.batch([
+      taskRepository.insertStmt(pmCtx.db, {
+        id: taskUnarchivedId,
+        projectId,
+        statusId: status.id,
+        title: "Unarchived Task",
+        createdById: pmId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(pmCtx.db, {
+        id: taskArchivedId,
+        projectId,
+        statusId: status.id,
+        title: "Archived Task",
+        createdById: pmId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(pmCtx.db, {
+        id: otherProjectTaskId,
+        projectId: otherProject.projectId,
+        statusId: status.id,
+        title: "Other Project Task",
+        createdById: pmId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    // Archive taskArchivedId
+    await pmCtx.db.batch([taskRepository.archiveStmt(pmCtx.db, taskArchivedId, now)]);
+
+    // Assign member to all three tasks
+    await pmCtx.db.batch(
+      compactBatch([
+        ...taskAssigneeRepository.insertBatchStmt(pmCtx.db, taskUnarchivedId, [targetUser.id], now),
+        ...taskAssigneeRepository.insertBatchStmt(pmCtx.db, taskArchivedId, [targetUser.id], now),
+        ...taskAssigneeRepository.insertBatchStmt(pmCtx.db, otherProjectTaskId, [targetUser.id], now),
+      ]),
+    );
+
+    // Remove member from projectId
+    await projectMemberService.removeMember(pmCtx, projectId, { userId: targetUser.id });
+
+    // Assertions
+    const unarchivedAssignees = await taskAssigneeRepository.findByTaskId(pmCtx.db, taskUnarchivedId);
+    const archivedAssignees = await taskAssigneeRepository.findByTaskId(pmCtx.db, taskArchivedId);
+    const otherProjectAssignees = await taskAssigneeRepository.findByTaskId(pmCtx.db, otherProjectTaskId);
+
+    expect(unarchivedAssignees).toHaveLength(0); // Assignments on unarchived tasks removed
+    expect(archivedAssignees).toHaveLength(1); // Assignments on archived tasks untouched
+    expect(otherProjectAssignees).toHaveLength(1); // Assignments on other projects untouched
+  });
 
   it("FR-10 c5: rejects removing the last PM with 400 A project needs at least one PM", async () => {
     const pmCtx = await createMockContext("PM");
