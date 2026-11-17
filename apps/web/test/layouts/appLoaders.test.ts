@@ -18,7 +18,7 @@ async function createAuthenticatedRequest(
   const db = createDatabase(env.DB);
   const now = new Date();
   const userId = crypto.randomUUID();
-  const email = `${role.toLowerCase()}-${userId.slice(0, 4)}@example.com`;
+  const email = `${role.toLowerCase()}-${userId}@example.com`;
 
   await userRepository.insert(db, {
     id: userId,

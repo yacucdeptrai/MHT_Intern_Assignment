@@ -11,7 +11,7 @@ export async function createUser(db: AppDatabase, overrides?: Partial<NewUser> &
 
   const newUser: NewUser = {
     id,
-    email: overrides?.email ?? `user-${id.slice(0, 8)}@example.com`,
+    email: overrides?.email ?? `user-${id}@example.com`,
     fullName: overrides?.fullName ?? "Test User",
     systemRole: overrides?.systemRole ?? "MEMBER",
     status: overrides?.status ?? "ACTIVE",

@@ -69,7 +69,7 @@ async function createProfileTestContext(options?: {
   const id = crypto.randomUUID();
   const db = createDatabase(env.DB);
   const now = new Date();
-  const email = `profile-test-${id.slice(0, 6)}@example.com`;
+  const email = `profile-test-${id}@example.com`;
   const fullName = "Profile User";
   const storage = createMockStorage();
 
