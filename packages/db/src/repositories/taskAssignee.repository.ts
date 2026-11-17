@@ -43,4 +43,22 @@ export const taskAssigneeRepository = {
     });
     return rows.map((r) => r.userId);
   },
+
+  findByTaskIdsWithUser: async (
+    db: AppDatabase,
+    taskIds: string[],
+  ): Promise<{ taskId: string; userId: string; fullName: string; avatarKey: string | null }[]> => {
+    if (taskIds.length === 0) return [];
+    const { users } = await import("../schema/users");
+    return db
+      .select({
+        taskId: taskAssignees.taskId,
+        userId: users.id,
+        fullName: users.fullName,
+        avatarKey: users.avatarKey,
+      })
+      .from(taskAssignees)
+      .innerJoin(users, eq(taskAssignees.userId, users.id))
+      .where(inArray(taskAssignees.taskId, taskIds));
+  },
 };
