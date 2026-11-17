@@ -113,17 +113,8 @@ export const taskService = {
       }
     }
 
-    // Validate sprint if provided
-    if (data.sprintId) {
-      const sprint = await sprintRepository.findById(ctx.db, data.sprintId);
-      if (!sprint || sprint.projectId !== projectId) {
-        throw new ValidationError("Sprint does not belong to this project", {
-          sprintId: ["Sprint does not belong to this project"],
-        });
-      }
-    }
-
-    // Validate parent task if provided
+    // Validate parent task or sprint
+    let targetSprintId: string | null | undefined = data.sprintId;
     if (data.parentTaskId) {
       const parent = await taskRepository.findById(ctx.db, data.parentTaskId);
       if (!parent || parent.projectId !== projectId) {
@@ -132,8 +123,17 @@ export const taskService = {
         });
       }
       if (parent.parentTaskId) {
-        throw new ValidationError("Sub-tasks can only be one level deep", {
-          parentTaskId: ["Sub-tasks can only be one level deep"],
+        throw new ValidationError("Sub-tasks cannot have sub-tasks", {
+          parentTaskId: ["Sub-tasks cannot have sub-tasks"],
+        });
+      }
+      // FR-17 c1: Sub-tasks inherit parent's sprint; any user-supplied sprintId is ignored
+      targetSprintId = parent.sprintId ?? null;
+    } else if (data.sprintId) {
+      const sprint = await sprintRepository.findById(ctx.db, data.sprintId);
+      if (!sprint || sprint.projectId !== projectId) {
+        throw new ValidationError("Sprint does not belong to this project", {
+          sprintId: ["Sprint does not belong to this project"],
         });
       }
     }
@@ -157,7 +157,7 @@ export const taskService = {
         id: taskId,
         projectId,
         parentTaskId: data.parentTaskId,
-        sprintId: data.sprintId,
+        sprintId: targetSprintId ?? null,
         statusId: defaultStatus.id,
         title: data.title,
         description: data.description,

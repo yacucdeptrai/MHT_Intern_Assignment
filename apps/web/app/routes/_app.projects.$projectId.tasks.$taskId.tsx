@@ -43,6 +43,7 @@ export default function TaskDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [prevActionData, setPrevActionData] = useState(actionData);
 
   if (actionData !== prevActionData) {
@@ -50,6 +51,7 @@ export default function TaskDetailPage() {
     if (actionData?.success) {
       setIsEditing(false);
       setIsAssigning(false);
+      setIsAddingSubtask(false);
     }
   }
 
@@ -413,46 +415,183 @@ export default function TaskDetailPage() {
           )}
 
           {/* Subtasks Section */}
-          <div
-            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4"
-            data-testid="subtasks-section"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-gray-900">Sub-tasks ({subTasks.length})</h2>
-            </div>
-            {subTasks.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">No sub-tasks</p>
-            ) : (
-              <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                {subTasks.map((st) => (
-                  <div
-                    key={st.id}
-                    className="flex items-center justify-between p-3 hover:bg-gray-50"
-                    data-testid="subtask-row"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-mono font-medium text-gray-500">
-                        {task.projectCode}-{st.number}
-                      </span>
-                      <Link
-                        to={`/projects/${st.projectId}/tasks/${st.id}`}
-                        className="text-sm font-medium text-blue-600 hover:underline"
-                        data-testid="subtask-link"
-                      >
-                        {st.title}
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${priorityColor[st.priority]}`}>
-                        {st.priority}
-                      </span>
-                      <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{st.statusName}</span>
-                    </div>
+          {(() => {
+            const doneSubtasksCount = subTasks.filter((st) => st.statusCategory === "DONE").length;
+            const totalSubtasksCount = subTasks.length;
+
+            return (
+              <div
+                className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4"
+                data-testid="subtasks-section"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-bold text-gray-900">Sub-tasks ({subTasks.length})</h2>
+                    {totalSubtasksCount > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${(doneSubtasksCount / totalSubtasksCount) * 100}%` }}
+                          />
+                        </div>
+                        <span
+                          className="rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700"
+                          data-testid="subtask-progress"
+                        >
+                          {doneSubtasksCount} / {totalSubtasksCount} done
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
-                ))}
+                  {!task.parentTaskId && !isAddingSubtask ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingSubtask(true);
+                      }}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                      data-testid="add-subtask-button"
+                    >
+                      + Add Sub-task
+                    </button>
+                  ) : null}
+                </div>
+
+                {isAddingSubtask ? (
+                  <Form
+                    method="post"
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3"
+                    data-testid="form-add-subtask"
+                  >
+                    <input type="hidden" name="intent" value="addSubTask" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">Add Sub-task</h3>
+                    <div>
+                      <input
+                        type="text"
+                        name="title"
+                        required
+                        maxLength={200}
+                        placeholder="Sub-task title"
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                        data-testid="input-subtask-title"
+                      />
+                      {actionData?.errors?.title ? (
+                        <p className="mt-1 text-xs text-red-600">{actionData.errors.title.join(", ")}</p>
+                      ) : null}
+                    </div>
+                    <div>
+                      <textarea
+                        name="description"
+                        rows={2}
+                        maxLength={10000}
+                        placeholder="Description (optional)"
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                        data-testid="input-subtask-description"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label htmlFor="subtask-priority-select" className="block text-xs font-medium text-gray-700">
+                          Priority
+                        </label>
+                        <select
+                          id="subtask-priority-select"
+                          name="priority"
+                          defaultValue="MEDIUM"
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-blue-500 focus:outline-none"
+                          data-testid="select-subtask-priority"
+                        >
+                          {TASK_PRIORITIES.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="subtask-start-date-input" className="block text-xs font-medium text-gray-700">
+                          Start Date
+                        </label>
+                        <input
+                          id="subtask-start-date-input"
+                          type="date"
+                          name="startDate"
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-blue-500 focus:outline-none"
+                          data-testid="input-subtask-start-date"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="subtask-due-date-input" className="block text-xs font-medium text-gray-700">
+                          Due Date
+                        </label>
+                        <input
+                          id="subtask-due-date-input"
+                          type="date"
+                          name="dueDate"
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-blue-500 focus:outline-none"
+                          data-testid="input-subtask-due-date"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingSubtask(false);
+                        }}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        data-testid="btn-cancel-subtask"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                        data-testid="btn-create-subtask"
+                      >
+                        Create Sub-task
+                      </button>
+                    </div>
+                  </Form>
+                ) : null}
+
+                {subTasks.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No sub-tasks</p>
+                ) : (
+                  <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                    {subTasks.map((st) => (
+                      <div
+                        key={st.id}
+                        className="flex items-center justify-between p-3 hover:bg-gray-50"
+                        data-testid="subtask-row"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono font-medium text-gray-500">
+                            {task.projectCode}-{st.number}
+                          </span>
+                          <Link
+                            to={`/projects/${st.projectId}/tasks/${st.id}`}
+                            className="text-sm font-medium text-blue-600 hover:underline"
+                            data-testid="subtask-link"
+                          >
+                            {st.title}
+                          </Link>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded px-2 py-0.5 text-xs font-medium ${priorityColor[st.priority]}`}>
+                            {st.priority}
+                          </span>
+                          <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{st.statusName}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
 
         {/* Right 1 Col: Metadata Sidebar */}
