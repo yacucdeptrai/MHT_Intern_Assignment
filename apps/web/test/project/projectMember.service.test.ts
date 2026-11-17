@@ -10,7 +10,7 @@ import {
   userRepository,
 } from "@pm/db";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@pm/domain";
-import { projectMemberService } from "../../app/services/project/projectMember.service";
+import { assertNotLastPm, projectMemberService } from "../../app/services/project/projectMember.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 
 async function createMockContext(
@@ -578,6 +578,34 @@ describe("projectMemberService (FR-10)", () => {
       await expect(
         projectMemberService.changeRole(pmCtx, projectId, { userId: pmId, projectRole: "MEMBER" }),
       ).rejects.toThrow("A project needs at least one PM");
+    });
+
+    it("FR-11: assertNotLastPm shared helper rejects when PM count is <= 1 and allows when > 1", async () => {
+      const pmCtx = await createMockContext("PM");
+      const { projectId } = await createTestProject(pmCtx, pmCtx.user?.id ?? "");
+
+      // Exactly 1 PM -> rejects
+      await expect(assertNotLastPm(pmCtx.db, projectId)).rejects.toThrow("A project needs at least one PM");
+
+      // Add a second PM
+      const secondPm = await userRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        email: `second-pm-${Date.now()}@example.com`,
+        fullName: "Second PM",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: secondPm.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      });
+
+      // Now 2 PMs -> succeeds without error
+      await expect(assertNotLastPm(pmCtx.db, projectId)).resolves.toBeUndefined();
     });
 
     it("rejects changeRole for non-lead members and archived projects", async () => {
