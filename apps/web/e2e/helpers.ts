@@ -160,3 +160,36 @@ export async function moveTaskToStatus(page: Page, statusLabel: string): Promise
   await expect(page.getByTestId("task-status-badge")).toHaveText(statusLabel);
   await expect(page.getByTestId("sidebar-status")).toHaveText(statusLabel);
 }
+
+/**
+ * Has the seeded admin create a fresh project and add `member` to it, which writes one
+ * PROJECT_MEMBER_ADDED notification for that member (A4). Returns the project name.
+ */
+export async function addMemberToNewProject(browser: Browser, member: TestUser): Promise<string> {
+  const adminContext = await browser.newContext();
+  const adminPage = await adminContext.newPage();
+  await signInAsAdmin(adminPage);
+
+  const code = `NT${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const projectName = `Notify Project ${code}`;
+  await adminPage.goto("/projects/new");
+  await adminPage.getByLabel("Project Code").fill(code);
+  await adminPage.getByLabel("Project Name").fill(projectName);
+  await adminPage.getByLabel("Start Date").fill("2026-11-01");
+  await adminPage.getByLabel("End Date").fill("2026-12-31");
+  await adminPage.getByRole("button", { name: "Create Project" }).click();
+  await adminPage.waitForURL("**/projects");
+  await adminPage.getByRole("link", { name: projectName }).click();
+  await adminPage.waitForURL("**/projects/*");
+  const projectId = adminPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
+
+  await adminPage.goto(`/projects/${projectId}/members`);
+  await adminPage.getByTestId("search-user-input").fill(member.email);
+  await adminPage.getByTestId("search-user-select").selectOption({ label: `${member.fullName} (${member.email})` });
+  await adminPage.getByTestId("add-member-role-select").selectOption("MEMBER");
+  await adminPage.getByTestId("add-member-submit-btn").click();
+  await expect(adminPage.getByTestId("members-table")).toContainText(member.email);
+
+  await adminContext.close();
+  return projectName;
+}
