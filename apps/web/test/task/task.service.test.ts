@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   auditLogRepository,
+  commentRepository,
   createDatabase,
   notificationRepository,
   outboxJobRepository,
@@ -2225,5 +2226,359 @@ describe("taskService.approveTask (FR-22 / A18)", () => {
     const notificationsAfter = await notificationRepository.listByUser(pmCtx.db, assigneeUser.id);
     expect(auditsAfter.length).toBe(auditsBefore.length);
     expect(notificationsAfter.length).toBe(notificationsBefore.length);
+  });
+});
+
+describe("taskService.rejectTask & reopenTask (FR-23 / A19)", () => {
+  async function seedRejectStatuses(ctx: RequestContext) {
+    const now = new Date();
+    const ensureDefault = async (category: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE", name: string, pos: number) => {
+      const existing = await taskStatusRepository.findDefaultByCategory(ctx.db, category);
+      if (existing) return existing;
+      return taskStatusRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        name: `${name} ${crypto.randomUUID().slice(0, 6)}`,
+        category,
+        position: pos,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    };
+
+    const todo = await ensureDefault("TODO", "To Do", 1);
+    const inProgress = await ensureDefault("IN_PROGRESS", "In Progress", 2);
+    const review = await ensureDefault("REVIEW", "Review", 3);
+    const done = await ensureDefault("DONE", "Done", 4);
+    return { todo, inProgress, review, done };
+  }
+
+  it("FR-23 c1 / A19: lead rejects REVIEW task with reason (1..2000 chars), moving to default IN_PROGRESS, saving root comment, auditing TASK_REJECTED, notifying assignees with reason, and queuing SLACK_UPDATE_THREAD", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { user: assigneeUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+    const statuses = await seedRejectStatuses(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: assigneeUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task To Reject",
+      assigneeIds: [assigneeUser.id],
+    });
+    await taskService.changeStatus(leadCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+
+    const capturedPayloads: string[] = [];
+    const origInsertStmt = outboxJobRepository.insertStmt.bind(outboxJobRepository);
+    const spy = vi.spyOn(outboxJobRepository, "insertStmt").mockImplementationOnce((db, job) => {
+      capturedPayloads.push(job.payload);
+      return origInsertStmt(db, job);
+    });
+
+    const rejectTime = new Date("2026-11-18T08:00:00Z");
+    const waitUntilPromises: Promise<unknown>[] = [];
+    leadCtx.clock = { now: () => rejectTime };
+    leadCtx.waitUntil = (p) => {
+      waitUntilPromises.push(p);
+    };
+
+    const rejected = await taskService.rejectTask(leadCtx, projectId, task.id, {
+      version: 2,
+      reason: "  Missing edge-case tests for empty payload  ",
+    });
+    spy.mockRestore();
+    await Promise.all(waitUntilPromises);
+
+    expect(rejected.statusId).toBe(statuses.inProgress.id);
+    expect(rejected.statusCategory).toBe("IN_PROGRESS");
+    expect(rejected.statusChangedAt).toBe(rejectTime.getTime());
+    expect(rejected.completedAt).toBeNull();
+    expect(rejected.version).toBe(3);
+
+    const savedComments = await commentRepository.listByTaskId(leadCtx.db, task.id);
+    expect(savedComments).toHaveLength(1);
+    expect(savedComments[0]?.authorId).toBe(leadUser.id);
+    expect(savedComments[0]?.parentCommentId).toBeNull();
+    expect(savedComments[0]?.body).toBe("Missing edge-case tests for empty payload");
+
+    const audits = await auditLogRepository.listByEntity(leadCtx.db, "TASK", task.id);
+    const rejectAudit = audits.find((a) => a.action === "TASK_REJECTED");
+    expect(rejectAudit).toBeDefined();
+    expect(rejectAudit?.changes).toMatchObject({
+      statusId: { from: statuses.review.id, to: statuses.inProgress.id },
+      reason: { from: null, to: "Missing edge-case tests for empty payload" },
+    });
+
+    const assigneeNotifications = await notificationRepository.listByUser(leadCtx.db, assigneeUser.id);
+    const rejectNotification = assigneeNotifications.find((n) => n.type === "TASK_REJECTED");
+    expect(rejectNotification?.payload).toEqual({
+      title: "Task To Reject",
+      actorName: "Test TEAM_LEAD",
+      reason: "Missing edge-case tests for empty payload",
+    });
+
+    expect(capturedPayloads).toHaveLength(1);
+    expect(JSON.parse(capturedPayloads[0] ?? "{}")).toEqual({
+      taskId: task.id,
+      fromStatusId: statuses.review.id,
+      toStatusId: statuses.inProgress.id,
+      actorId: leadUser.id,
+      reasonCommentId: savedComments[0]?.id,
+    });
+  });
+
+  it("FR-23 c1: rejects non-REVIEW task on reject (400 'Only tasks in review can be rejected') and reason > 2000 chars (400)", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedRejectStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "Todo Task Cannot Reject" });
+    await expect(
+      taskService.rejectTask(pmCtx, projectId, task.id, { version: 1, reason: "Too early" }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "Only tasks in review can be rejected",
+    });
+
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+    await expect(
+      taskService.rejectTask(pmCtx, projectId, task.id, { version: 2, reason: "x".repeat(2001) }),
+    ).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it("FR-23 c2: rejects empty or whitespace-only reason with 400 'A reason is required' and writes nothing", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedRejectStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "Empty Reason Task" });
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+
+    await expect(
+      taskService.rejectTask(pmCtx, projectId, task.id, { version: 2, reason: "   " }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "A reason is required",
+    });
+
+    const savedComments = await commentRepository.listByTaskId(pmCtx.db, task.id);
+    expect(savedComments).toHaveLength(0);
+    const unchanged = await taskRepository.findById(pmCtx.db, task.id);
+    expect(unchanged?.statusId).toBe(statuses.review.id);
+    expect(unchanged?.version).toBe(2);
+  });
+
+  it("FR-23 c3 / A19: lead reopens DONE task with reason, moving to default IN_PROGRESS, clearing completed_at, saving root comment, auditing TASK_REOPENED, notifying assignees, and queuing SLACK_UPDATE_THREAD", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { user: assigneeUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedRejectStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: assigneeUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, {
+      title: "Approved Task To Reopen",
+      assigneeIds: [assigneeUser.id],
+    });
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+    const approved = await taskService.approveTask(pmCtx, projectId, task.id, { version: 2 });
+    expect(approved.completedAt).not.toBeNull();
+
+    // Non-DONE reopen check ( tested on another task in REVIEW )
+    const reviewTask = await taskService.createTask(pmCtx, projectId, { title: "Still In Review" });
+    await taskService.changeStatus(pmCtx, projectId, reviewTask.id, { statusId: statuses.review.id, version: 1 });
+    await expect(
+      taskService.reopenTask(pmCtx, projectId, reviewTask.id, { version: 2, reason: "Wrong state" }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "Only completed tasks can be reopened",
+    });
+
+    // Empty reason on reopen -> 400 "A reason is required"
+    await expect(taskService.reopenTask(pmCtx, projectId, task.id, { version: 3, reason: "" })).rejects.toMatchObject({
+      status: 400,
+      message: "A reason is required",
+    });
+
+    const reopenTime = new Date("2026-11-18T10:00:00Z");
+    pmCtx.clock = { now: () => reopenTime };
+    const reopened = await taskService.reopenTask(pmCtx, projectId, task.id, {
+      version: 3,
+      reason: "Regression found in staging smoke test",
+    });
+
+    expect(reopened.statusId).toBe(statuses.inProgress.id);
+    expect(reopened.statusCategory).toBe("IN_PROGRESS");
+    expect(reopened.completedAt).toBeNull();
+    expect(reopened.statusChangedAt).toBe(reopenTime.getTime());
+    expect(reopened.version).toBe(4);
+
+    const savedComments = await commentRepository.listByTaskId(pmCtx.db, task.id);
+    expect(savedComments).toHaveLength(1);
+    expect(savedComments[0]?.body).toBe("Regression found in staging smoke test");
+    expect(savedComments[0]?.parentCommentId).toBeNull();
+
+    const audits = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    expect(audits.some((a) => a.action === "TASK_REOPENED")).toBe(true);
+
+    const assigneeNotifications = await notificationRepository.listByUser(pmCtx.db, assigneeUser.id);
+    const reopenNotification = assigneeNotifications.find((n) => n.type === "TASK_REOPENED");
+    expect(reopenNotification?.payload).toEqual({
+      title: "Approved Task To Reopen",
+      actorName: "Test PM",
+      reason: "Regression found in staging smoke test",
+    });
+  });
+
+  it("FR-23 c4: rejects project MEMBER posting reject or reopen with 403", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedRejectStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(memberCtx, projectId, { title: "Member Cannot Reject Or Reopen" });
+    await taskService.changeStatus(memberCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+
+    await expect(
+      taskService.rejectTask(memberCtx, projectId, task.id, { version: 2, reason: "Member reject" }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    await taskService.approveTask(pmCtx, projectId, task.id, { version: 2 });
+
+    await expect(
+      taskService.reopenTask(memberCtx, projectId, task.id, { version: 3, reason: "Member reopen" }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("A19 version conflict & forced failure rollback (docs/09 §3.3): rolls back task, comment, audit, and notifications", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { user: assigneeUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedRejectStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: assigneeUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, {
+      title: "Reject Atomicity Task",
+      assigneeIds: [assigneeUser.id],
+    });
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+
+    const auditsBefore = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    const notificationsBefore = await notificationRepository.listByUser(pmCtx.db, assigneeUser.id);
+
+    // 1. Stale version -> 409, zero comments written
+    await expect(
+      taskService.rejectTask(pmCtx, projectId, task.id, { version: 1, reason: "Stale reject" }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "This task was changed by someone else. Reload to see the latest version.",
+    });
+    expect(await commentRepository.listByTaskId(pmCtx.db, task.id)).toHaveLength(0);
+
+    // 2. Forced failure on outbox insert -> rolls back task, comment, audit, and notifications
+    const duplicateJobId = crypto.randomUUID();
+    await outboxJobRepository.insert(pmCtx.db, {
+      id: duplicateJobId,
+      type: "SLACK_UPDATE_THREAD",
+      payload: "{}",
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const origInsertStmt = outboxJobRepository.insertStmt.bind(outboxJobRepository);
+    const spy = vi
+      .spyOn(outboxJobRepository, "insertStmt")
+      .mockImplementationOnce((db, job) => origInsertStmt(db, { ...job, id: duplicateJobId }));
+
+    await expect(
+      taskService.rejectTask(pmCtx, projectId, task.id, { version: 2, reason: "Rollback reason" }),
+    ).rejects.toThrow();
+    spy.mockRestore();
+
+    const afterTask = await taskRepository.findById(pmCtx.db, task.id);
+    expect(afterTask?.statusId).toBe(statuses.review.id);
+    expect(afterTask?.version).toBe(2);
+    expect(await commentRepository.listByTaskId(pmCtx.db, task.id)).toHaveLength(0);
+    expect((await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id)).length).toBe(auditsBefore.length);
+    expect((await notificationRepository.listByUser(pmCtx.db, assigneeUser.id)).length).toBe(
+      notificationsBefore.length,
+    );
   });
 });

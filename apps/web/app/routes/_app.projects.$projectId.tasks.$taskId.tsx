@@ -44,6 +44,7 @@ export default function TaskDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [reasonFormMode, setReasonFormMode] = useState<"reject" | "reopen" | null>(null);
   const [prevActionData, setPrevActionData] = useState(actionData);
 
   if (actionData !== prevActionData) {
@@ -52,6 +53,7 @@ export default function TaskDetailPage() {
       setIsEditing(false);
       setIsAssigning(false);
       setIsAddingSubtask(false);
+      setReasonFormMode(null);
     }
   }
 
@@ -193,18 +195,43 @@ export default function TaskDetailPage() {
 
         <div className="flex items-center gap-3">
           {permissions.canApprove ? (
-            <Form method="post">
-              <input type="hidden" name="intent" value="approve" />
-              <input type="hidden" name="version" value={task.version} />
+            <>
+              <Form method="post">
+                <input type="hidden" name="intent" value="approve" />
+                <input type="hidden" name="version" value={task.version} />
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+                  data-testid="approve-task-button"
+                >
+                  Approve Task
+                </button>
+              </Form>
               <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
-                data-testid="approve-task-button"
+                type="button"
+                onClick={() => {
+                  setReasonFormMode(reasonFormMode === "reject" ? null : "reject");
+                }}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 shadow-sm hover:bg-amber-100"
+                data-testid="reject-task-button"
               >
-                Approve Task
+                Reject Task
               </button>
-            </Form>
+            </>
+          ) : null}
+
+          {permissions.canReopen ? (
+            <button
+              type="button"
+              onClick={() => {
+                setReasonFormMode(reasonFormMode === "reopen" ? null : "reopen");
+              }}
+              className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-800 shadow-sm hover:bg-indigo-100"
+              data-testid="reopen-task-button"
+            >
+              Reopen Task
+            </button>
           ) : null}
 
           {task.statusCategory === "DONE" ? (
@@ -250,6 +277,66 @@ export default function TaskDetailPage() {
           ) : null}
         </div>
       </div>
+
+      {/* Reject / Reopen Reason Form */}
+      {reasonFormMode ? (
+        <div
+          className="rounded-xl border border-amber-200 bg-white p-6 shadow-sm space-y-4"
+          data-testid="form-reason-transition"
+        >
+          <h2 className="text-base font-bold text-gray-900">
+            {reasonFormMode === "reject" ? "Reject Task" : "Reopen Task"}
+          </h2>
+          <Form method="post" className="space-y-3">
+            <input type="hidden" name="intent" value={reasonFormMode} />
+            <input type="hidden" name="version" value={task.version} />
+            <div>
+              <label htmlFor="task-reason-input" className="block text-sm font-medium text-gray-700">
+                Reason <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="task-reason-input"
+                name="reason"
+                rows={3}
+                maxLength={2000}
+                defaultValue={actionData?.values?.reason ?? ""}
+                placeholder={
+                  reasonFormMode === "reject"
+                    ? "Explain what needs to be reworked..."
+                    : "Explain why this completed task is being reopened..."
+                }
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                data-testid="input-task-reason"
+              />
+              {actionData?.errors?.reason ? (
+                <p className="mt-1 text-xs text-red-600" data-testid="error-reason">
+                  {actionData.errors.reason.join(", ")}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setReasonFormMode(null);
+                }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                data-testid="cancel-reason-button"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
+                data-testid="submit-reason-button"
+              >
+                {reasonFormMode === "reject" ? "Confirm Reject" : "Confirm Reopen"}
+              </button>
+            </div>
+          </Form>
+        </div>
+      ) : null}
 
       {/* Main Grid: Form/Details & Sidebar */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -607,6 +694,8 @@ export default function TaskDetailPage() {
               </div>
             );
           })()}
+
+          {/* TODO(M5-T1): render threaded comments (including rejection and reopen reason comments) */}
         </div>
 
         {/* Right 1 Col: Metadata Sidebar */}
