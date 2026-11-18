@@ -1,4 +1,5 @@
 import type { StatusCategory, TaskPriority } from "../enums";
+import type { AuditLogRow } from "./audit";
 import type { Page } from "./common";
 
 export interface TaskAssigneeInfo {
@@ -125,6 +126,7 @@ export interface TaskPermissions {
 export interface TaskDetailLoaderData {
   task: TaskDetailDto;
   subTasks: TaskListItem[];
+  history: AuditLogRow[];
   members: MemberOption[];
   sprints: SprintOption[];
   statuses: StatusOption[];

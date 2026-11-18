@@ -1342,4 +1342,43 @@ describe("taskDetailAction", () => {
       expect(reopenJson.task.version).toBe(4);
     });
   });
+
+  describe("taskDetailLoader history (FR-24 c3)", () => {
+    it("FR-24 c3: returns task audit history newest first to project members", async () => {
+      const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Loader History Task" });
+      await taskService.updateTask(pmCtx, projectId, task.id, { title: "Loader History Task v2", version: 1 });
+
+      const loaderData = await taskDetailLoader(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          headers: { Cookie: memberCookie },
+        }),
+      );
+
+      expect(loaderData.history).toHaveLength(2);
+      expect(loaderData.history[0]?.action).toBe("TASK_UPDATED");
+      expect(loaderData.history[1]?.action).toBe("TASK_CREATED");
+    });
+  });
 });

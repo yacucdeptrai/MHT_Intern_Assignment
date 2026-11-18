@@ -2582,3 +2582,95 @@ describe("taskService.rejectTask & reopenTask (FR-23 / A19)", () => {
     );
   });
 });
+
+describe("taskService.getTaskDetails — Task History (FR-24 c1, c3)", () => {
+  it("FR-24 c3: returns task history newest first to project members, including TASK_CREATED changes and rejection/reopen reasons", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+
+    const now = new Date();
+    const ensureDefaultStatus = async (category: "IN_PROGRESS" | "REVIEW", label: string, pos: number) => {
+      const existing = await taskStatusRepository.findDefaultByCategory(leadCtx.db, category);
+      if (existing) return existing;
+      return taskStatusRepository.insert(leadCtx.db, {
+        id: crypto.randomUUID(),
+        name: `${label} ${crypto.randomUUID().slice(0, 6)}`,
+        category,
+        position: pos,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    };
+    await ensureDefaultStatus("IN_PROGRESS", "In Progress", 2);
+    const reviewStatus = await ensureDefaultStatus("REVIEW", "In Review", 3);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    let tick = Date.UTC(2026, 10, 18, 9, 0, 0);
+    leadCtx.clock = {
+      now: () => {
+        tick += 1000;
+        return new Date(tick);
+      },
+    };
+    memberCtx.clock = leadCtx.clock;
+
+    const task = await taskService.createTask(memberCtx, projectId, {
+      title: "History Tracked Task",
+      priority: "MEDIUM",
+    });
+
+    await taskService.changeStatus(memberCtx, projectId, task.id, {
+      statusId: reviewStatus.id,
+      version: 1,
+    });
+
+    await taskService.rejectTask(leadCtx, projectId, task.id, {
+      version: 2,
+      reason: "Please add edge-case tests",
+    });
+
+    const details = await taskService.getTaskDetails(memberCtx, projectId, task.id);
+    expect(details.history).toHaveLength(3);
+    expect(details.history.map((h) => h.action)).toEqual(["TASK_REJECTED", "TASK_STATUS_CHANGED", "TASK_CREATED"]);
+    expect(details.history[0]?.changes?.reason?.to).toBe("Please add edge-case tests");
+    expect(details.history[0]?.actorName).toBe("Test TEAM_LEAD");
+    expect(details.history[2]?.changes?.title).toEqual({ from: null, to: "History Tracked Task" });
+  });
+
+  it("FR-24 c3 / P3: hides task history from non-members with 404", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { ctx: outsiderCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, {
+      title: "Private History Task",
+    });
+
+    await expect(taskService.getTaskDetails(outsiderCtx, projectId, task.id)).rejects.toThrow(NotFoundError);
+  });
+});
