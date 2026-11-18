@@ -20,6 +20,16 @@ import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, Valida
 import { taskService } from "../../app/services/task.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 
+/** Finds a task's SLACK_POST_TASK job in any status (dispatch may already have moved it past PENDING). */
+async function findSlackPostJobs(ctx: RequestContext, taskId: string) {
+  const jobs = await ctx.db.query.outboxJobs.findMany();
+  return jobs.filter((job) => {
+    if (job.type !== "SLACK_POST_TASK") return false;
+    const payload = JSON.parse(job.payload) as { taskId?: string };
+    return payload.taskId === taskId;
+  });
+}
+
 async function createTestContext(
   role: "ADMIN" | "PM" | "TEAM_LEAD" | "MEMBER" = "MEMBER",
 ): Promise<{ ctx: RequestContext; user: { id: string; email: string } }> {
@@ -98,6 +108,35 @@ async function createProjectWithMembers(ctx: RequestContext) {
 }
 
 describe("taskService.createTask", () => {
+  it("A14: dispatches the SLACK_POST_TASK job after commit; sub-tasks queue no Slack job", async () => {
+    const { ctx, user } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(ctx);
+    await ctx.db.batch([
+      projectMemberRepository.insertStmt(ctx.db, {
+        projectId,
+        userId: user.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+    const dispatched: Promise<unknown>[] = [];
+    ctx.waitUntil = (promise) => {
+      dispatched.push(promise);
+    };
+
+    const parent = await taskService.createTask(ctx, projectId, { title: "Dispatched task" });
+    expect(dispatched).toHaveLength(1);
+    await Promise.all(dispatched);
+
+    // Slack handlers return SKIPPED until M7, so a dispatched job is SKIPPED rather than left PENDING.
+    const [job] = await findSlackPostJobs(ctx, parent.id);
+    expect(job?.status).toBe("SKIPPED");
+
+    const subtask = await taskService.createTask(ctx, projectId, { title: "Child", parentTaskId: parent.id });
+    expect(dispatched).toHaveLength(1);
+    expect(await findSlackPostJobs(ctx, subtask.id)).toHaveLength(0);
+  });
+
   it("FR-12 c1 / A14: project member creates top-level task atomically in default TODO status, audits TASK_CREATED, and queues SLACK_POST_TASK", async () => {
     const { ctx, user } = await createTestContext("MEMBER");
     const { projectId, defaultStatus } = await createProjectWithMembers(ctx);
@@ -134,12 +173,7 @@ describe("taskService.createTask", () => {
     expect(taskCreatedLog?.actorId).toBe(user.id);
 
     // Verify SLACK_POST_TASK outbox job
-    const outboxJobs = await outboxJobRepository.listDue(ctx.db, new Date(Date.now() + 1000), 100);
-    const slackJob = outboxJobs.find((j) => {
-      if (j.type !== "SLACK_POST_TASK") return false;
-      const payload = JSON.parse(j.payload) as { taskId?: string };
-      return payload.taskId === created.id;
-    });
+    const [slackJob] = await findSlackPostJobs(ctx, created.id);
     expect(slackJob).toBeDefined();
   });
 
@@ -208,12 +242,7 @@ describe("taskService.createTask", () => {
     expect(subTask.parentTaskId).toBe(parent.id);
 
     // Verify no SLACK_POST_TASK for subTask
-    const outboxJobs = await outboxJobRepository.listDue(ctx.db, new Date(Date.now() + 1000), 100);
-    const subTaskJob = outboxJobs.find((j) => {
-      if (j.type !== "SLACK_POST_TASK") return false;
-      const payload = JSON.parse(j.payload) as { taskId?: string };
-      return payload.taskId === subTask.id;
-    });
+    const [subTaskJob] = await findSlackPostJobs(ctx, subTask.id);
     expect(subTaskJob).toBeUndefined();
   });
 
