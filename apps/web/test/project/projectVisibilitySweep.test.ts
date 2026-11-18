@@ -1,12 +1,23 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import { createDatabase, projectMemberRepository, projectRepository, userRepository } from "@pm/db";
+import {
+  createDatabase,
+  projectMemberRepository,
+  projectRepository,
+  taskRepository,
+  taskStatusRepository,
+  userRepository,
+} from "@pm/db";
 import { NotFoundError } from "@pm/domain";
 
 import { loader as projectLayoutLoader } from "../../app/routes/_app.projects.$projectId";
 import { loader as projectMembersRouteLoader } from "../../app/routes/_app.projects.$projectId.members";
 import { loader as projectSprintsRouteLoader } from "../../app/routes/_app.projects.$projectId.sprints";
+import {
+  action as taskDetailRouteAction,
+  loader as taskDetailRouteLoader,
+} from "../../app/routes/_app.projects.$projectId.tasks.$taskId";
 import { projectService } from "../../app/services/project/project.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 import { requestContextKey } from "../../app/utils/requestContext.server";
@@ -297,6 +308,65 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
       const res = err as Response;
       expect(res.status).toBe(404);
     }
+  });
+
+  it("returns 404 when non-member requests or posts to /projects/:projectId/tasks/:taskId", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const now = new Date();
+    const status = await taskStatusRepository.insert(db, {
+      id: crypto.randomUUID(),
+      name: `SweepStatus-${crypto.randomUUID().slice(0, 6)}`,
+      category: "TODO",
+      position: 1,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const taskId = crypto.randomUUID();
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: world.projectId,
+        statusId: status.id,
+        title: "Sweep Task",
+        createdById: world.users.creator.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const ctx = contextFor(db, world.users.nonMember);
+    const baseArgs = await requestFor(
+      `http://localhost/projects/${world.projectId}/tasks/${taskId}`,
+      world.users.nonMember,
+      ctx,
+    );
+    const loaderArgs = {
+      ...baseArgs,
+      params: { projectId: world.projectId, taskId },
+    } as unknown as Parameters<typeof taskDetailRouteLoader>[0];
+
+    await expect(taskDetailRouteLoader(loaderArgs)).rejects.toMatchObject({ status: 404 });
+
+    const form = new FormData();
+    form.append("intent", "changeStatus");
+    form.append("statusId", status.id);
+    form.append("version", "1");
+    const postReq = new Request(`http://localhost/projects/${world.projectId}/tasks/${taskId}`, {
+      method: "POST",
+      headers: baseArgs.request.headers,
+      body: form,
+    });
+    const actionArgs = {
+      ...baseArgs,
+      request: postReq,
+      params: { projectId: world.projectId, taskId },
+    } as unknown as Parameters<typeof taskDetailRouteAction>[0];
+
+    const res = await taskDetailRouteAction(actionArgs);
+    expect(res.status).toBe(404);
   });
 
   it("throws 404 Response when non-existent project is requested", async () => {

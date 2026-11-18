@@ -37,7 +37,7 @@ interface ActionData {
 }
 
 export default function TaskDetailPage() {
-  const { task, subTasks, sprints, members, permissions } = useLoaderData<TaskDetailLoaderData>();
+  const { task, subTasks, sprints, members, statuses, permissions } = useLoaderData<TaskDetailLoaderData>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
 
@@ -607,6 +607,39 @@ export default function TaskDetailPage() {
               <p className="mt-1 text-sm font-semibold text-gray-900" data-testid="sidebar-status">
                 {task.statusName}
               </p>
+              {permissions.canEdit ? (
+                <Form method="post" className="mt-2 flex items-center gap-2" data-testid="form-change-status">
+                  <input type="hidden" name="intent" value="changeStatus" />
+                  <input type="hidden" name="version" value={task.version} data-testid="status-form-version" />
+                  <label htmlFor="task-status-select" className="sr-only">
+                    Change Status
+                  </label>
+                  <select
+                    id="task-status-select"
+                    name="statusId"
+                    key={task.statusId}
+                    defaultValue={task.statusId}
+                    className="block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-blue-500 focus:outline-none"
+                    data-testid="select-task-status"
+                  >
+                    {statuses
+                      .filter((s) => s.canSelect)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                    data-testid="btn-change-status"
+                  >
+                    Move
+                  </button>
+                </Form>
+              ) : null}
             </div>
 
             <div>

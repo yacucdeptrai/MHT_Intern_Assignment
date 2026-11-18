@@ -1,3 +1,5 @@
+import type { StatusCategory } from "../enums";
+import { isTransitionAllowed } from "../workflow";
 import type { ActorContext, TaskPolicyTarget } from "./types";
 
 const isAdmin = (actor: ActorContext): boolean => actor.systemRole === "ADMIN";
@@ -44,6 +46,14 @@ export function canEditTask(actor: ActorContext, task: TaskPolicyTarget): boolea
     return false;
   }
   return isProjectLead(actor) || actor.userId === task.createdById || task.assigneeIds.includes(actor.userId);
+}
+
+export function canMoveTaskToCategory(
+  actor: ActorContext,
+  task: TaskPolicyTarget,
+  toCategory: StatusCategory,
+): boolean {
+  return canEditTask(actor, task) && isTransitionAllowed(task.category, toCategory, "UPDATE");
 }
 
 export function canArchiveTask(actor: ActorContext, task: TaskPolicyTarget): boolean {

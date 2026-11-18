@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   auditLogRepository,
@@ -1510,5 +1510,407 @@ describe("taskService.archiveTask", () => {
         version: 1,
       }),
     ).rejects.toMatchObject({ status: 403, message: "This project is archived" });
+  });
+});
+
+describe("taskService.changeStatus (FR-21 / A16)", () => {
+  async function seedWorkflowStatuses(ctx: RequestContext) {
+    const now = new Date();
+    const ensureDefault = async (category: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE", name: string, pos: number) => {
+      const existing = await taskStatusRepository.findDefaultByCategory(ctx.db, category);
+      if (existing) return existing;
+      return taskStatusRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        name: `${name} ${crypto.randomUUID().slice(0, 6)}`,
+        category,
+        position: pos,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    };
+
+    const todo = await ensureDefault("TODO", "To Do", 1);
+    const inProgress = await ensureDefault("IN_PROGRESS", "In Progress", 2);
+    const review = await ensureDefault("REVIEW", "Review", 3);
+    const done = await ensureDefault("DONE", "Done", 4);
+    const blocked = await taskStatusRepository.insert(ctx.db, {
+      id: crypto.randomUUID(),
+      name: `Blocked ${crypto.randomUUID().slice(0, 6)}`,
+      category: "IN_PROGRESS",
+      position: 5,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return { todo, inProgress, review, done, blocked };
+  }
+
+  it("FR-21 c1 / A16: editor moves task across TODO, IN_PROGRESS, and REVIEW atomically, updating status_changed_at, auditing TASK_STATUS_CHANGED, and queuing SLACK_UPDATE_THREAD", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { ctx: assigneeCtx, user: assigneeUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+    const statuses = await seedWorkflowStatuses(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: assigneeUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const initialTime = new Date("2026-11-18T02:00:00Z");
+    leadCtx.clock = { now: () => initialTime };
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Workflow Task",
+      assigneeIds: [assigneeUser.id],
+    });
+
+    const waitUntilPromises: Promise<unknown>[] = [];
+    const moveTime = new Date("2026-11-18T03:00:00Z");
+    assigneeCtx.clock = { now: () => moveTime };
+    assigneeCtx.waitUntil = (p) => {
+      waitUntilPromises.push(p);
+    };
+
+    const movedToInProgress = await taskService.changeStatus(assigneeCtx, projectId, task.id, {
+      statusId: statuses.inProgress.id,
+      version: 1,
+    });
+
+    expect(movedToInProgress.statusId).toBe(statuses.inProgress.id);
+    expect(movedToInProgress.statusCategory).toBe("IN_PROGRESS");
+    expect(movedToInProgress.version).toBe(2);
+    expect(movedToInProgress.statusChangedAt).toBe(moveTime.getTime());
+
+    const audits = await auditLogRepository.listByEntity(leadCtx.db, "TASK", task.id);
+    const statusAudit = audits.find((a) => a.action === "TASK_STATUS_CHANGED");
+    expect(statusAudit).toBeDefined();
+    expect(statusAudit?.actorId).toBe(assigneeUser.id);
+    expect(statusAudit?.changes).toMatchObject({
+      statusId: { from: task.statusId, to: statuses.inProgress.id },
+    });
+
+    await Promise.all(waitUntilPromises);
+    expect(waitUntilPromises.length).toBeGreaterThanOrEqual(1);
+
+    const reviewTime = new Date("2026-11-18T04:00:00Z");
+    assigneeCtx.clock = { now: () => reviewTime };
+    const movedToReview = await taskService.changeStatus(assigneeCtx, projectId, task.id, {
+      statusId: statuses.review.id,
+      version: 2,
+    });
+    expect(movedToReview.statusId).toBe(statuses.review.id);
+    expect(movedToReview.statusCategory).toBe("REVIEW");
+    expect(movedToReview.version).toBe(3);
+    expect(movedToReview.statusChangedAt).toBe(reviewTime.getTime());
+  });
+
+  it("FR-21 c1: creator moves task between two statuses in the same IN_PROGRESS category and queues SLACK_UPDATE_THREAD", async () => {
+    const { ctx: creatorCtx, user: creatorUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+    const statuses = await seedWorkflowStatuses(creatorCtx);
+
+    await creatorCtx.db.batch([
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: creatorUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(creatorCtx, projectId, { title: "Same Category Move" });
+    await taskService.changeStatus(creatorCtx, projectId, task.id, {
+      statusId: statuses.inProgress.id,
+      version: 1,
+    });
+
+    // Capture the outbox job inserted on the second move before waitUntil processes it
+    const capturedPayloads: string[] = [];
+    const origInsertStmt = outboxJobRepository.insertStmt.bind(outboxJobRepository);
+    const spy = vi.spyOn(outboxJobRepository, "insertStmt").mockImplementationOnce((db, job) => {
+      capturedPayloads.push(job.payload);
+      return origInsertStmt(db, job);
+    });
+
+    const moved = await taskService.changeStatus(creatorCtx, projectId, task.id, {
+      statusId: statuses.blocked.id,
+      version: 2,
+    });
+    spy.mockRestore();
+
+    expect(moved.statusId).toBe(statuses.blocked.id);
+    expect(moved.statusCategory).toBe("IN_PROGRESS");
+    expect(moved.version).toBe(3);
+    expect(capturedPayloads).toHaveLength(1);
+    expect(JSON.parse(capturedPayloads[0] ?? "{}")).toEqual({
+      taskId: task.id,
+      fromStatusId: statuses.inProgress.id,
+      toStatusId: statuses.blocked.id,
+      actorId: creatorUser.id,
+    });
+  });
+
+  it("FR-21 c2: rejects editor moving task to DONE category with 403 'Only an approval can complete a task' and leaves status unchanged", async () => {
+    const { ctx: creatorCtx, user: creatorUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(creatorCtx);
+    const statuses = await seedWorkflowStatuses(creatorCtx);
+
+    await creatorCtx.db.batch([
+      projectMemberRepository.insertStmt(creatorCtx.db, {
+        projectId,
+        userId: creatorUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(creatorCtx, projectId, { title: "Cannot Complete Directly" });
+
+    await expect(
+      taskService.changeStatus(creatorCtx, projectId, task.id, {
+        statusId: statuses.done.id,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: "Only an approval can complete a task",
+    });
+
+    const unchanged = await taskRepository.findById(creatorCtx.db, task.id);
+    expect(unchanged?.statusId).toBe(task.statusId);
+    expect(unchanged?.version).toBe(1);
+  });
+
+  it("FR-21 c3: rejects moving a task already in DONE status with 403 'Reopen the task to edit it'", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+    const statuses = await seedWorkflowStatuses(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, { title: "Frozen Done Task" });
+    await leadCtx.db.batch([
+      taskRepository.updateStatusStmt(leadCtx.db, {
+        id: task.id,
+        expectedVersion: 1,
+        statusId: statuses.done.id,
+        completedAt: new Date(),
+        now: new Date(),
+      }),
+    ]);
+
+    await expect(
+      taskService.changeStatus(leadCtx, projectId, task.id, {
+        statusId: statuses.inProgress.id,
+        version: 2,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: "Reopen the task to edit it",
+    });
+  });
+
+  it("FR-21 c4: rejects project MEMBER who is neither creator nor assignee with 403", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { ctx: otherMemberCtx, user: otherMemberUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedWorkflowStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: otherMemberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "PM Owned Task" });
+
+    await expect(
+      taskService.changeStatus(otherMemberCtx, projectId, task.id, {
+        statusId: statuses.inProgress.id,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const unchanged = await taskRepository.findById(pmCtx.db, task.id);
+    expect(unchanged?.statusId).toBe(task.statusId);
+    expect(unchanged?.version).toBe(1);
+  });
+
+  it("P3 / FR-09 c4: rejects non-member with 404 and archived project with 403 'This project is archived'", async () => {
+    const { ctx: adminCtx, user: adminUser } = await createTestContext("ADMIN");
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+    const statuses = await seedWorkflowStatuses(adminCtx);
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, { title: "Access Check Task" });
+
+    await expect(
+      taskService.changeStatus(nonMemberCtx, projectId, task.id, {
+        statusId: statuses.inProgress.id,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+
+    await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+
+    await expect(
+      taskService.changeStatus(adminCtx, projectId, task.id, {
+        statusId: statuses.inProgress.id,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ status: 403, message: "This project is archived" });
+  });
+
+  it("rejects unknown statusId with 400 ValidationError", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    await seedWorkflowStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "Unknown Status Task" });
+
+    await expect(
+      taskService.changeStatus(pmCtx, projectId, task.id, {
+        statusId: crypto.randomUUID(),
+        version: 1,
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "Status not found",
+    });
+  });
+
+  it("A16 version conflict: stale version returns 409 and writes zero audit or outbox rows", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedWorkflowStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "Stale Status Task" });
+    const auditsBefore = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+
+    await expect(
+      taskService.changeStatus(pmCtx, projectId, task.id, {
+        statusId: statuses.inProgress.id,
+        version: 99,
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "This task was changed by someone else. Reload to see the latest version.",
+    });
+
+    const afterTask = await taskRepository.findById(pmCtx.db, task.id);
+    expect(afterTask?.statusId).toBe(task.statusId);
+    expect(afterTask?.version).toBe(1);
+
+    const auditsAfter = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    expect(auditsAfter.length).toBe(auditsBefore.length);
+  });
+
+  it("A16 forced batch failure (docs/09 §3.3): rolls back task status update and audit log when outbox insert fails", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedWorkflowStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "Rollback Proof Task" });
+    const duplicateJobId = crypto.randomUUID();
+    await outboxJobRepository.insert(pmCtx.db, {
+      id: duplicateJobId,
+      type: "SLACK_UPDATE_THREAD",
+      payload: "{}",
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const auditsBefore = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    const origInsertStmt = outboxJobRepository.insertStmt.bind(outboxJobRepository);
+    const spy = vi
+      .spyOn(outboxJobRepository, "insertStmt")
+      .mockImplementationOnce((db, job) => origInsertStmt(db, { ...job, id: duplicateJobId }));
+
+    let waitUntilCalled = false;
+    pmCtx.waitUntil = () => {
+      waitUntilCalled = true;
+    };
+
+    await expect(
+      taskService.changeStatus(pmCtx, projectId, task.id, {
+        statusId: statuses.inProgress.id,
+        version: 1,
+      }),
+    ).rejects.toThrow();
+    spy.mockRestore();
+
+    const afterTask = await taskRepository.findById(pmCtx.db, task.id);
+    expect(afterTask?.statusId).toBe(task.statusId);
+    expect(afterTask?.version).toBe(1);
+
+    const auditsAfter = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    expect(auditsAfter.length).toBe(auditsBefore.length);
+    expect(waitUntilCalled).toBe(false);
   });
 });

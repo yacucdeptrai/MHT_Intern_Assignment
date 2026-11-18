@@ -70,3 +70,93 @@ export async function createSignedInMember(
 
   return { email, fullName, password, context, page };
 }
+
+export interface ProjectTaskSetup {
+  projectId: string;
+  projectCode: string;
+  taskUrl: string;
+  doneStatusId: string;
+}
+
+export async function setupProjectWithTask(
+  browser: Browser,
+  options: {
+    taskTitle: string;
+    members?: Array<{ user: TestUser; projectRole: "PM" | "TEAM_LEAD" | "MEMBER" }>;
+    assignToFullNames?: string[];
+  },
+): Promise<ProjectTaskSetup> {
+  const adminContext = await browser.newContext();
+  const adminPage = await adminContext.newPage();
+  await signInAsAdmin(adminPage);
+
+  await adminPage.goto("/projects/new");
+  const projectCode = `WF${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  const projectName = `Workflow Project ${projectCode}`;
+  await adminPage.getByLabel("Project Code").fill(projectCode);
+  await adminPage.getByLabel("Project Name").fill(projectName);
+  await adminPage.getByLabel("Start Date").fill("2026-11-01");
+  await adminPage.getByLabel("End Date").fill("2026-12-31");
+  await adminPage.getByRole("button", { name: "Create Project" }).click();
+
+  await adminPage.waitForURL("**/projects");
+  await adminPage.getByRole("link", { name: projectName }).click();
+  await adminPage.waitForURL("**/projects/*");
+
+  const projectId = adminPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
+
+  for (const m of options.members ?? []) {
+    await adminPage.goto(`/projects/${projectId}/members`);
+    await expect(adminPage.getByTestId("members-table")).toBeVisible();
+    await adminPage.getByTestId("search-user-input").fill(m.user.email);
+    const userSelect = adminPage.getByTestId("search-user-select");
+    await expect(userSelect).toBeVisible();
+    await userSelect.selectOption({ label: `${m.user.fullName} (${m.user.email})` });
+    await adminPage.getByTestId("add-member-role-select").selectOption(m.projectRole);
+    await adminPage.getByTestId("add-member-submit-btn").click();
+    await expect(adminPage.getByTestId("members-table")).toContainText(m.user.email);
+  }
+
+  await adminPage.goto(`/projects/${projectId}`);
+  const doneStatusId = await adminPage
+    .getByTestId("filter-status-select")
+    .locator("option", { hasText: "Done" })
+    .getAttribute("value");
+
+  await adminPage.getByTestId("create-task-button").click();
+  await adminPage.getByTestId("task-title-input").fill(options.taskTitle);
+  await adminPage.getByTestId("task-submit-button").click();
+
+  await expect(adminPage.getByTestId("tasks-table")).toContainText(options.taskTitle);
+  await adminPage.getByRole("link", { name: options.taskTitle }).click();
+  await adminPage.waitForURL("**/tasks/*");
+  const taskUrl = adminPage.url();
+
+  if (options.assignToFullNames && options.assignToFullNames.length > 0) {
+    await adminPage.getByTestId("btn-toggle-assign").click();
+    for (const fullName of options.assignToFullNames) {
+      await adminPage.getByLabel(fullName).check();
+    }
+    await adminPage.getByTestId("btn-save-assign").click();
+    for (const fullName of options.assignToFullNames) {
+      await expect(adminPage.getByTestId("sidebar-assignees")).toContainText(fullName);
+    }
+  }
+
+  await adminContext.close();
+  return {
+    projectId,
+    projectCode,
+    taskUrl,
+    doneStatusId: doneStatusId ?? "",
+  };
+}
+
+export async function moveTaskToStatus(page: Page, statusLabel: string): Promise<void> {
+  const select = page.getByTestId("select-task-status");
+  await expect(select).toBeVisible();
+  await select.selectOption({ label: statusLabel });
+  await page.getByTestId("btn-change-status").click();
+  await expect(page.getByTestId("task-status-badge")).toHaveText(statusLabel);
+  await expect(page.getByTestId("sidebar-status")).toHaveText(statusLabel);
+}

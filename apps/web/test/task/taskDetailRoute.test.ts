@@ -788,4 +788,158 @@ describe("taskDetailAction", () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe("taskDetailAction changeStatus intent (FR-21 / A16)", () => {
+    it("FR-21 c1: editor changes status via action, returns 200 with updated task", async () => {
+      const { ctx, user, cookie } = await createTestContext("PM");
+      const { projectId } = await createProject(ctx);
+      const inProgress = await taskStatusRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        name: `In Progress ${crypto.randomUUID().slice(0, 6)}`,
+        category: "IN_PROGRESS",
+        position: 2,
+        isDefault: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await ctx.db.batch([
+        projectMemberRepository.insertStmt(ctx.db, {
+          projectId,
+          userId: user.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(ctx, projectId, { title: "Action Status Task" });
+
+      const formData = new FormData();
+      formData.append("intent", "changeStatus");
+      formData.append("statusId", inProgress.id);
+      formData.append("version", "1");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(ctx, projectId, task.id, req);
+      expect(res.status).toBe(200);
+      const body = await res.json<{ success: boolean; task: { statusId: string; version: number } }>();
+      expect(body.success).toBe(true);
+      expect(body.task.statusId).toBe(inProgress.id);
+      expect(body.task.version).toBe(2);
+    });
+
+    it("FR-21 c2: submitting DONE category status via changeStatus returns 403 'Only an approval can complete a task'", async () => {
+      const { ctx, user, cookie } = await createTestContext("PM");
+      const { projectId } = await createProject(ctx);
+      const doneStatus = await taskStatusRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        name: `Done ${crypto.randomUUID().slice(0, 6)}`,
+        category: "DONE",
+        position: 4,
+        isDefault: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await ctx.db.batch([
+        projectMemberRepository.insertStmt(ctx.db, {
+          projectId,
+          userId: user.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(ctx, projectId, { title: "Blocked Done Action" });
+
+      const formData = new FormData();
+      formData.append("intent", "changeStatus");
+      formData.append("statusId", doneStatus.id);
+      formData.append("version", "1");
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(ctx, projectId, task.id, req);
+      expect(res.status).toBe(403);
+      const body = await res.json<{ success: boolean; message: string }>();
+      expect(body.message).toBe("Only an approval can complete a task");
+    });
+
+    it("FR-21 c4: returns 400 on missing statusId and 403 for non-editor member", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { ctx: otherCtx, user: otherUser, cookie: otherCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+      const reviewStatus = await taskStatusRepository.insert(pmCtx.db, {
+        id: crypto.randomUUID(),
+        name: `Review ${crypto.randomUUID().slice(0, 6)}`,
+        category: "REVIEW",
+        position: 3,
+        isDefault: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: otherUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Validation & Role Action Task" });
+
+      const badForm = new FormData();
+      badForm.append("intent", "changeStatus");
+      badForm.append("statusId", "");
+      badForm.append("version", "1");
+
+      const badRes = await taskDetailAction(
+        pmCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: pmCookie },
+          body: badForm,
+        }),
+      );
+      expect(badRes.status).toBe(400);
+      const badJson = await badRes.json<{ success: boolean; errors: Record<string, string[]> }>();
+      expect(badJson.errors.statusId).toBeDefined();
+
+      const memberForm = new FormData();
+      memberForm.append("intent", "changeStatus");
+      memberForm.append("statusId", reviewStatus.id);
+      memberForm.append("version", "1");
+
+      const forbiddenRes = await taskDetailAction(
+        otherCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: otherCookie },
+          body: memberForm,
+        }),
+      );
+      expect(forbiddenRes.status).toBe(403);
+    });
+  });
 });
