@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import { invites, type Invite, type NewInvite } from "../schema/invites";
@@ -39,5 +39,9 @@ export const inviteRepository = {
       .from(invites)
       .where(and(eq(invites.projectId, projectId), isNull(invites.acceptedAt), gt(invites.expiresAt, now)))
       .orderBy(desc(invites.createdAt));
+  },
+
+  deleteExpiredBeforeStmt(db: AppDatabase, cutoff: Date) {
+    return db.delete(invites).where(lt(invites.expiresAt, cutoff));
   },
 };

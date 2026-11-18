@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import type { AppDatabase } from "../client";
@@ -65,5 +65,14 @@ export const attachmentRepository = {
         createdAt: row.createdAt,
       };
     });
+  },
+
+  findExistingStorageKeys: async (db: AppDatabase, storageKeys: string[]): Promise<Set<string>> => {
+    if (storageKeys.length === 0) return new Set();
+    const rows = await db
+      .select({ storageKey: attachments.storageKey })
+      .from(attachments)
+      .where(inArray(attachments.storageKey, storageKeys));
+    return new Set(rows.map((r) => r.storageKey));
   },
 };
