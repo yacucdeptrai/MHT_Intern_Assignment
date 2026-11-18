@@ -38,7 +38,7 @@ export const outboxJobRepository = {
           lte(outboxJobs.nextAttemptAt, now),
         ),
       )
-      .returning({ id: outboxJobs.id });
+      .returning({ id: outboxJobs.id, attempts: outboxJobs.attempts });
   },
 
   finishStmt(db: AppDatabase, id: string, status: "DONE" | "SKIPPED", now: Date, payload?: string) {

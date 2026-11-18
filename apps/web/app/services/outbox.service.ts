@@ -8,17 +8,13 @@ import {
 } from "@pm/domain";
 
 import { unsealInviteToken } from "../utils/crypto.server";
+import { createLogger, type Logger } from "../utils/logger.server";
 import type { RequestContext } from "../utils/requestContext.server";
 
 export interface JobContext {
   env: Env;
   db: ReturnType<typeof createDatabase>;
-  logger: {
-    debug: (msg: string, meta?: Record<string, unknown>) => void;
-    info: (msg: string, meta?: Record<string, unknown>) => void;
-    warn: (msg: string, meta?: Record<string, unknown>) => void;
-    error: (msg: string, meta?: Record<string, unknown>) => void;
-  };
+  logger: Logger;
   clock: { now: () => Date };
 }
 
@@ -71,7 +67,10 @@ export const jobHandlers: Record<OutboxJobType, JobHandler> = {
   EMAIL_DEADLINE_REMINDER: () => Promise.resolve("SKIPPED"),
 };
 
-export async function processJob(ctx: JobContext, jobId: string): Promise<"DONE" | "FAILED" | "DEAD" | "SKIPPED"> {
+export async function processJob(
+  ctx: JobContext,
+  jobId: string,
+): Promise<"DONE" | "FAILED" | "DEAD" | "SKIPPED" | null> {
   const now = ctx.clock.now();
   const job = await outboxJobRepository.findById(ctx.db, jobId);
   if (!job) {
@@ -80,10 +79,12 @@ export async function processJob(ctx: JobContext, jobId: string): Promise<"DONE"
 
   const [claimedRows] = await ctx.db.batch([outboxJobRepository.claimStmt(ctx.db, jobId, now)]);
   // If no row was updated, another runner claimed it or it is not due
-  if (claimedRows.length === 0) {
-    return "SKIPPED";
+  const claimedJob = claimedRows[0];
+  if (!claimedJob) {
+    return null;
   }
 
+  const attempts = claimedJob.attempts;
   const handler = jobHandlers[job.type];
 
   try {
@@ -103,12 +104,20 @@ export async function processJob(ctx: JobContext, jobId: string): Promise<"DONE"
     return outcome;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    const nextAttempts = job.attempts + 1;
-    const isDead = nextAttempts >= OUTBOX_MAX_ATTEMPTS;
-    const backoffMs = OUTBOX_BACKOFF_BASE_MS * Math.pow(2, job.attempts);
+    const isDead = attempts >= OUTBOX_MAX_ATTEMPTS;
+    const backoffMs = OUTBOX_BACKOFF_BASE_MS * Math.pow(2, attempts - 1);
     const nextAttemptAt = new Date(now.getTime() + backoffMs);
 
-    await ctx.db.batch([outboxJobRepository.failStmt(ctx.db, jobId, nextAttemptAt, nextAttempts, errorMsg, now)]);
+    if (isDead) {
+      ctx.logger.error("Outbox job marked DEAD after max attempts", {
+        jobId,
+        jobType: job.type,
+        attempts,
+        error: err instanceof Error ? err : { name: "Error", message: errorMsg },
+      });
+    }
+
+    await ctx.db.batch([outboxJobRepository.failStmt(ctx.db, jobId, nextAttemptAt, attempts, errorMsg, now)]);
     return isDead ? "DEAD" : "FAILED";
   }
 }
@@ -135,15 +144,11 @@ export async function dispatchOutbox(ctx: RequestContext | JobContext, jobIds: s
 
 export async function sweepOutbox(env: Env, now: Date): Promise<SweepResult> {
   const db = createDatabase(env.DB);
+  const logger = createLogger("outbox-sweep");
   const ctx: JobContext = {
     env,
     db,
-    logger: {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    },
+    logger,
     clock: { now: () => now },
   };
 
@@ -162,8 +167,11 @@ export async function sweepOutbox(env: Env, now: Date): Promise<SweepResult> {
   // 2. Query and process due jobs up to limit
   const dueJobs = await outboxJobRepository.listDue(db, now, OUTBOX_SWEEP_LIMIT);
   for (const job of dueJobs) {
-    sweepResult.claimed++;
     const outcome = await processJob(ctx, job.id);
+    if (outcome === null) {
+      continue;
+    }
+    sweepResult.claimed++;
     if (outcome === "DONE") sweepResult.done++;
     else if (outcome === "FAILED") sweepResult.failed++;
     else if (outcome === "DEAD") sweepResult.dead++;
