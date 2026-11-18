@@ -90,7 +90,7 @@ export const attachmentService = {
           uploadedById: ctx.user.id,
           fileName: safeFileName,
           contentType: validatedType,
-          sizeBytes: input.size,
+          sizeBytes: input.bytes.length,
           storageKey,
           createdAt: now,
         }),
@@ -104,7 +104,7 @@ export const attachmentService = {
           changes: {
             attachmentId: { from: null, to: attachmentId },
             fileName: { from: null, to: safeFileName },
-            sizeBytes: { from: null, to: input.size },
+            sizeBytes: { from: null, to: input.bytes.length },
             contentType: { from: null, to: validatedType },
           },
           createdAt: now,
@@ -129,7 +129,7 @@ export const attachmentService = {
       taskId,
       projectId,
       fileName: safeFileName,
-      sizeBytes: input.size,
+      sizeBytes: input.bytes.length,
     });
 
     return {
@@ -139,19 +139,22 @@ export const attachmentService = {
       uploaderName: ctx.user.fullName,
       fileName: safeFileName,
       contentType: validatedType,
-      sizeBytes: input.size,
+      sizeBytes: input.bytes.length,
       canDelete: true,
       createdAt: now.getTime(),
     };
   },
 
+  /**
+   * Access is always checked on the attachment's own project. `expectedProjectId` can only narrow
+   * the result: a mismatch returns 404, never access to another project.
+   */
   async downloadAttachment(
     ctx: RequestContext,
-    projectIdOrAttachmentId: string,
-    optionalAttachmentId?: string,
+    attachmentId: string,
+    options: { expectedProjectId?: string } = {},
   ): Promise<DownloadAttachmentResult> {
-    const attachmentId = optionalAttachmentId ?? projectIdOrAttachmentId;
-    const explicitProjectId = optionalAttachmentId ? projectIdOrAttachmentId : undefined;
+    const explicitProjectId = options.expectedProjectId;
 
     const attachment = await attachmentRepository.findById(ctx.db, attachmentId);
     if (!attachment) {
@@ -195,6 +198,13 @@ export const attachmentService = {
 
     if (access.isArchived) {
       throw new ForbiddenError("This project is archived");
+    }
+
+    // The task must belong to the project whose access was checked; otherwise a lead of one
+    // project could delete another project's attachments by posting their own projectId.
+    const task = await taskRepository.findById(ctx.db, taskId);
+    if (!task || task.projectId !== projectId) {
+      throw new NotFoundError("Attachment not found");
     }
 
     const attachment = await attachmentRepository.findById(ctx.db, input.attachmentId);
