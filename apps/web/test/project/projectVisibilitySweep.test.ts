@@ -20,6 +20,7 @@ import {
 } from "../../app/routes/_app.projects.$projectId.tasks.$taskId";
 import { loader as attachmentDownloadLoader } from "../../app/routes/api.attachments.$attachmentId";
 import { action as attachmentUploadAction } from "../../app/routes/api.attachments.upload";
+import { loader as calendarRouteLoader } from "../../app/routes/_app.calendar";
 import { projectService } from "../../app/services/project/project.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 import { requestContextKey } from "../../app/utils/requestContext.server";
@@ -506,5 +507,13 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
 
     const res = await attachmentDownloadLoader(args);
     expect(res.status).toBe(404);
+  });
+
+  it("FR-35 c2 / P3: returns 404 when non-member filters /calendar by project", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const ctx = contextFor(db, world.users.nonMember);
+    const args = await requestFor(`http://localhost/calendar?projectId=${world.projectId}`, world.users.nonMember, ctx);
+    await expect(calendarRouteLoader(args)).rejects.toMatchObject({ status: 404 });
   });
 });

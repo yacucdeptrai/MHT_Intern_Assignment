@@ -1,4 +1,5 @@
 import { APP_TIMEZONE, DUE_SOON_WINDOW_MS } from "./constants";
+import type { CalendarRange, CalendarView } from "./types/calendar";
 
 export interface TaskDateTarget {
   dueDate?: string | null | undefined;
@@ -117,4 +118,75 @@ export function calculateDaysOverdue(dueDateStr: string, now: Date = new Date())
   const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
   const diffMs = todayUtc - dueUtc;
   return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
+}
+
+function formatUtcDate(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Calculates start and end calendar dates (inclusive) for a given view and reference date in APP_TIMEZONE.
+ * Week starts on Monday (ISO-8601).
+ */
+export function getCalendarRange(view: CalendarView, dateStr: string): CalendarRange {
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0] ?? 1970;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+
+  if (view === "day") {
+    return { from: dateStr, to: dateStr };
+  }
+
+  if (view === "week") {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const dayOfWeek = d.getUTCDay(); // 0: Sun, 1: Mon, ..., 6: Sat
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d.getTime() + diffToMonday * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    return {
+      from: formatUtcDate(monday),
+      to: formatUtcDate(sunday),
+    };
+  }
+
+  // Month view: full calendar month
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const mStr = String(month).padStart(2, "0");
+  return {
+    from: `${year}-${mStr}-01`,
+    to: `${year}-${mStr}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+/**
+ * Computes the previous and next reference dates for calendar navigation.
+ */
+export function getCalendarNavDates(view: CalendarView, dateStr: string): { prev: string; next: string } {
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0] ?? 1970;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+
+  if (view === "day") {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const prev = new Date(d.getTime() - 86400000);
+    const next = new Date(d.getTime() + 86400000);
+    return { prev: formatUtcDate(prev), next: formatUtcDate(next) };
+  }
+
+  if (view === "week") {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const prev = new Date(d.getTime() - 7 * 86400000);
+    const next = new Date(d.getTime() + 7 * 86400000);
+    return { prev: formatUtcDate(prev), next: formatUtcDate(next) };
+  }
+
+  // Month view: 1st of prev month, 1st of next month
+  const prevMonth = new Date(Date.UTC(year, month - 2, 1));
+  const nextMonth = new Date(Date.UTC(year, month, 1));
+  return { prev: formatUtcDate(prevMonth), next: formatUtcDate(nextMonth) };
 }
