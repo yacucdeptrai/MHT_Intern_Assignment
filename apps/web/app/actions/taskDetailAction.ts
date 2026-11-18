@@ -1,5 +1,7 @@
 import { redirect } from "react-router";
 
+import { TaskStatusChangeSchema } from "@pm/domain";
+
 import { taskService } from "../services/task.service";
 import { requireUser } from "../utils/auth.server";
 import { handleActionError } from "../utils/errors.server";
@@ -42,7 +44,28 @@ export async function taskDetailAction(
       return Response.json({ success: true, subTask }, { status: 200 });
     }
 
-    // TODO(M4-T1): changeStatus intent (A16)
+    if (intent === "changeStatus") {
+      const parsed = TaskStatusChangeSchema.safeParse(rawData);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        let firstMessage: string | undefined;
+        for (const issue of parsed.error.issues) {
+          firstMessage ??= issue.message;
+          const field = issue.path[0];
+          if (typeof field === "string") {
+            fieldErrors[field] = fieldErrors[field] ?? [];
+            fieldErrors[field].push(issue.message);
+          }
+        }
+        return Response.json(
+          { success: false, errors: fieldErrors, message: firstMessage ?? "Invalid status change", values: rawData },
+          { status: 400 },
+        );
+      }
+      const task = await taskService.changeStatus(ctx, projectId, taskId, parsed.data);
+      return Response.json({ success: true, task }, { status: 200 });
+    }
+
     // TODO(M4-T2): approve intent (A18)
     // TODO(M4-T3): reject and reopen intents (A19)
     // TODO(M5-T1): comment and deleteComment intents (A21, A22)

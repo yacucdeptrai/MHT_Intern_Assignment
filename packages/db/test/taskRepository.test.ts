@@ -839,4 +839,65 @@ describe("taskRepository", () => {
     expect(t2?.version).toBe(2);
     expect(t2?.updatedAt).toEqual(unlinkTime);
   });
+
+  it("FR-21 c1 / A16: updateStatusStmt updates statusId, statusChangedAt, bumps version, preserves completedAt when omitted, and guards stale version", async () => {
+    const { db, user, projectA, status, now } = await createBaseFixtures();
+    const inProgressStatus = await taskStatusRepository.insert(db, {
+      id: crypto.randomUUID(),
+      name: `InProgress-${crypto.randomUUID()}`,
+      category: "IN_PROGRESS",
+      position: 2,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const taskId = crypto.randomUUID();
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Status Transition Repo Task",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const moveTime = new Date(now.getTime() + 10_000);
+    await db.batch([
+      taskRepository.updateStatusStmt(db, {
+        id: taskId,
+        expectedVersion: 1,
+        statusId: inProgressStatus.id,
+        now: moveTime,
+      }),
+      conflictGuardStmt(db),
+    ]);
+
+    const moved = await taskRepository.findById(db, taskId);
+    expect(moved?.statusId).toBe(inProgressStatus.id);
+    expect(moved?.statusChangedAt).toEqual(moveTime);
+    expect(moved?.completedAt).toBeNull();
+    expect(moved?.version).toBe(2);
+    expect(moved?.updatedAt).toEqual(moveTime);
+
+    let conflict = false;
+    try {
+      await db.batch([
+        taskRepository.updateStatusStmt(db, {
+          id: taskId,
+          expectedVersion: 1,
+          statusId: status.id,
+          now: new Date(moveTime.getTime() + 1000),
+        }),
+        conflictGuardStmt(db),
+      ]);
+    } catch (err) {
+      conflict = isVersionConflict(err);
+    }
+    expect(conflict).toBe(true);
+  });
 });

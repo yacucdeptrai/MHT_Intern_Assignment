@@ -42,6 +42,7 @@ export interface StatusOption {
   name: string;
   category: StatusCategory;
   isDefault: boolean;
+  canSelect?: boolean;
 }
 
 export interface MemberOption {

@@ -15,11 +15,13 @@ import {
   type TaskRow,
 } from "@pm/db";
 import {
+  assertTransitionAllowed,
   canApproveTask,
   canArchiveTask,
   canAssignTask,
   canCreateTask,
   canEditTask,
+  canMoveTaskToCategory,
   canReopenTask,
   ConflictError,
   ForbiddenError,
@@ -33,6 +35,7 @@ import {
   TaskArchiveSchema,
   TaskAssignSchema,
   TaskCreateSchema,
+  TaskStatusChangeSchema,
   TaskUpdateSchema,
   toActor,
   UnauthorizedError,
@@ -42,6 +45,7 @@ import {
   type Page,
   type ProjectOption,
   type ProjectTaskFilters,
+  type SlackUpdateThreadPayload,
   type SprintOption,
   type StatusOption,
   type TaskArchiveInput,
@@ -53,11 +57,13 @@ import {
   type TaskListItem,
   type TaskPermissions,
   type TaskPolicyTarget,
+  type TaskStatusChangeInput,
   type TaskUpdateInput,
 } from "@pm/domain";
 
 import { loadProjectAccess } from "../utils/auth.server";
 import type { RequestContext } from "../utils/requestContext.server";
+import { dispatchOutbox } from "./outbox.service";
 
 export interface TaskDto extends TaskRow {
   assignees: string[];
@@ -613,6 +619,7 @@ export const taskService = {
         name: s.name,
         category: s.category,
         isDefault: s.isDefault,
+        canSelect: canMoveTaskToCategory(actor, target, s.category),
       })),
       permissions,
     };
@@ -946,5 +953,117 @@ export const taskService = {
       projectId,
       actorId: ctx.user.id,
     });
+  },
+
+  async changeStatus(
+    ctx: RequestContext,
+    projectId: string,
+    taskId: string,
+    rawInput: unknown,
+  ): Promise<TaskDetailDto> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+    const currentUser = ctx.user;
+
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const existing = await taskRepository.findDetailsById(ctx.db, taskId);
+    if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const assigneeIds = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
+    const actor = toActor(currentUser, access);
+    if (!canEditTask(actor, { createdById: existing.createdById, assigneeIds, category: "TODO" })) {
+      throw new ForbiddenError("You do not have permission to edit this task");
+    }
+    if (!canEditTask(actor, { createdById: existing.createdById, assigneeIds, category: existing.statusCategory })) {
+      throw new ForbiddenError("Reopen the task to edit it");
+    }
+
+    const parsed = TaskStatusChangeSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string") {
+          fieldErrors[field] = fieldErrors[field] ?? [];
+          fieldErrors[field].push(issue.message);
+        }
+      }
+      throw new ValidationError("Invalid status change data", fieldErrors);
+    }
+
+    const data: TaskStatusChangeInput = parsed.data;
+    const targetStatus = await taskStatusRepository.findById(ctx.db, data.statusId);
+    if (!targetStatus) {
+      throw new ValidationError("Status not found", { statusId: ["Status not found"] });
+    }
+
+    assertTransitionAllowed(existing.statusCategory, targetStatus.category, "UPDATE");
+
+    const now = ctx.clock.now();
+    const jobId = crypto.randomUUID();
+    const payload: SlackUpdateThreadPayload = {
+      taskId,
+      fromStatusId: existing.statusId,
+      toStatusId: targetStatus.id,
+      actorId: currentUser.id,
+    };
+
+    try {
+      await ctx.db.batch([
+        taskRepository.updateStatusStmt(ctx.db, {
+          id: taskId,
+          expectedVersion: data.version,
+          statusId: targetStatus.id,
+          now,
+        }),
+        conflictGuardStmt(ctx.db),
+        auditLogRepository.insertStmt(ctx.db, {
+          id: crypto.randomUUID(),
+          actorId: currentUser.id,
+          action: "TASK_STATUS_CHANGED",
+          entityType: "TASK",
+          entityId: taskId,
+          projectId,
+          changes: {
+            statusId: { from: existing.statusId, to: targetStatus.id },
+            statusName: { from: existing.statusName, to: targetStatus.name },
+          },
+          createdAt: now,
+        }),
+        outboxJobRepository.insertStmt(ctx.db, {
+          id: jobId,
+          type: "SLACK_UPDATE_THREAD",
+          payload: JSON.stringify(payload),
+          status: "PENDING",
+          attempts: 0,
+          nextAttemptAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ]);
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+      }
+      throw error;
+    }
+
+    ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
+    ctx.logger.info("Task status changed", {
+      taskId,
+      projectId,
+      fromStatusId: existing.statusId,
+      toStatusId: targetStatus.id,
+    });
+
+    const detailData = await this.getTaskDetails(ctx, projectId, taskId);
+    return detailData.task;
   },
 };

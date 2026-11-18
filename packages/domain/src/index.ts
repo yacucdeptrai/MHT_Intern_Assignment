@@ -13,6 +13,7 @@ export * from "./schemas/status";
 export * from "./schemas/task";
 export * from "./schemas/sprint";
 export * from "./dates";
+export * from "./workflow";
 export * from "./policies/types";
 export * from "./policies/user";
 export * from "./policies/project";

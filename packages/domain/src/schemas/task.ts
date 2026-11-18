@@ -176,3 +176,20 @@ export const TaskArchiveSchema = z.object({
 });
 
 export type TaskArchiveInput = z.infer<typeof TaskArchiveSchema>;
+
+export const TaskStatusChangeSchema = z.object({
+  statusId: z.string().trim().min(1, "Status is required"),
+  version: z.coerce.number().int().positive("Version must be a positive integer"),
+});
+
+export type TaskStatusChangeInput = z.infer<typeof TaskStatusChangeSchema>;
+
+export const SlackUpdateThreadPayloadSchema = z.object({
+  taskId: z.string().min(1),
+  fromStatusId: z.string().min(1),
+  toStatusId: z.string().min(1),
+  actorId: z.string().min(1),
+  reasonCommentId: z.string().min(1).optional(),
+});
+
+export type SlackUpdateThreadPayload = z.infer<typeof SlackUpdateThreadPayloadSchema>;

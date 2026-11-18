@@ -180,15 +180,18 @@ export const taskRepository = {
     db: AppDatabase,
     input: { id: string; expectedVersion: number; statusId: string; completedAt?: Date | null; now: Date },
   ) => {
+    const setValues: Record<string, unknown> = {
+      statusId: input.statusId,
+      statusChangedAt: input.now,
+      version: sql`${tasks.version} + 1`,
+      updatedAt: input.now,
+    };
+    if (input.completedAt !== undefined) {
+      setValues.completedAt = input.completedAt;
+    }
     return db
       .update(tasks)
-      .set({
-        statusId: input.statusId,
-        statusChangedAt: input.now,
-        completedAt: input.completedAt,
-        version: sql`${tasks.version} + 1`,
-        updatedAt: input.now,
-      })
+      .set(setValues)
       .where(and(eq(tasks.id, input.id), eq(tasks.version, input.expectedVersion), isNull(tasks.deletedAt)));
   },
 
