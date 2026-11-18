@@ -158,18 +158,18 @@ describe("Reports Route (_app.projects.$projectId.reports.tsx) (FR-30)", () => {
       }),
       taskStatusRepository.insertStmt(db, {
         id: statusTodoId,
-        name: "To Do",
+        name: `To Do ${Date.now()}`,
         category: "TODO",
-        position: 1,
-        isDefault: true,
+        position: 10,
+        isDefault: false,
         createdAt: now,
         updatedAt: now,
       }),
       taskStatusRepository.insertStmt(db, {
         id: statusDoneId,
-        name: "Done",
+        name: `Done ${Date.now()}`,
         category: "DONE",
-        position: 2,
+        position: 20,
         isDefault: false,
         createdAt: now,
         updatedAt: now,
@@ -274,5 +274,72 @@ describe("Reports Route (_app.projects.$projectId.reports.tsx) (FR-30)", () => {
     );
 
     await expect(reportsRouteLoader(args)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("FR-31 c1: project PM receives 200 with projectReport data on ?tab=project", async () => {
+    const db = createDatabase(env.DB);
+    const now = new Date("2026-11-19T08:00:00+07:00");
+    const pm = await createTestUser(db, "MEMBER", "pm4");
+
+    const projectId = crypto.randomUUID();
+    const statusTodoId = crypto.randomUUID();
+    const statusDoneId = crypto.randomUUID();
+
+    await db.batch([
+      projectRepository.insertStmt(db, {
+        id: projectId,
+        code: `RPT${Date.now().toString().slice(-4)}`,
+        name: "Test Project 4",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "ACTIVE",
+        createdById: pm.id,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      projectMemberRepository.insertStmt(db, {
+        projectId,
+        userId: pm.id,
+        projectRole: "PM",
+        createdAt: now,
+      }),
+      taskStatusRepository.insertStmt(db, {
+        id: statusTodoId,
+        name: `To Do ${Date.now()}`,
+        category: "TODO",
+        position: 10,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskStatusRepository.insertStmt(db, {
+        id: statusDoneId,
+        name: `Done ${Date.now()}`,
+        category: "DONE",
+        position: 20,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const ctx: RequestContext = {
+      env,
+      db,
+      user: pm,
+      requestId: "test-req",
+      logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+      waitUntil: () => {},
+      clock: { now: () => now },
+    };
+
+    const args = await makeLoaderArgs(ctx, `http://localhost/projects/${projectId}/reports?tab=project`, pm, projectId);
+
+    const data = await reportsRouteLoader(args);
+    expect(data.tab).toBe("project");
+    expect(data.projectReport).toBeDefined();
+    expect(data.projectReport?.completionRate).toBe(0);
+    expect(data.projectReport?.bottlenecks).toBeDefined();
+    expect(data.projectReport?.sprintCompletion).toBeDefined();
   });
 });

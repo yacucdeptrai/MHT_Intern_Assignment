@@ -7,6 +7,7 @@ import {
   type MemberReportFilters,
   type MemberReportRow,
   type ProjectPermissions,
+  type ProjectReportDto,
 } from "@pm/domain";
 
 import { sprintService } from "../services/project/sprint.service";
@@ -17,7 +18,7 @@ import type { RequestContext } from "../utils/requestContext.server";
 export interface ProjectReportsLoaderData {
   tab: "members" | "project";
   memberReport?: MemberReportRow[];
-  projectReport?: unknown;
+  projectReport?: ProjectReportDto;
   sprints: Array<{ id: string; name: string }>;
   filters: MemberReportFilters;
   permissions: ProjectPermissions;
@@ -77,13 +78,17 @@ export async function projectReportsLoader(
     const filters = parsed.success ? parsed.data : {};
 
     let memberReport: MemberReportRow[] | undefined;
+    let projectReport: ProjectReportDto | undefined;
     if (activeTab === "members") {
       memberReport = await reportService.getMemberReport(ctx, projectId, filters);
+    } else {
+      projectReport = await reportService.getProjectReport(ctx, projectId);
     }
 
     return {
       tab: activeTab,
       memberReport,
+      projectReport,
       sprints,
       filters,
       permissions,
