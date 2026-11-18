@@ -14,4 +14,5 @@ export * from "./repositories/taskAssignee.repository";
 export * from "./repositories/sprint.repository";
 export * from "./repositories/comment.repository";
 export * from "./repositories/attachment.repository";
+export * from "./repositories/reminderLog.repository";
 export * from "./schema";

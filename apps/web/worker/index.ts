@@ -2,6 +2,7 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 
 import { authService } from "../app/services/auth/auth.service";
 import { sweepOutbox } from "../app/services/outbox.service";
+import { runDeadlineScan } from "../app/services/reminder.service";
 import { taskStatusService } from "../app/services/taskStatus.service";
 import { createRequestContext, requestContextKey } from "../app/utils/requestContext.server";
 
@@ -15,7 +16,7 @@ export function scheduledHandler(controller: ScheduledController, env: Env, ctx:
     (async () => {
       if (now.getUTCMinutes() === 0) {
         // Hourly tasks run first, in sequence:
-        // M7-T4: await runDeadlineScan(env, now);
+        await runDeadlineScan(env, now);
         // M7-T5: await sweepOrphanFiles(env, now);
         // M7-T5: await cleanupExpiredInvites(env, now);
       }

@@ -4,12 +4,14 @@ import {
   inviteRepository,
   outboxJobRepository,
   projectRepository,
+  taskAssigneeRepository,
   taskRepository,
   taskStatusRepository,
   userRepository,
   type OutboxJob,
 } from "@pm/db";
 import {
+  EmailDeadlineReminderPayloadSchema,
   EmailInvitePayloadSchema,
   OUTBOX_BACKOFF_BASE_MS,
   OUTBOX_MAX_ATTEMPTS,
@@ -17,6 +19,7 @@ import {
   SlackPostTaskPayloadSchema,
   SlackUpdateThreadPayloadSchema,
   type OutboxJobType,
+  type ReminderKind,
 } from "@pm/domain";
 
 import { unsealInviteToken } from "../utils/crypto.server";
@@ -38,10 +41,33 @@ export interface SweepResult {
   skipped: number;
 }
 
+const defaultLogger = createLogger("email-sender");
+
+export interface DeadlineReminderEmailInput {
+  to: string;
+  subject: string;
+  kind: ReminderKind;
+  taskTitle: string;
+  dueDate: string;
+  taskUrl: string;
+  idempotencyKey?: string;
+}
+
 export const ConsoleEmailSender = {
   sendInvite: (_to: string, _inviteUrl: string, _projectName?: string): void => {
     // Mock email sender: records in logger / console
     // Never reveals sensitive tokens in external logs
+  },
+  sendDeadlineReminder: (input: DeadlineReminderEmailInput): void => {
+    defaultLogger.info("Email sent (console)", {
+      to: input.to,
+      subject: input.subject,
+      kind: input.kind,
+      taskTitle: input.taskTitle,
+      dueDate: input.dueDate,
+      taskUrl: input.taskUrl,
+      idempotencyKey: input.idempotencyKey,
+    });
   },
 };
 
@@ -242,11 +268,67 @@ async function handleSlackUpdateThread(ctx: JobContext, job: OutboxJob): Promise
   return "DONE";
 }
 
+async function handleDeadlineEmail(ctx: JobContext, job: OutboxJob): Promise<"DONE" | "SKIPPED"> {
+  const parsed = EmailDeadlineReminderPayloadSchema.safeParse(JSON.parse(job.payload));
+  if (!parsed.success) {
+    return "SKIPPED";
+  }
+
+  const { taskId, userId, kind, dueDate } = parsed.data;
+
+  const task = await taskRepository.findById(ctx.db, taskId);
+  if (!task || task.deletedAt !== null) {
+    return "SKIPPED";
+  }
+
+  const status = await taskStatusRepository.findById(ctx.db, task.statusId);
+  if (!status || status.category === "DONE") {
+    return "SKIPPED";
+  }
+
+  const user = await userRepository.findById(ctx.db, userId);
+  if (!user || user.deletedAt !== null || user.status !== "ACTIVE" || !user.email) {
+    return "SKIPPED";
+  }
+
+  const assignees = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, task.id);
+  if (!assignees.includes(user.id)) {
+    return "SKIPPED";
+  }
+
+  const subject =
+    kind === "OVERDUE" ? `[Overdue] Task is overdue: ${task.title}` : `[Reminder] Task due soon: ${task.title}`;
+
+  const taskUrl = `${ctx.env.APP_BASE_URL.replace(/\/+$/, "")}/projects/${task.projectId}/tasks/${task.id}`;
+
+  ConsoleEmailSender.sendDeadlineReminder({
+    to: user.email,
+    subject,
+    kind,
+    taskTitle: task.title,
+    dueDate,
+    taskUrl,
+    idempotencyKey: job.id,
+  });
+
+  ctx.logger.info("Email sent (console)", {
+    to: user.email,
+    subject,
+    kind,
+    taskTitle: task.title,
+    taskId: task.id,
+    userId: user.id,
+    idempotencyKey: job.id,
+  });
+
+  return "DONE";
+}
+
 export const jobHandlers: Record<OutboxJobType, JobHandler> = {
   EMAIL_INVITE: handleInviteEmail,
   SLACK_POST_TASK: handleSlackPostTask,
   SLACK_UPDATE_THREAD: handleSlackUpdateThread,
-  EMAIL_DEADLINE_REMINDER: () => Promise.resolve("SKIPPED"),
+  EMAIL_DEADLINE_REMINDER: handleDeadlineEmail,
 };
 
 export async function processJob(
