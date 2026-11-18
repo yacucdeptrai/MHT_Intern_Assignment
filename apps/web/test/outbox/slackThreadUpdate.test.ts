@@ -203,7 +203,7 @@ describe("SLACK_UPDATE_THREAD outbox handler (FR-28)", () => {
     expect(body.text).toBe("Status: To Do → In Progress by Alex Engineer");
   });
 
-  it("FR-28 c1: appends reason when reasonCommentId is provided", async () => {
+  it("FR-28 c1: posts exactly 'Status: <old> → <new> by <user>' and never the reject/reopen reason", async () => {
     const now = new Date("2026-11-18T10:00:00Z");
     const { user, project, todoStatusId, inProgressStatusId } = await ensureUserAndProject("C_THREAD_CHAN");
 
@@ -269,9 +269,60 @@ describe("SLACK_UPDATE_THREAD outbox handler (FR-28)", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(options.body as string) as { channel: string; thread_ts: string; text: string };
-    expect(body.text).toBe(
-      "Status: To Do → In Progress by Alex Engineer\nReason: Missing unit test coverage for edge case",
-    );
+    // Product decision (2026-11-19): the reason stays inside the project; Slack gets only FR-28 c1 text.
+    expect(body.text).toBe("Status: To Do → In Progress by Alex Engineer");
+    expect(body.text).not.toContain("Missing unit test coverage");
+  });
+
+  it("FR-28 c1 / security: escapes &, <, > in the actor name so it cannot ping a channel", async () => {
+    const now = new Date("2026-11-18T10:00:00Z");
+    const { user, project, todoStatusId, inProgressStatusId } = await ensureUserAndProject("C_THREAD_CHAN");
+    const mallory = crypto.randomUUID();
+    await userRepository.insert(db, {
+      id: mallory,
+      email: `mallory-${mallory}@example.com`,
+      fullName: "<!here> & <https://evil.example|Mallory>",
+      systemRole: "MEMBER",
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const taskId = crypto.randomUUID();
+    await createTask({
+      id: taskId,
+      projectId: project.id,
+      statusId: inProgressStatusId,
+      title: "Escaped Task",
+      createdById: user,
+      slackThreadTs: "1731930000.000999",
+      now,
+    });
+
+    const jobId = crypto.randomUUID();
+    await outboxJobRepository.insert(db, {
+      id: jobId,
+      type: "SLACK_UPDATE_THREAD",
+      payload: JSON.stringify({ taskId, fromStatusId: todoStatusId, toStatusId: inProgressStatusId, actorId: mallory }),
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ ok: true, ts: "1731930000.001000" }),
+    } as Response);
+
+    const outcome = await processJob(createTestContext(now, { ...env, SLACK_BOT_TOKEN: "xoxb-mock-token" }), jobId);
+    expect(outcome).toBe("DONE");
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(options.body as string) as { text: string };
+    expect(body.text).toBe("Status: To Do → In Progress by &lt;!here&gt; &amp; &lt;https://evil.example|Mallory&gt;");
+    expect(body.text).not.toContain("<!here>");
   });
 
   it("FR-28 c2: ordering after post: throws retryable error if slack_thread_ts is null and post job is PENDING", async () => {

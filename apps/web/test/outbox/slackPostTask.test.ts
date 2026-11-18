@@ -181,6 +181,45 @@ describe("SLACK_POST_TASK outbox handler (FR-27)", () => {
     expect(updatedTask?.slackThreadTs).toBe("1731930000.000100");
   });
 
+  it("FR-27 c1 / security: escapes &, <, > in the task title so it cannot ping a channel or inject a link", async () => {
+    const now = new Date("2026-11-18T10:00:00Z");
+    const { user, project, statusId } = await ensureUserAndProject("C_MAIN_CHAN");
+    const taskId = crypto.randomUUID();
+    await createTask({
+      id: taskId,
+      projectId: project.id,
+      statusId,
+      title: "<!channel> & <https://evil.example|Open task>",
+      priority: "LOW",
+      createdById: user,
+      now,
+    });
+    const jobId = crypto.randomUUID();
+    await outboxJobRepository.insert(db, {
+      id: jobId,
+      type: "SLACK_POST_TASK",
+      payload: JSON.stringify({ taskId }),
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ ok: true, ts: "1731930000.000200" }),
+    } as Response);
+
+    const outcome = await processJob(createTestContext(now, { ...env, SLACK_BOT_TOKEN: "xoxb-mock-token" }), jobId);
+    expect(outcome).toBe("DONE");
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(options.body as string) as { text: string };
+    expect(body.text).toContain("&lt;!channel&gt; &amp; &lt;https://evil.example|Open task&gt;");
+    expect(body.text).not.toContain("<!channel>");
+    expect(body.text).not.toContain("<https://evil.example");
+  });
+
   it("FR-27 c1: formats Due: none when dueDate is not set", async () => {
     const now = new Date("2026-11-18T10:00:00Z");
     const { user, project, statusId } = await ensureUserAndProject("C_MAIN_CHAN");
@@ -304,7 +343,7 @@ describe("SLACK_POST_TASK outbox handler (FR-27)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("FR-27 c3: marks SKIPPED without calling fetch for sub-tasks", async () => {
+  it("FR-27 / sub-tasks: marks SKIPPED without calling fetch for sub-tasks", async () => {
     const now = new Date("2026-11-18T10:00:00Z");
     const { user, project, statusId } = await ensureUserAndProject("C_MAIN_CHAN");
 

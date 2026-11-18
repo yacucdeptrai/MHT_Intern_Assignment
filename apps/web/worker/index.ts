@@ -1,9 +1,7 @@
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
 import { authService } from "../app/services/auth/auth.service";
-import { cleanupExpiredInvites, sweepOrphanFiles } from "../app/services/cleanup.service";
-import { sweepOutbox } from "../app/services/outbox.service";
-import { runDeadlineScan } from "../app/services/reminder.service";
+import { runScheduledTick } from "../app/services/scheduled.service";
 import { taskStatusService } from "../app/services/taskStatus.service";
 import { createRequestContext, requestContextKey } from "../app/utils/requestContext.server";
 
@@ -13,17 +11,8 @@ const requestHandler = createRequestHandler(() => import("virtual:react-router/s
 
 export function scheduledHandler(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
   const now = new Date(controller.scheduledTime);
-  ctx.waitUntil(
-    (async () => {
-      if (now.getUTCMinutes() === 0) {
-        // Hourly tasks run first, in sequence:
-        await runDeadlineScan(env, now);
-        await sweepOrphanFiles(env, now);
-        await cleanupExpiredInvites(env, now);
-      }
-      await sweepOutbox(env, now);
-    })(),
-  );
+  // Hourly steps first, then the outbox sweep; each step is isolated (scheduled.service.ts).
+  ctx.waitUntil(runScheduledTick(env, now));
 }
 
 export default {

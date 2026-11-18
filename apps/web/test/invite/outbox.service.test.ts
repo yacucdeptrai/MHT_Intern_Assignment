@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createDatabase, inviteRepository, outboxJobRepository, userRepository } from "@pm/db";
 import { OUTBOX_MAX_ATTEMPTS } from "@pm/domain";
@@ -84,9 +84,8 @@ describe("outbox.service", () => {
 
     let sentTo = "";
     let sentUrl = "";
-    const origSend = (...args: Parameters<typeof ConsoleEmailSender.sendInvite>) => {
-      ConsoleEmailSender.sendInvite(...args);
-    };
+    // Save the real function: a wrapper calling ConsoleEmailSender.sendInvite would recurse forever after restore.
+    const origSend = ConsoleEmailSender.sendInvite;
     ConsoleEmailSender.sendInvite = (to, url) => {
       sentTo = to;
       sentUrl = url;
@@ -105,6 +104,71 @@ describe("outbox.service", () => {
     } finally {
       ConsoleEmailSender.sendInvite = origSend;
     }
+  });
+
+  async function queueInviteJob(now: Date) {
+    const adminId = await ensureAdminUser();
+    const inviteId = crypto.randomUUID();
+    const rawToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    await inviteRepository.insert(db, {
+      id: inviteId,
+      email: `redact-${inviteId}@example.com`,
+      tokenHash: `hash-${inviteId}`,
+      userId: null,
+      projectId: null,
+      projectRole: null,
+      invitedById: adminId,
+      expiresAt: new Date(now.getTime() + 86400000),
+      createdAt: now,
+    });
+    const jobId = crypto.randomUUID();
+    await outboxJobRepository.insert(db, {
+      id: jobId,
+      type: "EMAIL_INVITE",
+      payload: JSON.stringify({ inviteId, sealedToken: await sealInviteToken(rawToken, env.SESSION_SECRET) }),
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { jobId, rawToken };
+  }
+
+  it("FR-37 c4 / security: outside local, the invite email is sent through the EmailSender port with the link redacted in logs", async () => {
+    const now = new Date();
+    const { jobId, rawToken } = await queueInviteJob(now);
+    const sent: { url: string; redactLink: boolean | undefined }[] = [];
+    const ctx: JobContext = {
+      ...createTestContext(now),
+      env: { ...env, APP_ENV: "production" },
+      emailSender: {
+        sendInvite: (_to, url, _project, options) => {
+          sent.push({ url, redactLink: options?.redactLink });
+        },
+        sendDeadlineReminder: () => {},
+      },
+    };
+
+    expect(await processJob(ctx, jobId)).toBe("DONE");
+    // The real link still reaches the sender (a real provider must deliver it)...
+    expect(sent).toEqual([{ url: expect.stringContaining(`/invite/${rawToken}`) as string, redactLink: true }]);
+  });
+
+  it("FR-37 c4: the console sender logs the rendered invite with only the token's last 4 characters", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join(
+      "",
+    );
+    await ConsoleEmailSender.sendInvite("someone@example.com", `https://pm.example.com/invite/${token}`, undefined, {
+      redactLink: true,
+    });
+    const logged = logSpy.mock.calls.map(([line]) => String(line)).join(" ");
+    logSpy.mockRestore();
+    expect(logged).toContain(`Set your password: https://pm.example.com/invite/…${token.slice(-4)}`);
+    expect(logged).not.toContain(token);
   });
 
   it("skips expired or already accepted invites", async () => {

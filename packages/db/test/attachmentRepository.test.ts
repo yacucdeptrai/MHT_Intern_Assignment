@@ -319,4 +319,29 @@ describe("attachmentRepository & attachments schema (docs/03 §attachments, FR-1
         })
         .catch(reject);
     }));
+  it("findExistingStorageKeys handles more keys than D1's 100 bound-parameter limit", async () => {
+    const { db, user, taskId, now } = await setupTask();
+    const realKeys = [crypto.randomUUID(), crypto.randomUUID()].map((id) => `projects/p1/tasks/${taskId}/${id}`);
+    await db.batch(
+      realKeys.map((storageKey, index) =>
+        attachmentRepository.insertStmt(db, {
+          id: storageKey.split("/").pop() ?? crypto.randomUUID(),
+          taskId,
+          uploadedById: user.id,
+          fileName: `file-${index}.pdf`,
+          contentType: "application/pdf",
+          sizeBytes: 10,
+          storageKey,
+          createdAt: now,
+        }),
+      ) as [ReturnType<typeof attachmentRepository.insertStmt>],
+    );
+
+    // 250 keys: well past the 100-parameter cap, with the two real keys at the start and the end.
+    const unknownKeys = Array.from({ length: 248 }, () => `projects/p1/tasks/${taskId}/${crypto.randomUUID()}`);
+    const keys = [realKeys[0] ?? "", ...unknownKeys, realKeys[1] ?? ""];
+
+    const found = await attachmentRepository.findExistingStorageKeys(db, keys);
+    expect([...found].sort()).toEqual([...realKeys].sort());
+  });
 });
