@@ -900,4 +900,49 @@ describe("taskRepository", () => {
     }
     expect(conflict).toBe(true);
   });
+
+  it("FR-22 c1 / A18: updateStatusStmt sets completedAt and statusChangedAt on approval", async () => {
+    const { db, user, projectA, status, now } = await createBaseFixtures();
+    const doneStatus = await taskStatusRepository.insert(db, {
+      id: crypto.randomUUID(),
+      name: `Done-${crypto.randomUUID()}`,
+      category: "DONE",
+      position: 4,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const taskId = crypto.randomUUID();
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: projectA.id,
+        statusId: status.id,
+        title: "Approve Repo Task",
+        createdById: user.id,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const approveTime = new Date(now.getTime() + 20_000);
+    await db.batch([
+      taskRepository.updateStatusStmt(db, {
+        id: taskId,
+        expectedVersion: 1,
+        statusId: doneStatus.id,
+        completedAt: approveTime,
+        now: approveTime,
+      }),
+      conflictGuardStmt(db),
+    ]);
+
+    const approved = await taskRepository.findById(db, taskId);
+    expect(approved?.statusId).toBe(doneStatus.id);
+    expect(approved?.statusChangedAt).toEqual(approveTime);
+    expect(approved?.completedAt).toEqual(approveTime);
+    expect(approved?.version).toBe(2);
+  });
 });

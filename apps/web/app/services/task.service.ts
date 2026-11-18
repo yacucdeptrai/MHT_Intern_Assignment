@@ -29,9 +29,11 @@ import {
   isDueSoon,
   isOverdue,
   isTodayPriority,
+  isTransitionAllowed,
   MyTaskFiltersSchema,
   NotFoundError,
   ProjectTaskFiltersSchema,
+  TaskApproveSchema,
   TaskArchiveSchema,
   TaskAssignSchema,
   TaskCreateSchema,
@@ -48,6 +50,7 @@ import {
   type SlackUpdateThreadPayload,
   type SprintOption,
   type StatusOption,
+  type TaskApproveInput,
   type TaskArchiveInput,
   type TaskAssigneeInfo,
   type TaskAssignInput,
@@ -546,8 +549,8 @@ export const taskService = {
       canEdit: canEditTask(actor, target),
       canArchive: canArchiveTask(actor, target),
       canAssign: canAssignTask(actor),
-      canApprove: canApproveTask(actor),
-      canReopen: canReopenTask(actor),
+      canApprove: canApproveTask(actor) && isTransitionAllowed(target.category, "DONE", "APPROVE"),
+      canReopen: canReopenTask(actor) && isTransitionAllowed(target.category, "IN_PROGRESS", "REOPEN"),
     };
 
     const task: TaskDetailDto = {
@@ -1062,6 +1065,130 @@ export const taskService = {
       fromStatusId: existing.statusId,
       toStatusId: targetStatus.id,
     });
+
+    const detailData = await this.getTaskDetails(ctx, projectId, taskId);
+    return detailData.task;
+  },
+
+  async approveTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+    const currentUser = ctx.user;
+
+    const access = await loadProjectAccess(ctx, projectId);
+    if (access.isArchived) {
+      throw new ForbiddenError("This project is archived");
+    }
+
+    const existing = await taskRepository.findDetailsById(ctx.db, taskId);
+    if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const actor = toActor(currentUser, access);
+    if (!canApproveTask(actor)) {
+      throw new ForbiddenError("You cannot approve this task");
+    }
+
+    const parsed = TaskApproveSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string") {
+          fieldErrors[field] = fieldErrors[field] ?? [];
+          fieldErrors[field].push(issue.message);
+        }
+      }
+      throw new ValidationError("Invalid approval data", fieldErrors);
+    }
+    const data: TaskApproveInput = parsed.data;
+
+    let doneStatus = await taskStatusRepository.findDefaultByCategory(ctx.db, "DONE");
+    if (!doneStatus) {
+      const statuses = await taskStatusRepository.list(ctx.db);
+      doneStatus = statuses.find((s) => s.category === "DONE") ?? null;
+    }
+    if (!doneStatus) {
+      throw new Error("No default DONE status found");
+    }
+
+    assertTransitionAllowed(existing.statusCategory, doneStatus.category, "APPROVE");
+
+    const assigneeIds = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
+    const now = ctx.clock.now();
+    const notifications = assigneeIds
+      .filter((userId) => userId !== currentUser.id)
+      .map((userId) => ({
+        id: crypto.randomUUID(),
+        userId,
+        type: "TASK_APPROVED" as const,
+        entityId: taskId,
+        projectId,
+        payload: {
+          title: existing.title,
+          actorName: currentUser.fullName,
+        },
+        readAt: null,
+        createdAt: now,
+      }));
+
+    const jobId = crypto.randomUUID();
+    const payload: SlackUpdateThreadPayload = {
+      taskId,
+      fromStatusId: existing.statusId,
+      toStatusId: doneStatus.id,
+      actorId: currentUser.id,
+    };
+
+    try {
+      await ctx.db.batch(
+        compactBatch([
+          taskRepository.updateStatusStmt(ctx.db, {
+            id: taskId,
+            expectedVersion: data.version,
+            statusId: doneStatus.id,
+            completedAt: now,
+            now,
+          }),
+          conflictGuardStmt(ctx.db),
+          auditLogRepository.insertStmt(ctx.db, {
+            id: crypto.randomUUID(),
+            actorId: currentUser.id,
+            action: "TASK_APPROVED",
+            entityType: "TASK",
+            entityId: taskId,
+            projectId,
+            changes: {
+              statusId: { from: existing.statusId, to: doneStatus.id },
+              statusName: { from: existing.statusName, to: doneStatus.name },
+            },
+            createdAt: now,
+          }),
+          notificationRepository.insertManyStmt(ctx.db, notifications),
+          outboxJobRepository.insertStmt(ctx.db, {
+            id: jobId,
+            type: "SLACK_UPDATE_THREAD",
+            payload: JSON.stringify(payload),
+            status: "PENDING",
+            attempts: 0,
+            nextAttemptAt: now,
+            createdAt: now,
+            updatedAt: now,
+          }),
+        ]),
+      );
+    } catch (error) {
+      if (isVersionConflict(error)) {
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+      }
+      throw error;
+    }
+
+    ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
+    // TODO(M6-T2): publishNotifications after commit
+    ctx.logger.info("Task approved", { taskId, projectId });
 
     const detailData = await this.getTaskDetails(ctx, projectId, taskId);
     return detailData.task;

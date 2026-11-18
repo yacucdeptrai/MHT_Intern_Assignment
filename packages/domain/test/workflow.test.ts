@@ -7,6 +7,7 @@ import {
   ForbiddenError,
   isTransitionAllowed,
   SlackUpdateThreadPayloadSchema,
+  TaskApproveSchema,
   TaskStatusChangeSchema,
   ValidationError,
 } from "../src";
@@ -234,5 +235,14 @@ describe("TaskStatusChangeSchema & SlackUpdateThreadPayloadSchema", () => {
       actorId: "u-1",
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("FR-22 c1: TaskApproveSchema parses positive integer version and rejects invalid versions", () => {
+    expect(TaskApproveSchema.safeParse({ version: "2" })).toEqual({
+      success: true,
+      data: { version: 2 },
+    });
+    expect(TaskApproveSchema.safeParse({ version: "0" }).success).toBe(false);
+    expect(TaskApproveSchema.safeParse({}).success).toBe(false);
   });
 });

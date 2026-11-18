@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 
-import { TaskStatusChangeSchema } from "@pm/domain";
+import { TaskApproveSchema, TaskStatusChangeSchema } from "@pm/domain";
 
 import { taskService } from "../services/task.service";
 import { requireUser } from "../utils/auth.server";
@@ -27,7 +27,19 @@ export async function taskDetailAction(
     }
 
     if (intent === "assign") {
-      const task = await taskService.assignTask(ctx, projectId, taskId, rawData);
+      const rawEntries = formData
+        .getAll("assigneeIds")
+        .filter((x): x is string => typeof x === "string")
+        .flatMap((s) =>
+          s
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean),
+        );
+      const task = await taskService.assignTask(ctx, projectId, taskId, {
+        ...rawData,
+        assigneeIds: rawEntries,
+      });
       return Response.json({ success: true, task }, { status: 200 });
     }
 
@@ -66,7 +78,28 @@ export async function taskDetailAction(
       return Response.json({ success: true, task }, { status: 200 });
     }
 
-    // TODO(M4-T2): approve intent (A18)
+    if (intent === "approve") {
+      const parsed = TaskApproveSchema.safeParse(rawData);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        let firstMessage: string | undefined;
+        for (const issue of parsed.error.issues) {
+          firstMessage ??= issue.message;
+          const field = issue.path[0];
+          if (typeof field === "string") {
+            fieldErrors[field] = fieldErrors[field] ?? [];
+            fieldErrors[field].push(issue.message);
+          }
+        }
+        return Response.json(
+          { success: false, errors: fieldErrors, message: firstMessage ?? "Invalid approval request", values: rawData },
+          { status: 400 },
+        );
+      }
+      const task = await taskService.approveTask(ctx, projectId, taskId, parsed.data);
+      return Response.json({ success: true, task }, { status: 200 });
+    }
+
     // TODO(M4-T3): reject and reopen intents (A19)
     // TODO(M5-T1): comment and deleteComment intents (A21, A22)
     // TODO(M5-T2): deleteAttachment intent (A24)

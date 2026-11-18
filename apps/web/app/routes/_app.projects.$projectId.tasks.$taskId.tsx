@@ -192,6 +192,21 @@ export default function TaskDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {permissions.canApprove ? (
+            <Form method="post">
+              <input type="hidden" name="intent" value="approve" />
+              <input type="hidden" name="version" value={task.version} />
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+                data-testid="approve-task-button"
+              >
+                Approve Task
+              </button>
+            </Form>
+          ) : null}
+
           {task.statusCategory === "DONE" ? (
             <span
               className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600"

@@ -502,6 +502,55 @@ describe("taskDetailAction", () => {
       expect(data.task.assignees.map((a) => a.id)).toEqual([memberUser.id]);
     });
 
+    it("FR-15 c1: assigns multiple members when formData contains multiple assigneeIds entries", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { user: memberOne } = await createTestContext("MEMBER");
+      const { user: memberTwo } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberOne.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberTwo.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, {
+        title: "Multi-assignee form test",
+      });
+
+      const formData = new FormData();
+      formData.append("intent", "assign");
+      formData.append("version", "1");
+      formData.append("assigneeIds", memberOne.id);
+      formData.append("assigneeIds", memberTwo.id);
+
+      const req = new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+        method: "POST",
+        headers: { Cookie: pmCookie },
+        body: formData,
+      });
+
+      const res = await taskDetailAction(pmCtx, projectId, task.id, req);
+      expect(res.status).toBe(200);
+      const data = await res.json<{ success: boolean; task: { assignees: { id: string }[] } }>();
+      expect(data.task.assignees.map((a) => a.id).sort()).toEqual([memberOne.id, memberTwo.id].sort());
+    });
+
     it("FR-15 c2: non-member assignee returns 400 with 'Assignees must be project members'", async () => {
       const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
       const { user: nonMemberUser } = await createTestContext("MEMBER");
@@ -940,6 +989,158 @@ describe("taskDetailAction", () => {
         }),
       );
       expect(forbiddenRes.status).toBe(403);
+    });
+  });
+
+  describe("taskDetailAction approve intent (FR-22 / A18)", () => {
+    async function ensureDefaultStatus(db: RequestContext["db"], category: "REVIEW" | "DONE", pos: number) {
+      const existing = await taskStatusRepository.findDefaultByCategory(db, category);
+      if (existing) return existing;
+      return taskStatusRepository.insert(db, {
+        id: crypto.randomUUID(),
+        name: `${category} ${crypto.randomUUID().slice(0, 6)}`,
+        category,
+        position: pos,
+        isDefault: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    it("FR-22 c1, c4: lead (including when also an assignee) approves REVIEW task via action, returning 200 with DONE task", async () => {
+      const { ctx: leadCtx, user: leadUser, cookie: leadCookie } = await createTestContext("TEAM_LEAD");
+      const { projectId } = await createProject(leadCtx);
+      const reviewStatus = await ensureDefaultStatus(leadCtx.db, "REVIEW", 3);
+      const doneStatus = await ensureDefaultStatus(leadCtx.db, "DONE", 4);
+
+      await leadCtx.db.batch([
+        projectMemberRepository.insertStmt(leadCtx.db, {
+          projectId,
+          userId: leadUser.id,
+          projectRole: "TEAM_LEAD",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(leadCtx, projectId, {
+        title: "Action Approve Task",
+        assigneeIds: [leadUser.id],
+      });
+      await taskService.changeStatus(leadCtx, projectId, task.id, {
+        statusId: reviewStatus.id,
+        version: 1,
+      });
+
+      const form = new FormData();
+      form.append("intent", "approve");
+      form.append("version", "2");
+
+      const res = await taskDetailAction(
+        leadCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: leadCookie },
+          body: form,
+        }),
+      );
+
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        success: boolean;
+        task: { statusId: string; statusCategory: string; completedAt: number | null; version: number };
+      }>();
+      expect(body.success).toBe(true);
+      expect(body.task.statusId).toBe(doneStatus.id);
+      expect(body.task.statusCategory).toBe("DONE");
+      expect(body.task.completedAt).not.toBeNull();
+      expect(body.task.version).toBe(3);
+    });
+
+    it("FR-22 c2, c3: returns 400 when approving non-REVIEW task, 403 for MEMBER, 400 on bad version, and 404 for non-member", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { ctx: nonMemberCtx, cookie: nonMemberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+      await ensureDefaultStatus(pmCtx.db, "DONE", 4);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Todo Task Cannot Approve" });
+
+      // Lead approving TODO task -> 400 "Only tasks in review can be approved"
+      const form = new FormData();
+      form.append("intent", "approve");
+      form.append("version", "1");
+      const notReviewRes = await taskDetailAction(
+        pmCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: pmCookie },
+          body: form,
+        }),
+      );
+      expect(notReviewRes.status).toBe(400);
+      const notReviewJson = await notReviewRes.json<{ message: string }>();
+      expect(notReviewJson.message).toBe("Only tasks in review can be approved");
+
+      // Member approving -> 403
+      const memberRes = await taskDetailAction(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: memberCookie },
+          body: form,
+        }),
+      );
+      expect(memberRes.status).toBe(403);
+
+      // Invalid version -> 400
+      const badForm = new FormData();
+      badForm.append("intent", "approve");
+      badForm.append("version", "0");
+      const badRes = await taskDetailAction(
+        pmCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: pmCookie },
+          body: badForm,
+        }),
+      );
+      expect(badRes.status).toBe(400);
+
+      // Non-member -> 404
+      const nonMemberRes = await taskDetailAction(
+        nonMemberCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: nonMemberCookie },
+          body: form,
+        }),
+      );
+      expect(nonMemberRes.status).toBe(404);
     });
   });
 });

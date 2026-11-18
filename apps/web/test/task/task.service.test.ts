@@ -1914,3 +1914,316 @@ describe("taskService.changeStatus (FR-21 / A16)", () => {
     expect(waitUntilCalled).toBe(false);
   });
 });
+
+describe("taskService.approveTask (FR-22 / A18)", () => {
+  async function seedApproveStatuses(ctx: RequestContext) {
+    const now = new Date();
+    const ensureDefault = async (category: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE", name: string, pos: number) => {
+      const existing = await taskStatusRepository.findDefaultByCategory(ctx.db, category);
+      if (existing) return existing;
+      return taskStatusRepository.insert(ctx.db, {
+        id: crypto.randomUUID(),
+        name: `${name} ${crypto.randomUUID().slice(0, 6)}`,
+        category,
+        position: pos,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    };
+
+    const todo = await ensureDefault("TODO", "To Do", 1);
+    const inProgress = await ensureDefault("IN_PROGRESS", "In Progress", 2);
+    const review = await ensureDefault("REVIEW", "Review", 3);
+    const done = await ensureDefault("DONE", "Done", 4);
+    return { todo, inProgress, review, done };
+  }
+
+  it("FR-22 c1 / A18: lead approves REVIEW task atomically to default DONE, sets status_changed_at and completed_at, audits TASK_APPROVED, notifies assignees, and queues SLACK_UPDATE_THREAD", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { user: assigneeOne } = await createTestContext("MEMBER");
+    const { user: assigneeTwo } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+    const statuses = await seedApproveStatuses(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: assigneeOne.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: assigneeTwo.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Task Ready For Approval",
+      assigneeIds: [assigneeOne.id, assigneeTwo.id],
+    });
+    await taskService.changeStatus(leadCtx, projectId, task.id, {
+      statusId: statuses.review.id,
+      version: 1,
+    });
+
+    const capturedPayloads: string[] = [];
+    const origInsertStmt = outboxJobRepository.insertStmt.bind(outboxJobRepository);
+    const spy = vi.spyOn(outboxJobRepository, "insertStmt").mockImplementationOnce((db, job) => {
+      capturedPayloads.push(job.payload);
+      return origInsertStmt(db, job);
+    });
+
+    const approveTime = new Date("2026-11-18T06:00:00Z");
+    const waitUntilPromises: Promise<unknown>[] = [];
+    leadCtx.clock = { now: () => approveTime };
+    leadCtx.waitUntil = (p) => {
+      waitUntilPromises.push(p);
+    };
+
+    const approved = await taskService.approveTask(leadCtx, projectId, task.id, { version: 2 });
+    spy.mockRestore();
+    await Promise.all(waitUntilPromises);
+
+    expect(approved.statusId).toBe(statuses.done.id);
+    expect(approved.statusCategory).toBe("DONE");
+    expect(approved.version).toBe(3);
+    expect(approved.statusChangedAt).toBe(approveTime.getTime());
+    expect(approved.completedAt).toBe(approveTime.getTime());
+
+    const audits = await auditLogRepository.listByEntity(leadCtx.db, "TASK", task.id);
+    const approveAudit = audits.find((a) => a.action === "TASK_APPROVED");
+    expect(approveAudit).toBeDefined();
+    expect(approveAudit?.actorId).toBe(leadUser.id);
+    expect(approveAudit?.changes).toMatchObject({
+      statusId: { from: statuses.review.id, to: statuses.done.id },
+    });
+
+    const n1 = await notificationRepository.listByUser(leadCtx.db, assigneeOne.id);
+    const n2 = await notificationRepository.listByUser(leadCtx.db, assigneeTwo.id);
+    expect(n1.some((n) => n.type === "TASK_APPROVED" && n.entityId === task.id)).toBe(true);
+    expect(n2.some((n) => n.type === "TASK_APPROVED" && n.entityId === task.id)).toBe(true);
+    const approvedNotification = n1.find((n) => n.type === "TASK_APPROVED");
+    expect(approvedNotification?.payload).toEqual({
+      title: "Task Ready For Approval",
+      actorName: "Test TEAM_LEAD",
+    });
+
+    expect(capturedPayloads).toHaveLength(1);
+    expect(JSON.parse(capturedPayloads[0] ?? "{}")).toEqual({
+      taskId: task.id,
+      fromStatusId: statuses.review.id,
+      toStatusId: statuses.done.id,
+      actorId: leadUser.id,
+    });
+    expect(waitUntilPromises.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("FR-22 c2: rejects approving a task in TODO, IN_PROGRESS, or DONE with 400 'Only tasks in review can be approved'", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedApproveStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, { title: "Not In Review Yet" });
+
+    // In TODO
+    await expect(taskService.approveTask(pmCtx, projectId, task.id, { version: 1 })).rejects.toMatchObject({
+      status: 400,
+      message: "Only tasks in review can be approved",
+    });
+
+    // In IN_PROGRESS
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.inProgress.id, version: 1 });
+    await expect(taskService.approveTask(pmCtx, projectId, task.id, { version: 2 })).rejects.toMatchObject({
+      status: 400,
+      message: "Only tasks in review can be approved",
+    });
+
+    // Move to REVIEW, approve once -> DONE, then second approve -> 400
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.review.id, version: 2 });
+    await taskService.approveTask(pmCtx, projectId, task.id, { version: 3 });
+    await expect(taskService.approveTask(pmCtx, projectId, task.id, { version: 4 })).rejects.toMatchObject({
+      status: 400,
+      message: "Only tasks in review can be approved",
+    });
+  });
+
+  it("FR-22 c3: rejects project MEMBER posting approve with 403 (even before state check)", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { ctx: memberCtx, user: memberUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedApproveStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: memberUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(memberCtx, projectId, { title: "Member Created Task" });
+    // Even on TODO, policy runs first -> 403 (docs/05 §5.1)
+    await expect(taskService.approveTask(memberCtx, projectId, task.id, { version: 1 })).rejects.toMatchObject({
+      status: 403,
+    });
+
+    await taskService.changeStatus(memberCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+    await expect(taskService.approveTask(memberCtx, projectId, task.id, { version: 2 })).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it("FR-22 c4 / docs/04 §3.2: allows approver who is the sole assignee to approve, writing zero notification rows", async () => {
+    const { ctx: leadCtx, user: leadUser } = await createTestContext("TEAM_LEAD");
+    const { projectId } = await createProjectWithMembers(leadCtx);
+    const statuses = await seedApproveStatuses(leadCtx);
+
+    await leadCtx.db.batch([
+      projectMemberRepository.insertStmt(leadCtx.db, {
+        projectId,
+        userId: leadUser.id,
+        projectRole: "TEAM_LEAD",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(leadCtx, projectId, {
+      title: "Self Assigned Lead Task",
+      assigneeIds: [leadUser.id],
+    });
+    await taskService.changeStatus(leadCtx, projectId, task.id, {
+      statusId: statuses.review.id,
+      version: 1,
+    });
+
+    const approved = await taskService.approveTask(leadCtx, projectId, task.id, { version: 2 });
+    expect(approved.statusCategory).toBe("DONE");
+
+    const leadNotifications = await notificationRepository.listByUser(leadCtx.db, leadUser.id);
+    expect(leadNotifications.filter((n) => n.type === "TASK_APPROVED")).toHaveLength(0);
+  });
+
+  it("P3 / FR-09 c4: rejects non-member with 404 and archived project with 403 'This project is archived'", async () => {
+    const { ctx: adminCtx, user: adminUser } = await createTestContext("ADMIN");
+    const { ctx: nonMemberCtx } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(adminCtx);
+    const statuses = await seedApproveStatuses(adminCtx);
+
+    await adminCtx.db.batch([
+      projectMemberRepository.insertStmt(adminCtx.db, {
+        projectId,
+        userId: adminUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(adminCtx, projectId, { title: "Approve Access Check" });
+    await taskService.changeStatus(adminCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+
+    await expect(taskService.approveTask(nonMemberCtx, projectId, task.id, { version: 2 })).rejects.toMatchObject({
+      status: 404,
+    });
+
+    await adminCtx.db.batch([projectRepository.archiveStmt(adminCtx.db, projectId, new Date())]);
+
+    await expect(taskService.approveTask(adminCtx, projectId, task.id, { version: 2 })).rejects.toMatchObject({
+      status: 403,
+      message: "This project is archived",
+    });
+  });
+
+  it("A18 version conflict & forced failure rollback (docs/09 §3.3): rolls back task, audit, and notifications", async () => {
+    const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+    const { user: assigneeUser } = await createTestContext("MEMBER");
+    const { projectId } = await createProjectWithMembers(pmCtx);
+    const statuses = await seedApproveStatuses(pmCtx);
+
+    await pmCtx.db.batch([
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: pmUser.id,
+        projectRole: "PM",
+        createdAt: new Date(),
+      }),
+      projectMemberRepository.insertStmt(pmCtx.db, {
+        projectId,
+        userId: assigneeUser.id,
+        projectRole: "MEMBER",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    const task = await taskService.createTask(pmCtx, projectId, {
+      title: "Approve Atomicity Task",
+      assigneeIds: [assigneeUser.id],
+    });
+    await taskService.changeStatus(pmCtx, projectId, task.id, { statusId: statuses.review.id, version: 1 });
+
+    const auditsBefore = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    const notificationsBefore = await notificationRepository.listByUser(pmCtx.db, assigneeUser.id);
+
+    // 1. Stale version -> 409, nothing written
+    await expect(taskService.approveTask(pmCtx, projectId, task.id, { version: 1 })).rejects.toMatchObject({
+      status: 409,
+      message: "This task was changed by someone else. Reload to see the latest version.",
+    });
+
+    // 2. Forced failure on outbox insert -> rolls back task, audit, and notifications
+    const duplicateJobId = crypto.randomUUID();
+    await outboxJobRepository.insert(pmCtx.db, {
+      id: duplicateJobId,
+      type: "SLACK_UPDATE_THREAD",
+      payload: "{}",
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const origInsertStmt = outboxJobRepository.insertStmt.bind(outboxJobRepository);
+    const spy = vi
+      .spyOn(outboxJobRepository, "insertStmt")
+      .mockImplementationOnce((db, job) => origInsertStmt(db, { ...job, id: duplicateJobId }));
+
+    await expect(taskService.approveTask(pmCtx, projectId, task.id, { version: 2 })).rejects.toThrow();
+    spy.mockRestore();
+
+    const afterTask = await taskRepository.findById(pmCtx.db, task.id);
+    expect(afterTask?.statusId).toBe(statuses.review.id);
+    expect(afterTask?.completedAt).toBeNull();
+    expect(afterTask?.version).toBe(2);
+
+    const auditsAfter = await auditLogRepository.listByEntity(pmCtx.db, "TASK", task.id);
+    const notificationsAfter = await notificationRepository.listByUser(pmCtx.db, assigneeUser.id);
+    expect(auditsAfter.length).toBe(auditsBefore.length);
+    expect(notificationsAfter.length).toBe(notificationsBefore.length);
+  });
+});
