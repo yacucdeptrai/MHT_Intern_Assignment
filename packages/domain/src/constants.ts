@@ -25,6 +25,23 @@ export const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_AVATAR_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 export type AllowedAvatarMimeType = (typeof ALLOWED_AVATAR_MIME_TYPES)[number];
 
+export const ALLOWED_ATTACHMENT_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+  "text/csv",
+  "application/zip",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+] as const;
+export type AllowedAttachmentMimeType = (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number];
+
 export const OUTBOX_MAX_ATTEMPTS = 5;
 export const OUTBOX_SWEEP_LIMIT = 20;
 export const OUTBOX_BACKOFF_BASE_MS = MINUTE_MS;

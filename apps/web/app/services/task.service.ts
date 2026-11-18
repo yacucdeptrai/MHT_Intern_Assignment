@@ -1,4 +1,5 @@
 import {
+  attachmentRepository,
   auditLogRepository,
   commentRepository,
   compactBatch,
@@ -22,9 +23,11 @@ import {
   canAssignTask,
   canCreateComment,
   canCreateTask,
+  canDeleteAttachment,
   canEditTask,
   canMoveTaskToCategory,
   canReopenTask,
+  canUploadAttachment,
   ConflictError,
   ForbiddenError,
   getTodayDateString,
@@ -45,6 +48,7 @@ import {
   toActor,
   UnauthorizedError,
   ValidationError,
+  type AttachmentDto,
   type MemberOption,
   type MyTasksLoaderData,
   type Page,
@@ -707,16 +711,28 @@ export const taskService = {
       updatedAt: typeof st.updatedAt === "number" ? st.updatedAt : st.updatedAt.getTime(),
     }));
 
-    const [statuses, members, sprints, history, commentRows] = await Promise.all([
+    const [statuses, members, sprints, history, commentRows, attachmentRows] = await Promise.all([
       taskStatusRepository.list(ctx.db),
       projectMemberRepository.listByProjectWithUser(ctx.db, projectId),
       sprintRepository.listByProject(ctx.db, projectId),
       auditLogRepository.listByEntityWithActor(ctx.db, "TASK", taskId),
       commentRepository.listByTaskWithAuthor(ctx.db, taskId),
+      attachmentRepository.listByTaskIdWithUploader(ctx.db, taskId),
     ]);
 
     const actor = toActor(ctx.user, access);
     const comments = buildCommentThreads(commentRows, actor);
+    const attachments: AttachmentDto[] = attachmentRows.map((row) => ({
+      id: row.id,
+      taskId: row.taskId,
+      uploadedById: row.uploadedById,
+      uploaderName: row.uploaderName,
+      fileName: row.fileName,
+      contentType: row.contentType,
+      sizeBytes: row.sizeBytes,
+      canDelete: canDeleteAttachment(actor, row),
+      createdAt: typeof row.createdAt === "number" ? row.createdAt : row.createdAt.getTime(),
+    }));
     const target: TaskPolicyTarget = {
       createdById: taskRow.createdById,
       assigneeIds: assigneeInfos.map((a) => a.id),
@@ -730,6 +746,7 @@ export const taskService = {
       canApprove: canApproveTask(actor) && isTransitionAllowed(target.category, "DONE", "APPROVE"),
       canReopen: canReopenTask(actor) && isTransitionAllowed(target.category, "IN_PROGRESS", "REOPEN"),
       canComment: canCreateComment(actor),
+      canAttach: canUploadAttachment(actor),
     };
 
     const task: TaskDetailDto = {
@@ -788,6 +805,7 @@ export const taskService = {
       task,
       subTasks,
       comments,
+      attachments,
       history,
       members: members.map((m) => ({
         id: m.userId,

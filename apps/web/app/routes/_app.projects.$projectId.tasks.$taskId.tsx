@@ -5,6 +5,7 @@ import { Form, Link, useActionData, useLoaderData, useNavigation } from "react-r
 import { APP_NAME, TASK_PRIORITIES, type TaskDetailLoaderData, type TaskPriority } from "@pm/domain";
 
 import { taskDetailAction } from "../actions/taskDetailAction";
+import { TaskAttachmentsSection } from "../components/task/TaskAttachmentsSection";
 import { TaskCommentsSection } from "../components/task/TaskCommentsSection";
 import { taskDetailLoader } from "../loaders/taskDetailLoader";
 import { extractAuditDiffs, formatAuditTimestamp } from "../utils/formatAudit";
@@ -40,7 +41,7 @@ interface ActionData {
 }
 
 export default function TaskDetailPage() {
-  const { task, subTasks, comments, history, sprints, members, statuses, permissions } =
+  const { task, subTasks, comments, attachments, history, sprints, members, statuses, permissions } =
     useLoaderData<TaskDetailLoaderData>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -698,6 +699,14 @@ export default function TaskDetailPage() {
               </div>
             );
           })()}
+
+          <TaskAttachmentsSection
+            projectId={task.projectId}
+            taskId={task.id}
+            attachments={attachments}
+            canAttach={permissions.canAttach}
+            isSubmitting={isSubmitting}
+          />
 
           <TaskCommentsSection
             comments={comments}

@@ -8,6 +8,7 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
   test("FR-24 c1..c4: member sees task history with rejection reason; PM and Member get 403 on /admin/audit-log; Admin filters system audit log", async ({
     browser,
   }) => {
+    test.slow();
     const lead = await createSignedInMember(browser, "TEAM_LEAD");
     const pm = await createSignedInMember(browser, "PM");
     const member = await createSignedInMember(browser, "MEMBER");

@@ -1,4 +1,5 @@
 import type { StatusCategory, TaskPriority } from "../enums";
+import type { AttachmentDto } from "./attachment";
 import type { AuditLogRow } from "./audit";
 import type { CommentThread } from "./comment";
 import type { Page } from "./common";
@@ -123,12 +124,14 @@ export interface TaskPermissions {
   canApprove: boolean;
   canReopen: boolean;
   canComment: boolean;
+  canAttach: boolean;
 }
 
 export interface TaskDetailLoaderData {
   task: TaskDetailDto;
   subTasks: TaskListItem[];
   comments: CommentThread[];
+  attachments: AttachmentDto[];
   history: AuditLogRow[];
   members: MemberOption[];
   sprints: SprintOption[];

@@ -34,6 +34,14 @@
     "bradlc",
     "dbaeumer",
     "esbenp",
-    "lintstagedrc"
+    "lintstagedrc",
+    "msdownload",
+    "msword",
+    "officedocument",
+    "openxmlformats",
+    "presentationml",
+    "revalidator",
+    "spreadsheetml",
+    "wordprocessingml"
   ]
 }

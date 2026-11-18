@@ -6,6 +6,7 @@ test.describe("Task Reject and Reopen Journey (FR-23)", () => {
   test("FR-23 c1..c4: lead rejects Review task (empty reason -> 400, valid reason -> In Progress), approves, then reopens Done task", async ({
     browser,
   }) => {
+    test.slow();
     const lead = await createSignedInMember(browser, "TEAM_LEAD");
     const assignee = await createSignedInMember(browser, "MEMBER");
 

@@ -91,6 +91,13 @@ export function canCreateComment(actor: ActorContext): boolean {
   return canViewProject(actor);
 }
 
+export function canUploadAttachment(actor: ActorContext): boolean {
+  if (actor.isProjectArchived) {
+    return false;
+  }
+  return canViewProject(actor);
+}
+
 export function canDeleteComment(actor: ActorContext, comment: { authorId: string }): boolean {
   if (actor.isProjectArchived) {
     return false;

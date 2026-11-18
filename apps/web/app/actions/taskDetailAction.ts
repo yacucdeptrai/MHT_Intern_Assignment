@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 
 import {
+  AttachmentIdSchema,
   CommentCreateSchema,
   CommentIdSchema,
   TaskApproveSchema,
@@ -8,6 +9,7 @@ import {
   TaskStatusChangeSchema,
 } from "@pm/domain";
 
+import { attachmentService } from "../services/attachment.service";
 import { commentService } from "../services/comment.service";
 import { taskService } from "../services/task.service";
 import { requireUser } from "../utils/auth.server";
@@ -188,7 +190,33 @@ export async function taskDetailAction(
       return Response.json({ success: true, intent: "deleteComment" }, { status: 200 });
     }
 
-    // TODO(M5-T2): deleteAttachment intent (A24)
+    if (intent === "deleteAttachment") {
+      const parsed = AttachmentIdSchema.safeParse(rawData);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        let firstMessage: string | undefined;
+        for (const issue of parsed.error.issues) {
+          firstMessage ??= issue.message;
+          const field = issue.path[0];
+          if (typeof field === "string") {
+            fieldErrors[field] = fieldErrors[field] ?? [];
+            fieldErrors[field].push(issue.message);
+          }
+        }
+        return Response.json(
+          {
+            success: false,
+            intent: "deleteAttachment",
+            errors: fieldErrors,
+            message: firstMessage ?? "Attachment ID is required",
+            values: rawData,
+          },
+          { status: 400 },
+        );
+      }
+      await attachmentService.deleteAttachment(ctx, projectId, taskId, parsed.data);
+      return Response.json({ success: true, intent: "deleteAttachment" }, { status: 200 });
+    }
 
     const intentStr = typeof intent === "string" ? intent : "";
     return Response.json({ success: false, message: `Unknown intent: ${intentStr}` }, { status: 400 });
