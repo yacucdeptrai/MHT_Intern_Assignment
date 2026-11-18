@@ -14,6 +14,7 @@ import { NotFoundError } from "@pm/domain";
 
 import { taskDetailAction } from "../../app/actions/taskDetailAction";
 import { taskDetailLoader } from "../../app/loaders/taskDetailLoader";
+import { attachmentService } from "../../app/services/attachment.service";
 import { taskService } from "../../app/services/task.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 import { commitSession, getSession } from "../../app/utils/session.server";
@@ -1554,6 +1555,90 @@ describe("taskDetailAction", () => {
         new Request(taskUrl, { method: "POST", headers: { Cookie: authorCookie }, body: delForm }),
       );
       expect(secondRes.status).toBe(409);
+    });
+  });
+
+  describe("taskDetailAction deleteAttachment intent (FR-18 / A24)", () => {
+    it("deletes an attachment, enforces uploader or PM role, and handles conflicts", async () => {
+      const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+      const { ctx: uploaderCtx, user: uploaderUser, cookie: uploaderCookie } = await createTestContext("MEMBER");
+      const { ctx: otherCtx, user: otherUser, cookie: otherCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: uploaderUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: otherUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Delete Attachment Action Task" });
+      const taskUrl = `http://localhost/projects/${projectId}/tasks/${task.id}`;
+
+      // Upload attachment by uploader
+      const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]);
+      const uploadRes = await attachmentService.uploadAttachment(uploaderCtx, projectId, task.id, {
+        fileName: "doc.pdf",
+        contentType: "application/pdf",
+        bytes: pdfBytes,
+        size: pdfBytes.byteLength,
+      });
+
+      // Missing attachmentId -> 400
+      const emptyForm = new FormData();
+      emptyForm.append("intent", "deleteAttachment");
+      const badRes = await taskDetailAction(
+        uploaderCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: uploaderCookie }, body: emptyForm }),
+      );
+      expect(badRes.status).toBe(400);
+
+      // Non-uploader MEMBER -> 403
+      const delForm = new FormData();
+      delForm.append("intent", "deleteAttachment");
+      delForm.append("attachmentId", uploadRes.id);
+
+      const forbiddenRes = await taskDetailAction(
+        otherCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: otherCookie }, body: delForm }),
+      );
+      expect(forbiddenRes.status).toBe(403);
+
+      // Uploader -> 200
+      const okRes = await taskDetailAction(
+        uploaderCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: uploaderCookie }, body: delForm }),
+      );
+      expect(okRes.status).toBe(200);
+
+      // Second delete -> 404 or 409 (since row was deleted)
+      const secondRes = await taskDetailAction(
+        uploaderCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: uploaderCookie }, body: delForm }),
+      );
+      expect([404, 409]).toContain(secondRes.status);
     });
   });
 });

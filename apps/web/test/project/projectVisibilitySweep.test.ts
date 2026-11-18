@@ -18,6 +18,8 @@ import {
   action as taskDetailRouteAction,
   loader as taskDetailRouteLoader,
 } from "../../app/routes/_app.projects.$projectId.tasks.$taskId";
+import { loader as attachmentDownloadLoader } from "../../app/routes/api.attachments.$attachmentId";
+import { action as attachmentUploadAction } from "../../app/routes/api.attachments.upload";
 import { projectService } from "../../app/services/project/project.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 import { requestContextKey } from "../../app/utils/requestContext.server";
@@ -377,6 +379,10 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
         ["intent", "deleteComment"],
         ["commentId", "comment-probe-id"],
       ],
+      [
+        ["intent", "deleteAttachment"],
+        ["attachmentId", "att-probe-id"],
+      ],
     ] as const) {
       const extraForm = new FormData();
       for (const [k, v] of extraEntries) {
@@ -461,5 +467,44 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
     expect(data.project.isArchived).toBe(true);
     expect(data.permissions.canManageProject).toBe(false);
     expect(data.permissions.canManageMembers).toBe(false);
+  });
+
+  it("FR-18 c3: returns 404 Response when non-member posts to /api/attachments/upload", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const ctx = contextFor(db, world.users.nonMember);
+    const form = new FormData();
+    form.append("projectId", world.projectId);
+    form.append("taskId", "some-task-id");
+    form.append("file", new File(["dummy content"], "test.pdf", { type: "application/pdf" }));
+
+    const baseArgs = await requestFor("http://localhost/api/attachments/upload", world.users.nonMember, ctx);
+    const postReq = new Request("http://localhost/api/attachments/upload", {
+      method: "POST",
+      headers: baseArgs.request.headers,
+      body: form,
+    });
+    const args = { ...baseArgs, request: postReq } as unknown as Parameters<typeof attachmentUploadAction>[0];
+
+    const res = await attachmentUploadAction(args);
+    expect(res.status).toBe(404);
+  });
+
+  it("FR-18 c3: returns 404 Response when non-member requests /api/attachments/:attachmentId", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const ctx = contextFor(db, world.users.nonMember);
+    const baseArgs = await requestFor(
+      `http://localhost/api/attachments/att-123?projectId=${world.projectId}`,
+      world.users.nonMember,
+      ctx,
+    );
+    const args = {
+      ...baseArgs,
+      params: { attachmentId: "att-123" },
+    } as unknown as Parameters<typeof attachmentDownloadLoader>[0];
+
+    const res = await attachmentDownloadLoader(args);
+    expect(res.status).toBe(404);
   });
 });

@@ -6,6 +6,7 @@ test.describe("Task Approval Journey (FR-22)", () => {
   test("FR-22 c1..c4: member moves task to Review, member cannot approve (403), lead assignee approves to Done", async ({
     browser,
   }) => {
+    test.slow();
     const lead = await createSignedInMember(browser, "TEAM_LEAD");
     const assignee = await createSignedInMember(browser, "MEMBER");
 

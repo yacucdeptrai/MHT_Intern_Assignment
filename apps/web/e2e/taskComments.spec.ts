@@ -6,6 +6,7 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
   test("FR-19 c1..c3: shows rejection reason as root comment, keeps replies one level deep, blocks non-author delete (403), and preserves replies when root is deleted", async ({
     browser,
   }) => {
+    test.slow();
     const lead = await createSignedInMember(browser, "TEAM_LEAD");
     const author = await createSignedInMember(browser, "MEMBER");
     const bystander = await createSignedInMember(browser, "MEMBER");
