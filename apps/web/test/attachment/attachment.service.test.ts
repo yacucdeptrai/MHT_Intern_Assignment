@@ -262,7 +262,9 @@ describe("attachmentService (FR-18, A23, A24)", () => {
         size: validPdfBytes.byteLength,
       });
 
-      const downloaded = await attachmentService.downloadAttachment(memberCtx, project.id, uploaded.id);
+      const downloaded = await attachmentService.downloadAttachment(memberCtx, uploaded.id, {
+        expectedProjectId: project.id,
+      });
       expect(downloaded.fileName).toBe("guide.pdf");
       expect(downloaded.contentType).toBe("application/pdf");
       expect(downloaded.size).toBe(validPdfBytes.byteLength);
@@ -279,9 +281,9 @@ describe("attachmentService (FR-18, A23, A24)", () => {
         size: validPdfBytes.byteLength,
       });
 
-      await expect(attachmentService.downloadAttachment(otherCtx, project.id, uploaded.id)).rejects.toThrow(
-        NotFoundError,
-      );
+      await expect(
+        attachmentService.downloadAttachment(otherCtx, uploaded.id, { expectedProjectId: project.id }),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -315,9 +317,9 @@ describe("attachmentService (FR-18, A23, A24)", () => {
       expect(storage.has(key)).toBe(false);
 
       // Verify row is deleted
-      await expect(attachmentService.downloadAttachment(memberCtx, project.id, uploaded.id)).rejects.toThrow(
-        NotFoundError,
-      );
+      await expect(
+        attachmentService.downloadAttachment(memberCtx, uploaded.id, { expectedProjectId: project.id }),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it("FR-18 c4: project PM / Admin can delete another member's attachment", async () => {
@@ -334,9 +336,9 @@ describe("attachmentService (FR-18, A23, A24)", () => {
         attachmentId: uploaded.id,
       });
 
-      await expect(attachmentService.downloadAttachment(adminCtx, project.id, uploaded.id)).rejects.toThrow(
-        NotFoundError,
-      );
+      await expect(
+        attachmentService.downloadAttachment(adminCtx, uploaded.id, { expectedProjectId: project.id }),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it("FR-18 c4: non-uploader project member gets 403 when trying to delete attachment", async () => {
@@ -364,6 +366,57 @@ describe("attachmentService (FR-18, A23, A24)", () => {
           attachmentId: uploaded.id,
         }),
       ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("FR-18 c4 / P3: a PM of another project cannot delete this project's attachment by posting their own projectId (404)", async () => {
+      const { memberCtx, project, task, storage } = await createFixture();
+      const uploaded = await attachmentService.uploadAttachment(memberCtx, project.id, task.id, {
+        fileName: "victim.pdf",
+        contentType: "application/pdf",
+        bytes: validPdfBytes,
+        size: validPdfBytes.byteLength,
+      });
+      const key = `projects/${project.id}/tasks/${task.id}/${uploaded.id}`;
+
+      // A system PM who creates (and so is PM of) a different project, and is not a member of `project`.
+      const outsiderPm = await createUser(memberCtx.db, { systemRole: "PM", fullName: "Outsider PM" });
+      const outsiderCtx = createRequestContext(env, { waitUntil: dummyWaitUntil }, new Request("http://localhost"));
+      outsiderCtx.user = outsiderPm;
+      outsiderCtx.storage = storage;
+      const ownProject = await projectService.createProject(outsiderCtx, {
+        code: `OP${crypto.randomUUID().slice(0, 4).toUpperCase()}`,
+        name: "Outsider Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+      });
+
+      await expect(
+        attachmentService.deleteAttachment(outsiderCtx, ownProject.id, task.id, { attachmentId: uploaded.id }),
+      ).rejects.toThrow(NotFoundError);
+
+      // Nothing was deleted: the row is still downloadable by a member and the object is still stored.
+      const stillThere = await attachmentService.downloadAttachment(memberCtx, uploaded.id);
+      expect(stillThere.fileName).toBe("victim.pdf");
+      expect(storage.has(key)).toBe(true);
+    });
+
+    it("FR-18 c3: download checks access on the attachment's own project; a mismatched project hint returns 404", async () => {
+      const { memberCtx, otherCtx, project, task } = await createFixture();
+      const uploaded = await attachmentService.uploadAttachment(memberCtx, project.id, task.id, {
+        fileName: "scoped.pdf",
+        contentType: "application/pdf",
+        bytes: validPdfBytes,
+        size: validPdfBytes.byteLength,
+      });
+
+      await expect(
+        attachmentService.downloadAttachment(memberCtx, uploaded.id, { expectedProjectId: crypto.randomUUID() }),
+      ).rejects.toThrow(NotFoundError);
+      await expect(attachmentService.downloadAttachment(otherCtx, uploaded.id)).rejects.toThrow(NotFoundError);
+      const downloaded = await attachmentService.downloadAttachment(memberCtx, uploaded.id, {
+        expectedProjectId: project.id,
+      });
+      expect(downloaded.size).toBe(validPdfBytes.byteLength);
     });
 
     it("double delete throws 409 ConflictError via conflictGuardStmt", async () => {
