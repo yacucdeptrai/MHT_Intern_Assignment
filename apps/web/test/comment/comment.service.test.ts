@@ -386,6 +386,46 @@ describe("commentService (FR-19 c1..c3, A21, A22)", () => {
     });
   });
 
+  it("FR-19 c1 / decision: a member can comment on a task in DONE status", async () => {
+    const world = await setupProjectWorld();
+
+    // Move task to REVIEW and APPROVE to DONE
+    await taskService.changeStatus(world.creatorCtx, world.projectId, world.taskId, {
+      statusId: world.statuses.review.id,
+      version: 2,
+    });
+    await taskService.approveTask(world.leadCtx, world.projectId, world.taskId, { version: 3 });
+
+    // Other member comments on DONE task
+    const comment = await commentService.addComment(world.otherMemberCtx, world.projectId, world.taskId, {
+      body: "Verification completed in staging environment.",
+    });
+
+    expect(comment.body).toBe("Verification completed in staging environment.");
+
+    // Assert TASK_COMMENTED notification is delivered to creator and assignee
+    const notifications = (await notificationRepository.listByUser(world.pmCtx.db, world.creatorUser.id)).filter(
+      (n) => n.type === "TASK_COMMENTED" && n.entityId === world.taskId,
+    );
+    expect(notifications.length).toBeGreaterThanOrEqual(1);
+    expect(notifications[0]?.payload).toEqual({
+      title: "Discuss API Contract",
+      actorName: "Other Member",
+    });
+  });
+
+  it("FR-09 c4 / decision: a comment on an archived project's task gets 403 'This project is archived'", async () => {
+    const world = await setupProjectWorld();
+    await world.pmCtx.db.batch([projectRepository.archiveStmt(world.pmCtx.db, world.projectId, new Date())]);
+
+    await expect(
+      commentService.addComment(world.adminCtx, world.projectId, world.taskId, { body: "Archived write" }),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: "This project is archived",
+    });
+  });
+
   it("A21 forced batch failure (docs/09 §3.3): rolls back comment row when notification insert fails", async () => {
     const world = await setupProjectWorld();
     const commentsBefore = await commentRepository.listByTaskWithAuthor(world.pmCtx.db, world.taskId);
