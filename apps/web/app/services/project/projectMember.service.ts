@@ -182,6 +182,7 @@ export const projectMemberService = {
       throw err;
     }
 
+    // TODO(M6-T2): publishNotifications after commit (A4 PROJECT_MEMBER_ADDED)
     ctx.logger.info("Project member added", {
       projectId,
       userId,

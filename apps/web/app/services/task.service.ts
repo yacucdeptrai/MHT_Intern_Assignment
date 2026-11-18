@@ -239,7 +239,7 @@ async function transitionWithReason(
   }
 
   ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
-  // TODO(M6-T2): publishNotifications after commit
+  // TODO(M6-T2): publishNotifications after commit (A19 TASK_REJECTED / TASK_REOPENED)
   ctx.logger.info(mode === "REJECT" ? "Task rejected" : "Task reopened", {
     taskId,
     projectId,
@@ -380,10 +380,11 @@ export const taskService = {
       }),
     ];
 
-    if (!data.parentTaskId) {
+    const slackPostJobId = data.parentTaskId ? null : crypto.randomUUID();
+    if (slackPostJobId) {
       batchItems.push(
         outboxJobRepository.insertStmt(ctx.db, {
-          id: crypto.randomUUID(),
+          id: slackPostJobId,
           type: "SLACK_POST_TASK",
           payload: JSON.stringify({
             taskId,
@@ -402,6 +403,12 @@ export const taskService = {
 
     // Atomic batch A14
     await ctx.db.batch(compactBatch(batchItems));
+
+    // A14 after commit: dispatch the Slack post job now instead of waiting for the sweep.
+    if (slackPostJobId) {
+      ctx.waitUntil(dispatchOutbox(ctx, [slackPostJobId]));
+    }
+    // TODO(M6-T2): publishNotifications after commit (A14 TASK_ASSIGNED)
 
     const created = await taskRepository.findById(ctx.db, taskId);
     if (!created) {
@@ -1027,6 +1034,7 @@ export const taskService = {
       throw error;
     }
 
+    // TODO(M6-T2): publishNotifications after commit (A17 TASK_ASSIGNED)
     ctx.logger.info("Task assignees updated", {
       taskId,
       projectId,
@@ -1355,7 +1363,7 @@ export const taskService = {
     }
 
     ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
-    // TODO(M6-T2): publishNotifications after commit
+    // TODO(M6-T2): publishNotifications after commit (A18 TASK_APPROVED)
     ctx.logger.info("Task approved", { taskId, projectId });
 
     const detailData = await this.getTaskDetails(ctx, projectId, taskId);
