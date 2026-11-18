@@ -184,6 +184,12 @@ export const TaskStatusChangeSchema = z.object({
 
 export type TaskStatusChangeInput = z.infer<typeof TaskStatusChangeSchema>;
 
+export const TaskApproveSchema = z.object({
+  version: z.coerce.number().int().positive("Version must be a positive integer"),
+});
+
+export type TaskApproveInput = z.infer<typeof TaskApproveSchema>;
+
 export const SlackUpdateThreadPayloadSchema = z.object({
   taskId: z.string().min(1),
   fromStatusId: z.string().min(1),
