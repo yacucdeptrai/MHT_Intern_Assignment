@@ -46,3 +46,8 @@ export const OUTBOX_MAX_ATTEMPTS = 5;
 export const OUTBOX_SWEEP_LIMIT = 20;
 export const OUTBOX_BACKOFF_BASE_MS = MINUTE_MS;
 export const CRON_SCHEDULE = "*/5 * * * *";
+
+export const ORPHAN_SWEEP_BATCH_LIMIT = 100;
+export const ORPHAN_AGE_THRESHOLD_MS = DAY_MS;
+export const INVITE_EXPIRY_THRESHOLD_MS = 30 * DAY_MS;
+export const CRON_STATE_ORPHAN_CURSOR = "orphan_sweep_cursor";

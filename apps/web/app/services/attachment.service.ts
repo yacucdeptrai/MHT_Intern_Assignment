@@ -120,7 +120,7 @@ export const attachmentService = {
           key: storageKey,
         });
       }
-      // TODO(M7-T5): orphan sweep will clean up leftovers if worker dies
+      // Orphan sweep cleans up leftovers if worker dies (docs/07 §2)
       throw err;
     }
 
