@@ -1,5 +1,4 @@
 import {
-  commentRepository,
   createDatabase,
   inviteRepository,
   outboxJobRepository,
@@ -13,16 +12,18 @@ import {
 import {
   EmailDeadlineReminderPayloadSchema,
   EmailInvitePayloadSchema,
+  escapeSlackText,
   OUTBOX_BACKOFF_BASE_MS,
   OUTBOX_MAX_ATTEMPTS,
   OUTBOX_SWEEP_LIMIT,
   SlackPostTaskPayloadSchema,
   SlackUpdateThreadPayloadSchema,
   type OutboxJobType,
-  type ReminderKind,
 } from "@pm/domain";
 
 import { unsealInviteToken } from "../utils/crypto.server";
+import { createEmailSender, type EmailSender } from "./email/emailSender";
+import { deadlineReminderSubject } from "./email/templates";
 import { createLogger, type Logger } from "../utils/logger.server";
 import type { RequestContext } from "../utils/requestContext.server";
 
@@ -31,6 +32,12 @@ export interface JobContext {
   db: ReturnType<typeof createDatabase>;
   logger: Logger;
   clock: { now: () => Date };
+  /** Defaults to the sender chosen by `EMAIL_PROVIDER` (createEmailSender). */
+  emailSender?: EmailSender;
+}
+
+function emailSenderFor(ctx: JobContext): EmailSender {
+  return ctx.emailSender ?? createEmailSender(ctx.env, ctx.logger);
 }
 
 export interface SweepResult {
@@ -41,35 +48,8 @@ export interface SweepResult {
   skipped: number;
 }
 
-const defaultLogger = createLogger("email-sender");
-
-export interface DeadlineReminderEmailInput {
-  to: string;
-  subject: string;
-  kind: ReminderKind;
-  taskTitle: string;
-  dueDate: string;
-  taskUrl: string;
-  idempotencyKey?: string;
-}
-
-export const ConsoleEmailSender = {
-  sendInvite: (_to: string, _inviteUrl: string, _projectName?: string): void => {
-    // Mock email sender: records in logger / console
-    // Never reveals sensitive tokens in external logs
-  },
-  sendDeadlineReminder: (input: DeadlineReminderEmailInput): void => {
-    defaultLogger.info("Email sent (console)", {
-      to: input.to,
-      subject: input.subject,
-      kind: input.kind,
-      taskTitle: input.taskTitle,
-      dueDate: input.dueDate,
-      taskUrl: input.taskUrl,
-      idempotencyKey: input.idempotencyKey,
-    });
-  },
-};
+export { ConsoleEmailSender, createEmailSender } from "./email/emailSender";
+export type { DeadlineReminderEmailInput, EmailSender } from "./email/emailSender";
 
 export type JobHandler = (ctx: JobContext, job: OutboxJob) => Promise<"DONE" | "SKIPPED">;
 
@@ -94,7 +74,10 @@ async function handleInviteEmail(ctx: JobContext, job: OutboxJob): Promise<"DONE
   const rawToken = await unsealInviteToken(parsed.data.sealedToken, ctx.env.SESSION_SECRET);
   const inviteUrl = `${ctx.env.APP_BASE_URL.replace(/\/+$/, "")}/invite/${rawToken}`;
 
-  ConsoleEmailSender.sendInvite(invite.email, inviteUrl);
+  // The URL carries a one-time token; it is only logged in full during local development.
+  await emailSenderFor(ctx).sendInvite(invite.email, inviteUrl, undefined, {
+    redactLink: ctx.env.APP_ENV !== "local",
+  });
   return "DONE";
 }
 
@@ -109,12 +92,12 @@ async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DO
     return "SKIPPED";
   }
 
-  // Sub-tasks are not posted (FR-27 criterion 3)
+  // Sub-tasks are not posted; only top-level tasks get a Slack thread (FR-27)
   if (task.parentTaskId !== null) {
     return "SKIPPED";
   }
 
-  // Idempotency: if already posted, return DONE without re-posting (FR-27 criterion 4)
+  // Idempotency: if already posted, return DONE without re-posting (docs/09 §3.4)
   if (task.slackThreadTs) {
     return "DONE";
   }
@@ -133,7 +116,8 @@ async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DO
   const appBaseUrl = ctx.env.APP_BASE_URL.replace(/\/+$/, "");
   const taskUrl = `${appBaseUrl}/projects/${project.id}/tasks/${task.id}`;
   const dueText = task.dueDate || "none";
-  const messageText = `*${project.code}-${task.number}* ${task.title} · Priority: ${task.priority} · Due: ${dueText} · ${taskUrl}`;
+  // The title is escaped so it cannot ping a channel or inject a link (Slack mrkdwn).
+  const messageText = `*${project.code}-${task.number}* ${escapeSlackText(task.title)} · Priority: ${task.priority} · Due: ${dueText} · ${taskUrl}`;
 
   const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
@@ -220,19 +204,9 @@ async function handleSlackUpdateThread(ctx: JobContext, job: OutboxJob): Promise
   const actor = await userRepository.findById(ctx.db, parsed.data.actorId);
   const actorName = actor?.fullName ?? "Unknown";
 
-  // Look up optional reason comment
-  let reasonText: string | undefined;
-  if (parsed.data.reasonCommentId) {
-    const comment = await commentRepository.findById(ctx.db, parsed.data.reasonCommentId);
-    if (comment && comment.deletedAt === null) {
-      reasonText = comment.body;
-    }
-  }
-
-  let messageText = `Status: ${fromName} → ${toName} by ${actorName}`;
-  if (reasonText) {
-    messageText += `\nReason: ${reasonText}`;
-  }
+  // FR-28 c1, exactly. The reject/reopen reason is never sent: it stays inside the project.
+  // Status and user names are user-controlled, so they are escaped for Slack mrkdwn.
+  const messageText = `Status: ${escapeSlackText(fromName)} → ${escapeSlackText(toName)} by ${escapeSlackText(actorName)}`;
 
   const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
@@ -281,6 +255,18 @@ async function handleDeadlineEmail(ctx: JobContext, job: OutboxJob): Promise<"DO
     return "SKIPPED";
   }
 
+  // The due date changed after this reminder was queued: the scan queues a new reminder for the
+  // new date (FR-29 c3), so this one is stale and must not be sent.
+  if (task.dueDate !== dueDate) {
+    return "SKIPPED";
+  }
+
+  // Archived projects get no reminders, even for jobs queued before archiving.
+  const project = await projectRepository.findById(ctx.db, task.projectId);
+  if (!project) {
+    return "SKIPPED";
+  }
+
   const status = await taskStatusRepository.findById(ctx.db, task.statusId);
   if (!status || status.category === "DONE") {
     return "SKIPPED";
@@ -296,26 +282,22 @@ async function handleDeadlineEmail(ctx: JobContext, job: OutboxJob): Promise<"DO
     return "SKIPPED";
   }
 
-  const subject =
-    kind === "OVERDUE" ? `[Overdue] Task is overdue: ${task.title}` : `[Reminder] Task due soon: ${task.title}`;
-
+  const subject = deadlineReminderSubject(kind, task.title);
   const taskUrl = `${ctx.env.APP_BASE_URL.replace(/\/+$/, "")}/projects/${task.projectId}/tasks/${task.id}`;
 
-  ConsoleEmailSender.sendDeadlineReminder({
+  await emailSenderFor(ctx).sendDeadlineReminder({
     to: user.email,
     subject,
     kind,
     taskTitle: task.title,
+    projectName: project.name,
     dueDate,
     taskUrl,
     idempotencyKey: job.id,
   });
 
-  ctx.logger.info("Email sent (console)", {
-    to: user.email,
-    subject,
+  ctx.logger.info("Deadline reminder sent", {
     kind,
-    taskTitle: task.title,
     taskId: task.id,
     userId: user.id,
     idempotencyKey: job.id,

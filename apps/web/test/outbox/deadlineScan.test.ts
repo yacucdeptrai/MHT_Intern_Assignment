@@ -431,4 +431,82 @@ describe("Deadline scan & EMAIL_DEADLINE_REMINDER outbox handler (FR-29, catalog
       }),
     );
   });
+  async function insertDueTask(suffix: string, title: string, dueDate: string, scanTime: Date) {
+    const { user1, project, statusTodo } = await createFixture(suffix);
+    const taskId = `task-${crypto.randomUUID()}`;
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: taskId,
+        projectId: project.id,
+        title,
+        statusId: statusTodo.id,
+        createdById: user1.id,
+        priority: "MEDIUM",
+        dueDate,
+        statusChangedAt: scanTime,
+        createdAt: scanTime,
+        updatedAt: scanTime,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(db, taskId, [user1.id], scanTime),
+    ]);
+    return { user1, project, taskId };
+  }
+
+  function loggedEmails(logSpy: { mock: { calls: unknown[][] } }) {
+    return logSpy.mock.calls
+      .map(([line]) => (typeof line === "string" ? (JSON.parse(line) as Record<string, unknown>) : {}))
+      .filter((entry) => entry.msg === "Email sent (console)");
+  }
+
+  it("FR-29 c4: the console sender logs the rendered email (subject, text, and escaped HTML)", async () => {
+    const scanTime = new Date("2026-11-18T03:00:00.000Z");
+    const { user1, taskId } = await insertDueTask(
+      crypto.randomUUID().slice(0, 8),
+      "<script>alert(1)</script> report",
+      "2026-11-18",
+      scanTime,
+    );
+    await runDeadlineScan(env, scanTime);
+
+    const logSpy = vi.spyOn(console, "log");
+    await sweepOutbox(env, scanTime);
+
+    const email = loggedEmails(logSpy).find((entry) => entry.to === user1.email);
+    expect(email).toBeDefined();
+    expect(email?.subject).toBe("[Reminder] Task due soon: <script>alert(1)</script> report");
+    expect(email?.text).toContain("This task is due within 24 hours.");
+    expect(email?.text).toContain(`/tasks/${taskId}`);
+    expect(email?.html).toContain("&lt;script&gt;alert(1)&lt;/script&gt; report");
+    expect(email?.html).not.toContain("<script>");
+  });
+
+  it("FR-29 c3: a reminder queued for the old due date is not sent after the due date changes", async () => {
+    const scanTime = new Date("2026-11-18T03:00:00.000Z");
+    const { taskId } = await insertDueTask(crypto.randomUUID().slice(0, 8), "Moved deadline", "2026-11-18", scanTime);
+    await runDeadlineScan(env, scanTime);
+
+    // The due date moves to next week before the queued job is delivered.
+    await env.DB.prepare("UPDATE tasks SET due_date = ? WHERE id = ?").bind("2026-11-25", taskId).run();
+
+    const emailSpy = vi.spyOn(ConsoleEmailSender, "sendDeadlineReminder");
+    await sweepOutbox(env, scanTime);
+    expect(emailSpy).not.toHaveBeenCalledWith(expect.objectContaining({ taskTitle: "Moved deadline" }));
+  });
+
+  it("FR-29 c1: a queued reminder is not sent when the project was archived before delivery", async () => {
+    const scanTime = new Date("2026-11-18T03:00:00.000Z");
+    const { project } = await insertDueTask(
+      crypto.randomUUID().slice(0, 8),
+      "Archived meanwhile",
+      "2026-11-18",
+      scanTime,
+    );
+    await runDeadlineScan(env, scanTime);
+
+    await env.DB.prepare("UPDATE projects SET deleted_at = ? WHERE id = ?").bind(scanTime.getTime(), project.id).run();
+
+    const emailSpy = vi.spyOn(ConsoleEmailSender, "sendDeadlineReminder");
+    await sweepOutbox(env, scanTime);
+    expect(emailSpy).not.toHaveBeenCalledWith(expect.objectContaining({ taskTitle: "Archived meanwhile" }));
+  });
 });

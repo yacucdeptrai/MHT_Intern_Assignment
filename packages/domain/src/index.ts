@@ -3,6 +3,7 @@ export * from "./enums";
 export type * from "./ports";
 export * from "./errors";
 export * from "./files";
+export * from "./slack";
 export * from "./schemas/auth";
 export * from "./schemas/user";
 export * from "./schemas/invite";
