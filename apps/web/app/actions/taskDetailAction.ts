@@ -1,7 +1,14 @@
 import { redirect } from "react-router";
 
-import { TaskApproveSchema, TaskReasonSchema, TaskStatusChangeSchema } from "@pm/domain";
+import {
+  CommentCreateSchema,
+  CommentIdSchema,
+  TaskApproveSchema,
+  TaskReasonSchema,
+  TaskStatusChangeSchema,
+} from "@pm/domain";
 
+import { commentService } from "../services/comment.service";
 import { taskService } from "../services/task.service";
 import { requireUser } from "../utils/auth.server";
 import { handleActionError } from "../utils/errors.server";
@@ -125,7 +132,62 @@ export async function taskDetailAction(
       return Response.json({ success: true, task }, { status: 200 });
     }
 
-    // TODO(M5-T1): comment and deleteComment intents (A21, A22)
+    if (intent === "comment") {
+      const parsed = CommentCreateSchema.safeParse(rawData);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        let firstMessage: string | undefined;
+        for (const issue of parsed.error.issues) {
+          firstMessage ??= issue.message;
+          const field = issue.path[0];
+          if (typeof field === "string") {
+            fieldErrors[field] = fieldErrors[field] ?? [];
+            fieldErrors[field].push(issue.message);
+          }
+        }
+        return Response.json(
+          {
+            success: false,
+            intent: "comment",
+            errors: fieldErrors,
+            message: firstMessage ?? "Comment cannot be empty",
+            values: rawData,
+          },
+          { status: 400 },
+        );
+      }
+      const comment = await commentService.addComment(ctx, projectId, taskId, parsed.data);
+      return Response.json({ success: true, intent: "comment", comment }, { status: 201 });
+    }
+
+    if (intent === "deleteComment") {
+      const parsed = CommentIdSchema.safeParse(rawData);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        let firstMessage: string | undefined;
+        for (const issue of parsed.error.issues) {
+          firstMessage ??= issue.message;
+          const field = issue.path[0];
+          if (typeof field === "string") {
+            fieldErrors[field] = fieldErrors[field] ?? [];
+            fieldErrors[field].push(issue.message);
+          }
+        }
+        return Response.json(
+          {
+            success: false,
+            intent: "deleteComment",
+            errors: fieldErrors,
+            message: firstMessage ?? "Comment ID is required",
+            values: rawData,
+          },
+          { status: 400 },
+        );
+      }
+      await commentService.deleteComment(ctx, projectId, taskId, parsed.data);
+      return Response.json({ success: true, intent: "deleteComment" }, { status: 200 });
+    }
+
     // TODO(M5-T2): deleteAttachment intent (A24)
 
     const intentStr = typeof intent === "string" ? intent : "";

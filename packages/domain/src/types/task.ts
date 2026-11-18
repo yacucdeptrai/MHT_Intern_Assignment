@@ -1,5 +1,6 @@
 import type { StatusCategory, TaskPriority } from "../enums";
 import type { AuditLogRow } from "./audit";
+import type { CommentThread } from "./comment";
 import type { Page } from "./common";
 
 export interface TaskAssigneeInfo {
@@ -121,11 +122,13 @@ export interface TaskPermissions {
   canAssign: boolean;
   canApprove: boolean;
   canReopen: boolean;
+  canComment: boolean;
 }
 
 export interface TaskDetailLoaderData {
   task: TaskDetailDto;
   subTasks: TaskListItem[];
+  comments: CommentThread[];
   history: AuditLogRow[];
   members: MemberOption[];
   sprints: SprintOption[];

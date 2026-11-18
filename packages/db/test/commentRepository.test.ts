@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   commentRepository,
+  conflictGuardStmt,
   createDatabase,
+  isVersionConflict,
   projectRepository,
   taskRepository,
   taskStatusRepository,
@@ -169,5 +171,71 @@ describe("commentRepository & comments schema (docs/03 §comments, M4-T3)", () =
     );
     const details = plan.map((r) => r.detail).join("\n");
     expect(details).toContain("USING INDEX idx_comments_task");
+  });
+
+  it("FR-19 c1..c3 & FR-03 c4: listByTaskWithAuthor includes soft-deleted comments and maps soft-deleted author to 'Deleted user'", async () => {
+    const { db, user, taskId, now } = await setupTask();
+    const deletedAuthor = await userRepository.insert(db, {
+      id: crypto.randomUUID(),
+      email: `deleted-author-${crypto.randomUUID()}@example.com`,
+      fullName: "Former Commenter",
+      systemRole: "MEMBER",
+      status: "LOCKED",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const rootId = crypto.randomUUID();
+    const replyId = crypto.randomUUID();
+
+    await db.batch([
+      commentRepository.insertStmt(db, {
+        id: rootId,
+        taskId,
+        authorId: deletedAuthor.id,
+        parentCommentId: null,
+        body: "Original root body before deletion",
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      }),
+      commentRepository.insertStmt(db, {
+        id: replyId,
+        taskId,
+        authorId: user.id,
+        parentCommentId: rootId,
+        body: "Visible reply on deleted root",
+        createdAt: new Date(now.getTime() + 1000),
+        updatedAt: new Date(now.getTime() + 1000),
+        deletedAt: null,
+      }),
+      userRepository.softDeleteStmt(db, deletedAuthor.id, new Date(now.getTime() + 2000)),
+      conflictGuardStmt(db),
+    ]);
+
+    // A22: first soft delete succeeds
+    const deleteTime = new Date(now.getTime() + 3000);
+    await db.batch([commentRepository.softDeleteStmt(db, rootId, deleteTime), conflictGuardStmt(db)]);
+
+    // Second soft delete of the same comment fails via conflictGuardStmt
+    let conflictErr: unknown;
+    try {
+      await db.batch([commentRepository.softDeleteStmt(db, rootId, deleteTime), conflictGuardStmt(db)]);
+    } catch (err) {
+      conflictErr = err;
+    }
+    expect(isVersionConflict(conflictErr)).toBe(true);
+
+    const foundIncludingDeleted = await commentRepository.findByIdIncludingDeleted(db, rootId);
+    expect(foundIncludingDeleted?.deletedAt?.getTime()).toBe(deleteTime.getTime());
+
+    const rows = await commentRepository.listByTaskWithAuthor(db, taskId);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.id).toBe(rootId);
+    expect(rows[0]?.authorName).toBe("Deleted user");
+    expect(rows[0]?.deletedAt?.getTime()).toBe(deleteTime.getTime());
+    expect(rows[1]?.id).toBe(replyId);
+    expect(rows[1]?.authorName).toBe("Comment Tester");
+    expect(rows[1]?.deletedAt).toBeNull();
   });
 });

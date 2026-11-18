@@ -367,6 +367,32 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
 
     const res = await taskDetailRouteAction(actionArgs);
     expect(res.status).toBe(404);
+
+    for (const extraEntries of [
+      [
+        ["intent", "comment"],
+        ["body", "Non-member comment probe"],
+      ],
+      [
+        ["intent", "deleteComment"],
+        ["commentId", "comment-probe-id"],
+      ],
+    ] as const) {
+      const extraForm = new FormData();
+      for (const [k, v] of extraEntries) {
+        extraForm.append(k, v);
+      }
+      const extraRes = await taskDetailRouteAction({
+        ...baseArgs,
+        request: new Request(`http://localhost/projects/${world.projectId}/tasks/${taskId}`, {
+          method: "POST",
+          headers: baseArgs.request.headers,
+          body: extraForm,
+        }),
+        params: { projectId: world.projectId, taskId },
+      });
+      expect(extraRes.status).toBe(404);
+    }
   });
 
   it("throws 404 Response when non-existent project is requested", async () => {

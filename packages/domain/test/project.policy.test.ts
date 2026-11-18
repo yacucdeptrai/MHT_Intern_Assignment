@@ -5,6 +5,7 @@ import {
   canApproveTask,
   canArchiveTask,
   canAssignTask,
+  canCreateComment,
   canCreateTask,
   canDeleteAttachment,
   canDeleteComment,
@@ -264,6 +265,25 @@ describe("Project Permission Matrix (docs/05 §3.2)", () => {
 
     it("denies when project is archived", () => {
       expect(canReopenTask({ ...adminActor, isProjectArchived: true })).toBe(false);
+    });
+  });
+
+  describe("canCreateComment (FR-19, FR-09 c4)", () => {
+    it("FR-19 c1: allows Admin, PM, Team Lead, Creator, Assignee, and Other Member", () => {
+      expect(canCreateComment(adminActor)).toBe(true);
+      expect(canCreateComment(projectPmActor)).toBe(true);
+      expect(canCreateComment(teamLeadActor)).toBe(true);
+      expect(canCreateComment(creatorActor)).toBe(true);
+      expect(canCreateComment(assigneeActor)).toBe(true);
+      expect(canCreateComment(otherMemberActor)).toBe(true);
+    });
+
+    it("denies Non-Member", () => {
+      expect(canCreateComment(nonMemberActor)).toBe(false);
+    });
+
+    it("FR-09 c4: denies when project is archived (including Admin)", () => {
+      expect(canCreateComment({ ...adminActor, isProjectArchived: true })).toBe(false);
     });
   });
 

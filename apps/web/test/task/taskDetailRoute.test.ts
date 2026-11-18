@@ -1381,4 +1381,179 @@ describe("taskDetailAction", () => {
       expect(loaderData.history[1]?.action).toBe("TASK_CREATED");
     });
   });
+
+  describe("taskDetailAction comment and deleteComment intents (FR-19 / A21, A22)", () => {
+    it("FR-19 c1, c2: posts root comment, direct reply, and reply-to-reply via action (201), rejects empty body (400), and returns 404 for non-member", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { ctx: nonMemberCtx, cookie: nonMemberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Comment Action Task" });
+      const taskUrl = `http://localhost/projects/${projectId}/tasks/${task.id}`;
+
+      // Empty comment -> 400
+      const emptyForm = new FormData();
+      emptyForm.append("intent", "comment");
+      emptyForm.append("body", "   ");
+      const emptyRes = await taskDetailAction(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: memberCookie }, body: emptyForm }),
+      );
+      expect(emptyRes.status).toBe(400);
+
+      // Root comment -> 201
+      const rootForm = new FormData();
+      rootForm.append("intent", "comment");
+      rootForm.append("body", "Root comment from member");
+      const rootRes = await taskDetailAction(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: memberCookie }, body: rootForm }),
+      );
+      expect(rootRes.status).toBe(201);
+      const rootJson = await rootRes.json<{
+        success: boolean;
+        comment: { id: string; parentCommentId: string | null };
+      }>();
+      expect(rootJson.success).toBe(true);
+      expect(rootJson.comment.parentCommentId).toBeNull();
+
+      // Direct reply -> 201
+      const replyForm = new FormData();
+      replyForm.append("intent", "comment");
+      replyForm.append("body", "Direct reply from PM");
+      replyForm.append("parentCommentId", rootJson.comment.id);
+      const replyRes = await taskDetailAction(
+        pmCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: pmCookie }, body: replyForm }),
+      );
+      expect(replyRes.status).toBe(201);
+      const replyJson = await replyRes.json<{
+        success: boolean;
+        comment: { id: string; parentCommentId: string | null };
+      }>();
+      expect(replyJson.comment.parentCommentId).toBe(rootJson.comment.id);
+
+      // Reply-to-reply -> 201 re-pointed to root
+      const nestedForm = new FormData();
+      nestedForm.append("intent", "comment");
+      nestedForm.append("body", "Follow-up reply");
+      nestedForm.append("parentCommentId", replyJson.comment.id);
+      const nestedRes = await taskDetailAction(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: memberCookie }, body: nestedForm }),
+      );
+      expect(nestedRes.status).toBe(201);
+      const nestedJson = await nestedRes.json<{ success: boolean; comment: { parentCommentId: string | null } }>();
+      expect(nestedJson.comment.parentCommentId).toBe(rootJson.comment.id);
+
+      // Non-member -> 404
+      const outsiderForm = new FormData();
+      outsiderForm.append("intent", "comment");
+      outsiderForm.append("body", "Outsider comment");
+      const outsiderRes = await taskDetailAction(
+        nonMemberCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: nonMemberCookie }, body: outsiderForm }),
+      );
+      expect(outsiderRes.status).toBe(404);
+    });
+
+    it("FR-19 c3: deletes comment via action (200), returns 403 for non-author member, and 409 on second delete", async () => {
+      const { ctx: pmCtx, user: pmUser } = await createTestContext("PM");
+      const { ctx: authorCtx, user: authorUser, cookie: authorCookie } = await createTestContext("MEMBER");
+      const { ctx: otherCtx, user: otherUser, cookie: otherCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: authorUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: otherUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Delete Comment Action Task" });
+      const taskUrl = `http://localhost/projects/${projectId}/tasks/${task.id}`;
+
+      const createForm = new FormData();
+      createForm.append("intent", "comment");
+      createForm.append("body", "Author comment");
+      const createdRes = await taskDetailAction(
+        authorCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: authorCookie }, body: createForm }),
+      );
+      const { comment } = await createdRes.json<{ comment: { id: string } }>();
+
+      const delForm = new FormData();
+      delForm.append("intent", "deleteComment");
+      delForm.append("commentId", comment.id);
+
+      // Non-author MEMBER -> 403
+      const forbiddenRes = await taskDetailAction(
+        otherCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: otherCookie }, body: delForm }),
+      );
+      expect(forbiddenRes.status).toBe(403);
+
+      // Author -> 200
+      const okRes = await taskDetailAction(
+        authorCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: authorCookie }, body: delForm }),
+      );
+      expect(okRes.status).toBe(200);
+
+      // Second delete -> 409
+      const secondRes = await taskDetailAction(
+        authorCtx,
+        projectId,
+        task.id,
+        new Request(taskUrl, { method: "POST", headers: { Cookie: authorCookie }, body: delForm }),
+      );
+      expect(secondRes.status).toBe(409);
+    });
+  });
 });
