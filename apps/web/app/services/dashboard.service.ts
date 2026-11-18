@@ -1,0 +1,134 @@
+import type { AdminDashboardLoaderData, DashboardLoaderData, TaskAssigneeInfo, TaskListItem } from "@pm/domain";
+import {
+  ForbiddenError,
+  getTodayDateString,
+  isDueSoon,
+  isOverdue,
+  isTodayPriority,
+  UnauthorizedError,
+} from "@pm/domain";
+import {
+  notificationRepository,
+  projectMemberRepository,
+  projectRepository,
+  taskAssigneeRepository,
+  taskRepository,
+} from "@pm/db";
+
+import type { RequestContext } from "../utils/requestContext.server";
+
+export const dashboardService = {
+  async getPersonalDashboard(ctx: RequestContext): Promise<DashboardLoaderData> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const now = ctx.clock.now();
+    const isAdmin = ctx.user.systemRole === "ADMIN";
+
+    let allowedProjectIds: string[] | undefined;
+    if (!isAdmin) {
+      const memberships = await projectMemberRepository.listByUser(ctx.db, ctx.user.id);
+      allowedProjectIds = memberships.map((m) => m.projectId);
+    }
+
+    const [rawTasks, unreadCount] = await Promise.all([
+      taskRepository.listDashboardTasks(ctx.db, {
+        userId: ctx.user.id,
+        allowedProjectIds,
+      }),
+      notificationRepository.countUnread(ctx.db, ctx.user.id),
+    ]);
+
+    const taskIds = rawTasks.map((t) => t.id);
+    const assigneesByTaskId = new Map<string, TaskAssigneeInfo[]>();
+    if (taskIds.length > 0) {
+      const assignees = await taskAssigneeRepository.findByTaskIdsWithUser(ctx.db, taskIds);
+      for (const a of assignees) {
+        const list = assigneesByTaskId.get(a.taskId) ?? [];
+        list.push({ id: a.userId, fullName: a.fullName, avatarKey: a.avatarKey });
+        assigneesByTaskId.set(a.taskId, list);
+      }
+    }
+
+    const taskListItems: TaskListItem[] = rawTasks.map((task) => ({
+      id: task.id,
+      projectId: task.projectId,
+      projectCode: task.projectCode,
+      projectName: task.projectName,
+      number: task.number,
+      title: task.title,
+      priority: task.priority,
+      statusId: task.statusId,
+      statusName: task.statusName,
+      statusCategory: task.statusCategory,
+      dueDate: task.dueDate,
+      startDate: task.startDate,
+      assignees: assigneesByTaskId.get(task.id) ?? [],
+      parentTaskId: task.parentTaskId,
+      sprintId: task.sprintId,
+      sprintName: task.sprintName,
+      isOverdue: isOverdue(
+        { dueDate: task.dueDate, statusCategory: task.statusCategory, deletedAt: task.deletedAt },
+        now,
+      ),
+      isDueSoon: isDueSoon(
+        { dueDate: task.dueDate, statusCategory: task.statusCategory, deletedAt: task.deletedAt },
+        now,
+      ),
+      isTodayPriority: isTodayPriority(
+        {
+          dueDate: task.dueDate,
+          statusCategory: task.statusCategory,
+          deletedAt: task.deletedAt,
+          priority: task.priority,
+        },
+        now,
+      ),
+      createdAt: task.createdAt instanceof Date ? task.createdAt.getTime() : Number(task.createdAt),
+      updatedAt: task.updatedAt instanceof Date ? task.updatedAt.getTime() : Number(task.updatedAt),
+    }));
+
+    const inProgress = taskListItems.filter((t) => t.statusCategory === "IN_PROGRESS");
+    const todayPriorities = taskListItems.filter((t) => t.isTodayPriority);
+
+    return {
+      inProgress,
+      todayPriorities,
+      overdue: [], // TODO(M8-T2): implement overdue widget
+      unreadCount,
+    };
+  },
+
+  async getAdminDashboard(ctx: RequestContext): Promise<AdminDashboardLoaderData> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    if (ctx.user.systemRole !== "ADMIN" && ctx.user.systemRole !== "PM") {
+      throw new ForbiddenError("Insufficient permissions");
+    }
+
+    const now = ctx.clock.now();
+    const todayStr = getTodayDateString(now);
+
+    let allowedProjectIds: string[] | undefined;
+    if (ctx.user.systemRole === "PM") {
+      const memberships = await projectMemberRepository.listByUser(ctx.db, ctx.user.id);
+      allowedProjectIds = memberships.map((m) => m.projectId);
+    }
+
+    const [personalDashboard, projectsAtRisk] = await Promise.all([
+      this.getPersonalDashboard(ctx),
+      projectRepository.listProjectsAtRisk(ctx.db, {
+        todayStr,
+        allowedProjectIds,
+      }),
+    ]);
+
+    return {
+      ...personalDashboard,
+      projectsAtRisk,
+    };
+  },
+};

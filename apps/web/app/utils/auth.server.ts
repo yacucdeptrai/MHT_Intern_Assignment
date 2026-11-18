@@ -6,6 +6,8 @@ import { NotFoundError, UnauthorizedError, type ProjectRole, type SessionUser, t
 import type { RequestContext } from "./requestContext.server";
 import { destroySession, getSession, isRequestSecure } from "./session.server";
 
+export type { SessionUser };
+
 export function getSafeRedirect(target: string | null | undefined, defaultUrl = "/"): string {
   if (!target || typeof target !== "string") {
     return defaultUrl;

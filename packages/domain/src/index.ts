@@ -32,3 +32,4 @@ export type * from "./types/task";
 export type * from "./types/sprint";
 export type * from "./types/comment";
 export type * from "./types/attachment";
+export type * from "./types/dashboard";

@@ -56,3 +56,10 @@ export interface InviteRow {
   createdAt: Date;
   expiresAt: Date;
 }
+
+export interface ProjectRiskItem {
+  id: string;
+  code: string;
+  name: string;
+  overdueCount: number;
+}
