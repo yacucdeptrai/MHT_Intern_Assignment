@@ -10,7 +10,10 @@ import {
   userRepository,
 } from "@pm/db";
 
-import { type JobContext, processJob } from "../../app/services/outbox.service";
+import {
+  type JobContext,
+  processJob,
+} from "../../app/services/outbox.service";
 
 describe("SLACK_POST_TASK outbox handler (FR-27)", () => {
   const db = createDatabase(env.DB);
@@ -433,7 +436,10 @@ describe("SLACK_POST_TASK outbox handler (FR-27)", () => {
 
     expect(outcome).toBe("SKIPPED");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("channel_not_found"), expect.anything());
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("channel_not_found"),
+      expect.anything(),
+    );
   });
 
   it("error handling: Slack HTTP >= 500 throws so job retries", async () => {

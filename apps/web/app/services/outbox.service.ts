@@ -1,9 +1,12 @@
 import {
+  commentRepository,
   createDatabase,
   inviteRepository,
   outboxJobRepository,
   projectRepository,
   taskRepository,
+  taskStatusRepository,
+  userRepository,
   type OutboxJob,
 } from "@pm/db";
 import {
@@ -12,6 +15,7 @@ import {
   OUTBOX_MAX_ATTEMPTS,
   OUTBOX_SWEEP_LIMIT,
   SlackPostTaskPayloadSchema,
+  SlackUpdateThreadPayloadSchema,
   type OutboxJobType,
 } from "@pm/domain";
 
@@ -143,10 +147,105 @@ async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DO
   return "DONE";
 }
 
+async function handleSlackUpdateThread(ctx: JobContext, job: OutboxJob): Promise<"DONE" | "SKIPPED"> {
+  const parsed = SlackUpdateThreadPayloadSchema.safeParse(JSON.parse(job.payload));
+  if (!parsed.success) {
+    return "SKIPPED";
+  }
+
+  const task = await taskRepository.findById(ctx.db, parsed.data.taskId);
+  if (!task || task.deletedAt !== null) {
+    return "SKIPPED";
+  }
+
+  // If Slack is not configured, return SKIPPED without making an external request
+  if (!ctx.env.SLACK_BOT_TOKEN || ctx.env.SLACK_BOT_TOKEN.trim() === "") {
+    return "SKIPPED";
+  }
+
+  const project = await projectRepository.findById(ctx.db, task.projectId);
+  if (!project || !project.slackChannelId || project.slackChannelId.trim() === "") {
+    return "SKIPPED";
+  }
+
+  // Determine thread_ts (ordering after post, FR-28 criterion 2)
+  const threadTs = task.slackThreadTs;
+  if (!threadTs) {
+    const postJob = await outboxJobRepository.findSlackPostTaskJob(ctx.db, task.id);
+    if (!postJob) {
+      return "SKIPPED";
+    }
+    if (postJob.status === "DEAD" || postJob.status === "SKIPPED") {
+      return "SKIPPED";
+    }
+    // If postJob is PENDING, RUNNING, or FAILED: throw retryable error so update follows post
+    throw new Error("Waiting for original post");
+  }
+
+  // Look up status names
+  const [fromStatus, toStatus] = await Promise.all([
+    taskStatusRepository.findById(ctx.db, parsed.data.fromStatusId),
+    taskStatusRepository.findById(ctx.db, parsed.data.toStatusId),
+  ]);
+  const fromName = fromStatus?.name ?? "Unknown";
+  const toName = toStatus?.name ?? "Unknown";
+
+  // Look up actor name
+  const actor = await userRepository.findById(ctx.db, parsed.data.actorId);
+  const actorName = actor?.fullName ?? "Unknown";
+
+  // Look up optional reason comment
+  let reasonText: string | undefined;
+  if (parsed.data.reasonCommentId) {
+    const comment = await commentRepository.findById(ctx.db, parsed.data.reasonCommentId);
+    if (comment && comment.deletedAt === null) {
+      reasonText = comment.body;
+    }
+  }
+
+  let messageText = `Status: ${fromName} → ${toName} by ${actorName}`;
+  if (reasonText) {
+    messageText += `\nReason: ${reasonText}`;
+  }
+
+  const res = await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ctx.env.SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      channel: project.slackChannelId,
+      thread_ts: threadTs,
+      text: messageText,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Slack chat.postMessage failed with HTTP ${res.status}`);
+  }
+
+  const data = await res.json<{ ok: boolean; error?: string }>();
+  if (!data.ok) {
+    if (data.error === "channel_not_found" || data.error === "not_in_channel") {
+      ctx.logger.warn(`Slack thread update skipped: ${data.error}`, {
+        jobId: job.id,
+        taskId: task.id,
+        channel: project.slackChannelId,
+        slackError: data.error,
+      });
+      return "SKIPPED";
+    }
+    throw new Error(`Slack API error: ${data.error ?? "unknown"}`);
+  }
+
+  return "DONE";
+}
+
 export const jobHandlers: Record<OutboxJobType, JobHandler> = {
   EMAIL_INVITE: handleInviteEmail,
   SLACK_POST_TASK: handleSlackPostTask,
-  SLACK_UPDATE_THREAD: () => Promise.resolve("SKIPPED"),
+  SLACK_UPDATE_THREAD: handleSlackUpdateThread,
   EMAIL_DEADLINE_REMINDER: () => Promise.resolve("SKIPPED"),
 };
 
