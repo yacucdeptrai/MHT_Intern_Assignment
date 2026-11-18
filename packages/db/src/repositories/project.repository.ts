@@ -1,8 +1,11 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import type { ProjectRiskItem } from "@pm/domain";
 
 import type { AppDatabase } from "../client";
 import { projectMembers } from "../schema/projectMembers";
 import { projects, type NewProject, type Project } from "../schema/projects";
+import { tasks } from "../schema/tasks";
+import { taskStatuses } from "../schema/taskStatuses";
 
 export const projectRepository = {
   insertStmt(db: AppDatabase, project: NewProject) {
@@ -76,5 +79,43 @@ export const projectRepository = {
       ...r.project,
       projectRole: r.projectRole,
     }));
+  },
+
+  async listProjectsAtRisk(
+    db: AppDatabase,
+    options: { todayStr: string; allowedProjectIds?: string[] },
+  ): Promise<ProjectRiskItem[]> {
+    if (options.allowedProjectIds && options.allowedProjectIds.length === 0) {
+      return [];
+    }
+
+    const conditions = [
+      isNull(projects.deletedAt),
+      isNull(tasks.deletedAt),
+      isNotNull(tasks.dueDate),
+      sql`${tasks.dueDate} < ${options.todayStr}`,
+      sql`${taskStatuses.category} != 'DONE'`,
+    ];
+
+    if (options.allowedProjectIds) {
+      conditions.push(inArray(projects.id, options.allowedProjectIds));
+    }
+
+    const rows = await db
+      .select({
+        id: projects.id,
+        code: projects.code,
+        name: projects.name,
+        overdueCount: sql<number>`count(${tasks.id})`.mapWith(Number),
+      })
+      .from(projects)
+      .innerJoin(tasks, eq(tasks.projectId, projects.id))
+      .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+      .where(and(...conditions))
+      .groupBy(projects.id, projects.code, projects.name)
+      .having(sql`count(${tasks.id}) > 0`)
+      .orderBy(desc(sql`count(${tasks.id})`), asc(projects.code));
+
+    return rows;
   },
 };

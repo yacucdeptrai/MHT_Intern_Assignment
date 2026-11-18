@@ -536,4 +536,65 @@ export const taskRepository = {
       totalPages: Math.ceil(total / pageSize) || 1,
     };
   },
+
+  listDashboardTasks: async (
+    db: AppDatabase,
+    options: { userId: string; allowedProjectIds?: string[] },
+  ): Promise<MyTaskRow[]> => {
+    if (options.allowedProjectIds && options.allowedProjectIds.length === 0) {
+      return [];
+    }
+
+    const assignedSubquery = db
+      .select({ taskId: taskAssignees.taskId })
+      .from(taskAssignees)
+      .where(eq(taskAssignees.userId, options.userId));
+
+    const conditions = [
+      inArray(tasks.id, assignedSubquery),
+      isNull(tasks.deletedAt),
+      isNull(projects.deletedAt),
+      sql`${taskStatuses.category} != 'DONE'`,
+    ];
+
+    if (options.allowedProjectIds) {
+      conditions.push(inArray(tasks.projectId, options.allowedProjectIds));
+    }
+
+    const items = await db
+      .select({
+        id: tasks.id,
+        projectId: tasks.projectId,
+        number: tasks.number,
+        parentTaskId: tasks.parentTaskId,
+        sprintId: tasks.sprintId,
+        statusId: tasks.statusId,
+        title: tasks.title,
+        description: tasks.description,
+        priority: tasks.priority,
+        startDate: tasks.startDate,
+        dueDate: tasks.dueDate,
+        createdById: tasks.createdById,
+        slackThreadTs: tasks.slackThreadTs,
+        statusChangedAt: tasks.statusChangedAt,
+        completedAt: tasks.completedAt,
+        version: tasks.version,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        deletedAt: tasks.deletedAt,
+        statusName: taskStatuses.name,
+        statusCategory: taskStatuses.category,
+        projectCode: projects.code,
+        projectName: projects.name,
+        sprintName: sprints.name,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+      .leftJoin(sprints, eq(tasks.sprintId, sprints.id))
+      .where(and(...conditions))
+      .orderBy(asc(tasks.dueDate), desc(tasks.createdAt));
+
+    return items;
+  },
 };
