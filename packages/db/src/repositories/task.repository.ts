@@ -226,6 +226,16 @@ export const taskRepository = {
       .where(and(eq(tasks.sprintId, input.sprintId), isNull(tasks.deletedAt)));
   },
 
+  updateSlackThreadTsStmt: (db: AppDatabase, taskId: string, ts: string, now: Date) => {
+    return db
+      .update(tasks)
+      .set({
+        slackThreadTs: ts,
+        updatedAt: now,
+      })
+      .where(and(eq(tasks.id, taskId), isNull(tasks.slackThreadTs)));
+  },
+
   findDetailsById: async (db: AppDatabase, id: string): Promise<TaskDetailRow | undefined> => {
     const parentTasks = alias(tasks, "parent_tasks");
     const rows = await db

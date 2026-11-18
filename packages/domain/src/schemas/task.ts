@@ -201,6 +201,15 @@ export const TaskReasonSchema = z.object({
 
 export type TaskReasonInput = z.infer<typeof TaskReasonSchema>;
 
+export const SlackPostTaskPayloadSchema = z.object({
+  taskId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+  createdById: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
+});
+
+export type SlackPostTaskPayload = z.infer<typeof SlackPostTaskPayloadSchema>;
+
 export const SlackUpdateThreadPayloadSchema = z.object({
   taskId: z.string().min(1),
   fromStatusId: z.string().min(1),
