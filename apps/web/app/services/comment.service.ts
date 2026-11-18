@@ -26,6 +26,7 @@ import {
 
 import { loadProjectAccess } from "../utils/auth.server";
 import type { RequestContext } from "../utils/requestContext.server";
+import { notificationService } from "./notification.service";
 
 function mapRowToCommentDto(row: CommentWithAuthorRow, actor: ActorContext): CommentDto {
   const isDeleted = row.deletedAt !== null;
@@ -162,7 +163,14 @@ export const commentService = {
       ]),
     );
 
-    // TODO(M6-T2): publishNotifications after commit (A21 TASK_COMMENTED)
+    if (notifications.length > 0) {
+      ctx.waitUntil(
+        notificationService.publishNotifications(
+          ctx,
+          notifications.map((n) => n.id),
+        ),
+      );
+    }
     ctx.logger.info("Task comment added", {
       taskId,
       projectId,

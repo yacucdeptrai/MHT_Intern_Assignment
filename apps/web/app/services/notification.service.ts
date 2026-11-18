@@ -87,4 +87,49 @@ export const notificationService = {
       requestId: ctx.requestId,
     });
   },
+
+  async publishNotifications(ctx: RequestContext, notificationIds: string[]): Promise<void> {
+    if (notificationIds.length === 0) {
+      return;
+    }
+
+    try {
+      const items = await notificationRepository.findByIds(ctx.db, notificationIds);
+      if (items.length === 0) {
+        return;
+      }
+
+      // Group notifications by recipient userId
+      const byUser = new Map<string, NotificationDto[]>();
+      for (const item of items) {
+        const dto = toNotificationDto(item);
+        const list = byUser.get(item.userId) ?? [];
+        list.push(dto);
+        byUser.set(item.userId, list);
+      }
+
+      for (const [userId, userNotifications] of byUser.entries()) {
+        try {
+          const hubId = ctx.env.NOTIFICATION_HUB.idFromName(userId);
+          const hub = ctx.env.NOTIFICATION_HUB.get(hubId);
+          for (const dto of userNotifications) {
+            await hub.publish(dto);
+          }
+        } catch (hubErr) {
+          ctx.logger.error("Failed to publish notification to hub", {
+            userId,
+            error: hubErr instanceof Error ? hubErr : new Error(String(hubErr)),
+            requestId: ctx.requestId,
+          });
+        }
+      }
+    } catch (err) {
+      // Swallowed: realtime notification failures must never roll back or fail the originating request
+      ctx.logger.error("Failed to publish notifications", {
+        error: err instanceof Error ? err : new Error(String(err)),
+        notificationIds,
+        requestId: ctx.requestId,
+      });
+    }
+  },
 };

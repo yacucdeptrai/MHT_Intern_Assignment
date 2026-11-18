@@ -219,4 +219,40 @@ describe("notificationRepository (docs/03 §notifications, FR-25)", () => {
     const u2After = await notificationRepository.countUnread(db, user2.id);
     expect(u2After).toBe(1);
   });
+
+  it("findByIds returns matching notifications or empty array", async () => {
+    const { db, user1, projectId, now } = await setupFixture();
+
+    const empty = await notificationRepository.findByIds(db, []);
+    expect(empty).toEqual([]);
+
+    const id1 = crypto.randomUUID();
+    const id2 = crypto.randomUUID();
+    await db.batch([
+      notificationRepository.insertStmt(db, {
+        id: id1,
+        userId: user1.id,
+        type: "TASK_ASSIGNED",
+        entityId: crypto.randomUUID(),
+        projectId,
+        payload: { title: "Task 1", actorName: "Lead" },
+        readAt: null,
+        createdAt: now,
+      }),
+      notificationRepository.insertStmt(db, {
+        id: id2,
+        userId: user1.id,
+        type: "TASK_COMMENTED",
+        entityId: crypto.randomUUID(),
+        projectId,
+        payload: { title: "Task 2", actorName: "Lead" },
+        readAt: null,
+        createdAt: now,
+      }),
+    ]);
+
+    const found = await notificationRepository.findByIds(db, [id1, id2, crypto.randomUUID()]);
+    expect(found.length).toBe(2);
+    expect(found.map((n) => n.id).sort()).toEqual([id1, id2].sort());
+  });
 });

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import { notifications, type NewNotification, type Notification } from "../schema/notifications";
@@ -55,6 +55,13 @@ export const notificationRepository = {
   async findById(db: AppDatabase, id: string): Promise<Notification | null> {
     const rows = await db.select().from(notifications).where(eq(notifications.id, id)).limit(1);
     return rows[0] ?? null;
+  },
+
+  async findByIds(db: AppDatabase, ids: string[]): Promise<Notification[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return db.select().from(notifications).where(inArray(notifications.id, ids));
   },
 
   markReadStmt(db: AppDatabase, id: string, userId: string, readAt: Date) {
