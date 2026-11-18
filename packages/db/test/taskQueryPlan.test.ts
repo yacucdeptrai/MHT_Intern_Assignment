@@ -284,4 +284,121 @@ describe("Task list queries and EXPLAIN QUERY PLAN (M3-T3 / FR-16)", () => {
     expect(overdueTasks.total).toBe(1);
     expect(overdueTasks.items[0]?.id).toBe(t1);
   });
+
+  describe("Calendar queries (FR-35)", () => {
+    it("EXPLAIN QUERY PLAN shows index use for idx_tasks_due on calendar range lookups", async () => {
+      const db = createDatabase(env.DB);
+      const plan = await db.all<QueryPlanRow>(
+        sql`EXPLAIN QUERY PLAN SELECT * FROM tasks WHERE deleted_at IS NULL AND due_date >= '2026-11-01' AND due_date <= '2026-11-30'`,
+      );
+
+      const details = plan.map((r) => r.detail).join("\n");
+      expect(details).toContain("USING INDEX idx_tasks_due");
+    });
+
+    it("FR-35 c1: listCalendarTasks returns spans and single-day tasks, omitting tasks without dates", async () => {
+      const db = createDatabase(env.DB);
+      const now = new Date();
+      const projectId = crypto.randomUUID();
+      const statusId = crypto.randomUUID();
+
+      const user = await userRepository.insert(db, {
+        id: crypto.randomUUID(),
+        email: `cal-user-${Date.now()}@example.com`,
+        fullName: "Calendar User",
+        systemRole: "MEMBER",
+        status: "ACTIVE",
+        passwordHash: "hash",
+        passwordIterations: 100000,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.batch([
+        projectRepository.insertStmt(db, {
+          id: projectId,
+          code: `CAL${Date.now().toString().slice(-6)}`,
+          name: "Calendar Test Project",
+          startDate: "2026-11-01",
+          endDate: "2026-12-31",
+          status: "ACTIVE",
+          createdById: user.id,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        taskStatusRepository.insertStmt(db, {
+          id: statusId,
+          name: `Status-${crypto.randomUUID().slice(0, 6)}`,
+          category: "TODO",
+          isDefault: true,
+          position: 1,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ]);
+
+      const tSpan = crypto.randomUUID(); // Nov 10 to Nov 20 (overlaps Nov 15-25)
+      const tSingle = crypto.randomUUID(); // Nov 18 only (overlaps Nov 15-25)
+      const tNoDates = crypto.randomUUID(); // No dates (omitted)
+      const tOutside = crypto.randomUUID(); // Dec 01 only (outside Nov 15-25)
+
+      await db.batch([
+        taskRepository.insertStmt(db, {
+          id: tSpan,
+          projectId,
+          statusId,
+          title: "Span Task",
+          startDate: "2026-11-10",
+          dueDate: "2026-11-20",
+          createdById: user.id,
+          statusChangedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        taskRepository.insertStmt(db, {
+          id: tSingle,
+          projectId,
+          statusId,
+          title: "Single Day Task",
+          dueDate: "2026-11-18",
+          createdById: user.id,
+          statusChangedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        taskRepository.insertStmt(db, {
+          id: tNoDates,
+          projectId,
+          statusId,
+          title: "No Date Task",
+          createdById: user.id,
+          statusChangedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        taskRepository.insertStmt(db, {
+          id: tOutside,
+          projectId,
+          statusId,
+          title: "Outside Task",
+          dueDate: "2026-12-01",
+          createdById: user.id,
+          statusChangedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ]);
+
+      const events = await taskRepository.listCalendarTasks(db, {
+        from: "2026-11-15",
+        to: "2026-11-25",
+        projectId,
+      });
+
+      expect(events.map((e) => e.id)).toContain(tSpan);
+      expect(events.map((e) => e.id)).toContain(tSingle);
+      expect(events.map((e) => e.id)).not.toContain(tNoDates);
+      expect(events.map((e) => e.id)).not.toContain(tOutside);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { StatusCategory, TaskPriority } from "@pm/domain";
 
@@ -597,4 +597,71 @@ export const taskRepository = {
 
     return items;
   },
+
+  listCalendarTasks: async (
+    db: AppDatabase,
+    options: {
+      from: string;
+      to: string;
+      projectId?: string;
+      allowedProjectIds?: string[];
+    },
+  ): Promise<CalendarTaskRow[]> => {
+    if (options.allowedProjectIds && options.allowedProjectIds.length === 0) {
+      return [];
+    }
+
+    const conditions = [
+      isNull(tasks.deletedAt),
+      isNull(projects.deletedAt),
+      eq(projects.status, "ACTIVE"),
+      isNotNull(tasks.dueDate),
+      gte(tasks.dueDate, options.from),
+      sql`coalesce(${tasks.startDate}, ${tasks.dueDate}) <= ${options.to}`,
+    ];
+
+    if (options.projectId) {
+      conditions.push(eq(tasks.projectId, options.projectId));
+    } else if (options.allowedProjectIds) {
+      conditions.push(inArray(tasks.projectId, options.allowedProjectIds));
+    }
+
+    const items = await db
+      .select({
+        id: tasks.id,
+        projectId: tasks.projectId,
+        number: tasks.number,
+        title: tasks.title,
+        priority: tasks.priority,
+        statusId: tasks.statusId,
+        startDate: tasks.startDate,
+        dueDate: tasks.dueDate,
+        statusName: taskStatuses.name,
+        statusCategory: taskStatuses.category,
+        projectCode: projects.code,
+        projectName: projects.name,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+      .where(and(...conditions))
+      .orderBy(asc(sql`coalesce(${tasks.startDate}, ${tasks.dueDate})`), asc(tasks.dueDate), asc(tasks.number));
+
+    return items;
+  },
 };
+
+export interface CalendarTaskRow {
+  id: string;
+  projectId: string;
+  number: number;
+  title: string;
+  priority: TaskPriority;
+  statusId: string;
+  statusName: string;
+  statusCategory: StatusCategory;
+  startDate: string | null;
+  dueDate: string | null;
+  projectCode: string;
+  projectName: string;
+}

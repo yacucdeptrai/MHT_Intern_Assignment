@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { calculateDaysOverdue, isDueSoon, isOverdue, isTodayPriority } from "../src/dates";
+import {
+  calculateDaysOverdue,
+  getCalendarNavDates,
+  getCalendarRange,
+  isDueSoon,
+  isOverdue,
+  isTodayPriority,
+} from "../src/dates";
 
 describe("domain dates: isOverdue, isDueSoon, isTodayPriority (docs/09 §3.5)", () => {
   const baseTask = {
@@ -132,6 +139,41 @@ describe("domain dates: isOverdue, isDueSoon, isTodayPriority (docs/09 §3.5)", 
       expect(calculateDaysOverdue("2026-11-18", at0030)).toBe(2);
       expect(calculateDaysOverdue("2026-11-19", at0030)).toBe(1);
       expect(calculateDaysOverdue("2026-11-20", at0030)).toBe(0);
+    });
+  });
+
+  describe("getCalendarRange and getCalendarNavDates (FR-35 c1, c3)", () => {
+    it("computes single-day range for day view", () => {
+      const range = getCalendarRange("day", "2026-11-19");
+      expect(range).toEqual({ from: "2026-11-19", to: "2026-11-19" });
+
+      const nav = getCalendarNavDates("day", "2026-11-19");
+      expect(nav).toEqual({ prev: "2026-11-18", next: "2026-11-20" });
+    });
+
+    it("computes Monday-to-Sunday week range for week view", () => {
+      // 2026-11-19 is Thursday. Monday is Nov 16, Sunday is Nov 22.
+      const range = getCalendarRange("week", "2026-11-19");
+      expect(range).toEqual({ from: "2026-11-16", to: "2026-11-22" });
+
+      const nav = getCalendarNavDates("week", "2026-11-19");
+      expect(nav).toEqual({ prev: "2026-11-12", next: "2026-11-26" });
+    });
+
+    it("computes full month range for month view", () => {
+      // November has 30 days
+      const range = getCalendarRange("month", "2026-11-19");
+      expect(range).toEqual({ from: "2026-11-01", to: "2026-11-30" });
+
+      const nav = getCalendarNavDates("month", "2026-11-19");
+      expect(nav).toEqual({ prev: "2026-10-01", next: "2026-12-01" });
+    });
+
+    it("handles month-end leap-year boundary for February", () => {
+      // 2024 is leap year -> 29 days
+      expect(getCalendarRange("month", "2024-02-15")).toEqual({ from: "2024-02-01", to: "2024-02-29" });
+      // 2026 is non-leap year -> 28 days
+      expect(getCalendarRange("month", "2026-02-15")).toEqual({ from: "2026-02-01", to: "2026-02-28" });
     });
   });
 });
