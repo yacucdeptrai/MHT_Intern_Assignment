@@ -3,16 +3,16 @@ import { expect, test } from "@playwright/test";
 
 import { addMemberToNewProject, createSignedInMember } from "./helpers";
 
-/**
- * Proxies /api/realtime through to the real server while recording connections. In development,
- * React StrictMode mounts effects twice, so a page may open and immediately close one extra socket;
- * tests therefore look at live sockets and at attempts counted from a settled baseline.
- */
 /** Builds close options without undefined keys (exactOptionalPropertyTypes). */
 function closeOptions(code: number | undefined, reason: string | undefined): { code?: number; reason?: string } {
   return { ...(code === undefined ? {} : { code }), ...(reason === undefined ? {} : { reason }) };
 }
 
+/**
+ * Proxies /api/realtime through to the real server while recording connections. In development,
+ * React StrictMode mounts effects twice, so a page may open and immediately close one extra socket;
+ * tests therefore look at live sockets and at attempts counted from a settled baseline.
+ */
 async function trackRealtime(page: Page) {
   const state = { attempts: 0, refuse: false, live: new Set<WebSocketRoute>() };
   await page.routeWebSocket("**/api/realtime", (ws) => {
