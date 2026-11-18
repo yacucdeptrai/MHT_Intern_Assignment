@@ -20,6 +20,7 @@ import {
   canApproveTask,
   canArchiveTask,
   canAssignTask,
+  canCreateComment,
   canCreateTask,
   canEditTask,
   canMoveTaskToCategory,
@@ -69,6 +70,7 @@ import {
 
 import { loadProjectAccess } from "../utils/auth.server";
 import type { RequestContext } from "../utils/requestContext.server";
+import { buildCommentThreads } from "./comment.service";
 import { dispatchOutbox } from "./outbox.service";
 
 export interface TaskDto extends TaskRow {
@@ -705,14 +707,16 @@ export const taskService = {
       updatedAt: typeof st.updatedAt === "number" ? st.updatedAt : st.updatedAt.getTime(),
     }));
 
-    const [statuses, members, sprints, history] = await Promise.all([
+    const [statuses, members, sprints, history, commentRows] = await Promise.all([
       taskStatusRepository.list(ctx.db),
       projectMemberRepository.listByProjectWithUser(ctx.db, projectId),
       sprintRepository.listByProject(ctx.db, projectId),
       auditLogRepository.listByEntityWithActor(ctx.db, "TASK", taskId),
+      commentRepository.listByTaskWithAuthor(ctx.db, taskId),
     ]);
 
     const actor = toActor(ctx.user, access);
+    const comments = buildCommentThreads(commentRows, actor);
     const target: TaskPolicyTarget = {
       createdById: taskRow.createdById,
       assigneeIds: assigneeInfos.map((a) => a.id),
@@ -725,6 +729,7 @@ export const taskService = {
       canAssign: canAssignTask(actor),
       canApprove: canApproveTask(actor) && isTransitionAllowed(target.category, "DONE", "APPROVE"),
       canReopen: canReopenTask(actor) && isTransitionAllowed(target.category, "IN_PROGRESS", "REOPEN"),
+      canComment: canCreateComment(actor),
     };
 
     const task: TaskDetailDto = {
@@ -782,6 +787,7 @@ export const taskService = {
     return {
       task,
       subTasks,
+      comments,
       history,
       members: members.map((m) => ({
         id: m.userId,

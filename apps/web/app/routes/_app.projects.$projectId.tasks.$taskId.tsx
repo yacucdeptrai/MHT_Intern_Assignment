@@ -5,6 +5,7 @@ import { Form, Link, useActionData, useLoaderData, useNavigation } from "react-r
 import { APP_NAME, TASK_PRIORITIES, type TaskDetailLoaderData, type TaskPriority } from "@pm/domain";
 
 import { taskDetailAction } from "../actions/taskDetailAction";
+import { TaskCommentsSection } from "../components/task/TaskCommentsSection";
 import { taskDetailLoader } from "../loaders/taskDetailLoader";
 import { extractAuditDiffs, formatAuditTimestamp } from "../utils/formatAudit";
 import { requestContextKey } from "../utils/requestContext.server";
@@ -32,13 +33,15 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 
 interface ActionData {
   success?: boolean;
+  intent?: string;
   errors?: Record<string, string[]>;
   message?: string;
   values?: Record<string, string>;
 }
 
 export default function TaskDetailPage() {
-  const { task, subTasks, history, sprints, members, statuses, permissions } = useLoaderData<TaskDetailLoaderData>();
+  const { task, subTasks, comments, history, sprints, members, statuses, permissions } =
+    useLoaderData<TaskDetailLoaderData>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
 
@@ -696,7 +699,12 @@ export default function TaskDetailPage() {
             );
           })()}
 
-          {/* TODO(M5-T1): render threaded comments (including rejection and reopen reason comments) */}
+          <TaskCommentsSection
+            comments={comments}
+            canComment={permissions.canComment}
+            isSubmitting={isSubmitting}
+            actionData={actionData}
+          />
 
           {/* Task History Section (FR-24 c3) */}
           <div
