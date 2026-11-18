@@ -1143,4 +1143,203 @@ describe("taskDetailAction", () => {
       expect(nonMemberRes.status).toBe(404);
     });
   });
+
+  describe("taskDetailAction reject and reopen intents (FR-23 / A19)", () => {
+    async function ensureWorkflowDefaults(db: RequestContext["db"]) {
+      const categories = [
+        ["IN_PROGRESS", 2],
+        ["REVIEW", 3],
+        ["DONE", 4],
+      ] as const;
+      const result: Record<string, { id: string }> = {};
+      for (const [category, pos] of categories) {
+        const existing = await taskStatusRepository.findDefaultByCategory(db, category);
+        if (existing) {
+          result[category] = existing;
+        } else {
+          result[category] = await taskStatusRepository.insert(db, {
+            id: crypto.randomUUID(),
+            name: `${category} ${crypto.randomUUID().slice(0, 6)}`,
+            category,
+            position: pos,
+            isDefault: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      }
+      return result;
+    }
+
+    it("FR-23 c1, c2: lead rejects REVIEW task with reason -> 200 IN_PROGRESS; empty reason -> 400 'A reason is required'", async () => {
+      const { ctx: leadCtx, user: leadUser, cookie: leadCookie } = await createTestContext("TEAM_LEAD");
+      const { projectId } = await createProject(leadCtx);
+      const defaults = await ensureWorkflowDefaults(leadCtx.db);
+
+      await leadCtx.db.batch([
+        projectMemberRepository.insertStmt(leadCtx.db, {
+          projectId,
+          userId: leadUser.id,
+          projectRole: "TEAM_LEAD",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(leadCtx, projectId, { title: "Action Reject Task" });
+      await taskService.changeStatus(leadCtx, projectId, task.id, {
+        statusId: defaults.REVIEW?.id ?? "",
+        version: 1,
+      });
+
+      // Empty reason -> 400 "A reason is required"
+      const emptyForm = new FormData();
+      emptyForm.append("intent", "reject");
+      emptyForm.append("version", "2");
+      emptyForm.append("reason", "   ");
+
+      const emptyRes = await taskDetailAction(
+        leadCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: leadCookie },
+          body: emptyForm,
+        }),
+      );
+      expect(emptyRes.status).toBe(400);
+      const emptyJson = await emptyRes.json<{ success: boolean; message: string }>();
+      expect(emptyJson.message).toBe("A reason is required");
+
+      // Valid reason -> 200 IN_PROGRESS
+      const validForm = new FormData();
+      validForm.append("intent", "reject");
+      validForm.append("version", "2");
+      validForm.append("reason", "Please add pagination boundary tests");
+
+      const validRes = await taskDetailAction(
+        leadCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: leadCookie },
+          body: validForm,
+        }),
+      );
+      expect(validRes.status).toBe(200);
+      const validJson = await validRes.json<{
+        success: boolean;
+        task: { statusId: string; statusCategory: string; version: number };
+      }>();
+      expect(validJson.success).toBe(true);
+      expect(validJson.task.statusId).toBe(defaults.IN_PROGRESS?.id);
+      expect(validJson.task.statusCategory).toBe("IN_PROGRESS");
+      expect(validJson.task.version).toBe(3);
+    });
+
+    it("FR-23 c3, c4: lead reopens DONE task -> 200 clearing completedAt; MEMBER gets 403; non-member gets 404", async () => {
+      const { ctx: pmCtx, user: pmUser, cookie: pmCookie } = await createTestContext("PM");
+      const { ctx: memberCtx, user: memberUser, cookie: memberCookie } = await createTestContext("MEMBER");
+      const { ctx: nonMemberCtx, cookie: nonMemberCookie } = await createTestContext("MEMBER");
+      const { projectId } = await createProject(pmCtx);
+      const defaults = await ensureWorkflowDefaults(pmCtx.db);
+
+      await pmCtx.db.batch([
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: pmUser.id,
+          projectRole: "PM",
+          createdAt: new Date(),
+        }),
+        projectMemberRepository.insertStmt(pmCtx.db, {
+          projectId,
+          userId: memberUser.id,
+          projectRole: "MEMBER",
+          createdAt: new Date(),
+        }),
+      ]);
+
+      const task = await taskService.createTask(pmCtx, projectId, { title: "Action Reopen Task" });
+      await taskService.changeStatus(pmCtx, projectId, task.id, {
+        statusId: defaults.REVIEW?.id ?? "",
+        version: 1,
+      });
+
+      // Member posting reject -> 403
+      const memberRejectForm = new FormData();
+      memberRejectForm.append("intent", "reject");
+      memberRejectForm.append("version", "2");
+      memberRejectForm.append("reason", "Member attempt");
+      const memberRejectRes = await taskDetailAction(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: memberCookie },
+          body: memberRejectForm,
+        }),
+      );
+      expect(memberRejectRes.status).toBe(403);
+
+      // PM approves -> DONE (version 3)
+      await taskService.approveTask(pmCtx, projectId, task.id, { version: 2 });
+
+      // Member posting reopen -> 403
+      const memberReopenForm = new FormData();
+      memberReopenForm.append("intent", "reopen");
+      memberReopenForm.append("version", "3");
+      memberReopenForm.append("reason", "Member reopen attempt");
+      const memberReopenRes = await taskDetailAction(
+        memberCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: memberCookie },
+          body: memberReopenForm,
+        }),
+      );
+      expect(memberReopenRes.status).toBe(403);
+
+      // Non-member posting reopen -> 404
+      const nonMemberRes = await taskDetailAction(
+        nonMemberCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: nonMemberCookie },
+          body: memberReopenForm,
+        }),
+      );
+      expect(nonMemberRes.status).toBe(404);
+
+      // PM reopens -> 200 IN_PROGRESS, completedAt null
+      const reopenForm = new FormData();
+      reopenForm.append("intent", "reopen");
+      reopenForm.append("version", "3");
+      reopenForm.append("reason", "Found bug after deployment");
+      const reopenRes = await taskDetailAction(
+        pmCtx,
+        projectId,
+        task.id,
+        new Request(`http://localhost/projects/${projectId}/tasks/${task.id}`, {
+          method: "POST",
+          headers: { Cookie: pmCookie },
+          body: reopenForm,
+        }),
+      );
+      expect(reopenRes.status).toBe(200);
+      const reopenJson = await reopenRes.json<{
+        success: boolean;
+        task: { statusCategory: string; completedAt: number | null; version: number };
+      }>();
+      expect(reopenJson.success).toBe(true);
+      expect(reopenJson.task.statusCategory).toBe("IN_PROGRESS");
+      expect(reopenJson.task.completedAt).toBeNull();
+      expect(reopenJson.task.version).toBe(4);
+    });
+  });
 });

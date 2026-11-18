@@ -8,6 +8,7 @@ import {
   isTransitionAllowed,
   SlackUpdateThreadPayloadSchema,
   TaskApproveSchema,
+  TaskReasonSchema,
   TaskStatusChangeSchema,
   ValidationError,
 } from "../src";
@@ -244,5 +245,31 @@ describe("TaskStatusChangeSchema & SlackUpdateThreadPayloadSchema", () => {
     });
     expect(TaskApproveSchema.safeParse({ version: "0" }).success).toBe(false);
     expect(TaskApproveSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("FR-23 c1, c2: TaskReasonSchema trims reason (1..2000 chars) and rejects empty or >2000-char reasons", () => {
+    const valid = TaskReasonSchema.safeParse({ reason: "  Needs unit tests  ", version: "3" });
+    expect(valid).toEqual({
+      success: true,
+      data: { reason: "Needs unit tests", version: 3 },
+    });
+
+    const maxLen = TaskReasonSchema.safeParse({ reason: "a".repeat(2000), version: 1 });
+    expect(maxLen.success).toBe(true);
+
+    const empty = TaskReasonSchema.safeParse({ reason: "   ", version: 1 });
+    expect(empty.success).toBe(false);
+    if (!empty.success) {
+      expect(empty.error.issues[0]?.message).toBe("A reason is required");
+    }
+
+    const missing = TaskReasonSchema.safeParse({ version: 1 });
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      expect(missing.error.issues[0]?.message).toBe("A reason is required");
+    }
+
+    const tooLong = TaskReasonSchema.safeParse({ reason: "a".repeat(2001), version: 1 });
+    expect(tooLong.success).toBe(false);
   });
 });

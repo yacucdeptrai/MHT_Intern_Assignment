@@ -1,5 +1,6 @@
 import {
   auditLogRepository,
+  commentRepository,
   compactBatch,
   conflictGuardStmt,
   isVersionConflict,
@@ -37,6 +38,7 @@ import {
   TaskArchiveSchema,
   TaskAssignSchema,
   TaskCreateSchema,
+  TaskReasonSchema,
   TaskStatusChangeSchema,
   TaskUpdateSchema,
   toActor,
@@ -60,6 +62,7 @@ import {
   type TaskListItem,
   type TaskPermissions,
   type TaskPolicyTarget,
+  type TaskReasonInput,
   type TaskStatusChangeInput,
   type TaskUpdateInput,
 } from "@pm/domain";
@@ -87,6 +90,163 @@ async function assertSprintAssignable(ctx: RequestContext, projectId: string, sp
   if (sprint.deletedAt !== null) {
     throw new ValidationError("Sprint is archived", { sprintId: ["Sprint is archived"] });
   }
+}
+
+async function transitionWithReason(
+  ctx: RequestContext,
+  projectId: string,
+  taskId: string,
+  rawInput: unknown,
+  mode: "REJECT" | "REOPEN",
+): Promise<TaskRow["id"]> {
+  if (!ctx.user) {
+    throw new UnauthorizedError("Authentication required");
+  }
+  const currentUser = ctx.user;
+
+  const access = await loadProjectAccess(ctx, projectId);
+  if (access.isArchived) {
+    throw new ForbiddenError("This project is archived");
+  }
+
+  const existing = await taskRepository.findDetailsById(ctx.db, taskId);
+  if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
+    throw new NotFoundError("Task not found");
+  }
+
+  const actor = toActor(currentUser, access);
+  if (mode === "REJECT") {
+    if (!canApproveTask(actor)) {
+      throw new ForbiddenError("You cannot reject this task");
+    }
+  } else if (!canReopenTask(actor)) {
+    throw new ForbiddenError("You cannot reopen this task");
+  }
+
+  let inProgressStatus = await taskStatusRepository.findDefaultByCategory(ctx.db, "IN_PROGRESS");
+  if (!inProgressStatus) {
+    const statuses = await taskStatusRepository.list(ctx.db);
+    inProgressStatus = statuses.find((s) => s.category === "IN_PROGRESS") ?? null;
+  }
+  if (!inProgressStatus) {
+    throw new Error("No default IN_PROGRESS status found");
+  }
+
+  assertTransitionAllowed(existing.statusCategory, inProgressStatus.category, mode);
+
+  const parsed = TaskReasonSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string[]> = {};
+    let firstMessage: string | undefined;
+    for (const issue of parsed.error.issues) {
+      firstMessage ??= issue.message;
+      const field = issue.path[0];
+      if (typeof field === "string") {
+        fieldErrors[field] = fieldErrors[field] ?? [];
+        fieldErrors[field].push(issue.message);
+      }
+    }
+    throw new ValidationError(firstMessage ?? "A reason is required", fieldErrors);
+  }
+  const data: TaskReasonInput = parsed.data;
+
+  const assigneeIds = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
+  const now = ctx.clock.now();
+  const commentId = crypto.randomUUID();
+  const jobId = crypto.randomUUID();
+  const auditAction = mode === "REJECT" ? ("TASK_REJECTED" as const) : ("TASK_REOPENED" as const);
+  const notificationType = mode === "REJECT" ? ("TASK_REJECTED" as const) : ("TASK_REOPENED" as const);
+
+  const notifications = assigneeIds
+    .filter((userId) => userId !== currentUser.id)
+    .map((userId) => ({
+      id: crypto.randomUUID(),
+      userId,
+      type: notificationType,
+      entityId: taskId,
+      projectId,
+      payload: {
+        title: existing.title,
+        actorName: currentUser.fullName,
+        reason: data.reason,
+      },
+      readAt: null,
+      createdAt: now,
+    }));
+
+  const payload: SlackUpdateThreadPayload = {
+    taskId,
+    fromStatusId: existing.statusId,
+    toStatusId: inProgressStatus.id,
+    actorId: currentUser.id,
+    reasonCommentId: commentId,
+  };
+
+  try {
+    await ctx.db.batch(
+      compactBatch([
+        taskRepository.updateStatusStmt(ctx.db, {
+          id: taskId,
+          expectedVersion: data.version,
+          statusId: inProgressStatus.id,
+          completedAt: null,
+          now,
+        }),
+        conflictGuardStmt(ctx.db),
+        commentRepository.insertStmt(ctx.db, {
+          id: commentId,
+          taskId,
+          authorId: currentUser.id,
+          parentCommentId: null,
+          body: data.reason,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        }),
+        auditLogRepository.insertStmt(ctx.db, {
+          id: crypto.randomUUID(),
+          actorId: currentUser.id,
+          action: auditAction,
+          entityType: "TASK",
+          entityId: taskId,
+          projectId,
+          changes: {
+            statusId: { from: existing.statusId, to: inProgressStatus.id },
+            statusName: { from: existing.statusName, to: inProgressStatus.name },
+            reason: { from: null, to: data.reason },
+            commentId: { from: null, to: commentId },
+          },
+          createdAt: now,
+        }),
+        notificationRepository.insertManyStmt(ctx.db, notifications),
+        outboxJobRepository.insertStmt(ctx.db, {
+          id: jobId,
+          type: "SLACK_UPDATE_THREAD",
+          payload: JSON.stringify(payload),
+          status: "PENDING",
+          attempts: 0,
+          nextAttemptAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ]),
+    );
+  } catch (error) {
+    if (isVersionConflict(error)) {
+      throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+    }
+    throw error;
+  }
+
+  ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
+  // TODO(M6-T2): publishNotifications after commit
+  ctx.logger.info(mode === "REJECT" ? "Task rejected" : "Task reopened", {
+    taskId,
+    projectId,
+    commentId,
+  });
+
+  return taskId;
 }
 
 export const taskService = {
@@ -1190,6 +1350,18 @@ export const taskService = {
     // TODO(M6-T2): publishNotifications after commit
     ctx.logger.info("Task approved", { taskId, projectId });
 
+    const detailData = await this.getTaskDetails(ctx, projectId, taskId);
+    return detailData.task;
+  },
+
+  async rejectTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
+    await transitionWithReason(ctx, projectId, taskId, rawInput, "REJECT");
+    const detailData = await this.getTaskDetails(ctx, projectId, taskId);
+    return detailData.task;
+  },
+
+  async reopenTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
+    await transitionWithReason(ctx, projectId, taskId, rawInput, "REOPEN");
     const detailData = await this.getTaskDetails(ctx, projectId, taskId);
     return detailData.task;
   },

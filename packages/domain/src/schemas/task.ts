@@ -190,6 +190,17 @@ export const TaskApproveSchema = z.object({
 
 export type TaskApproveInput = z.infer<typeof TaskApproveSchema>;
 
+export const TaskReasonSchema = z.object({
+  reason: z
+    .string({ error: "A reason is required" })
+    .trim()
+    .min(1, "A reason is required")
+    .max(2000, "Reason must not exceed 2,000 characters"),
+  version: z.coerce.number().int().positive("Version must be a positive integer"),
+});
+
+export type TaskReasonInput = z.infer<typeof TaskReasonSchema>;
+
 export const SlackUpdateThreadPayloadSchema = z.object({
   taskId: z.string().min(1),
   fromStatusId: z.string().min(1),

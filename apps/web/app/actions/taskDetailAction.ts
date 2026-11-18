@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 
-import { TaskApproveSchema, TaskStatusChangeSchema } from "@pm/domain";
+import { TaskApproveSchema, TaskReasonSchema, TaskStatusChangeSchema } from "@pm/domain";
 
 import { taskService } from "../services/task.service";
 import { requireUser } from "../utils/auth.server";
@@ -100,7 +100,31 @@ export async function taskDetailAction(
       return Response.json({ success: true, task }, { status: 200 });
     }
 
-    // TODO(M4-T3): reject and reopen intents (A19)
+    if (intent === "reject" || intent === "reopen") {
+      const parsed = TaskReasonSchema.safeParse(rawData);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        let firstMessage: string | undefined;
+        for (const issue of parsed.error.issues) {
+          firstMessage ??= issue.message;
+          const field = issue.path[0];
+          if (typeof field === "string") {
+            fieldErrors[field] = fieldErrors[field] ?? [];
+            fieldErrors[field].push(issue.message);
+          }
+        }
+        return Response.json(
+          { success: false, errors: fieldErrors, message: firstMessage ?? "A reason is required", values: rawData },
+          { status: 400 },
+        );
+      }
+      const task =
+        intent === "reject"
+          ? await taskService.rejectTask(ctx, projectId, taskId, parsed.data)
+          : await taskService.reopenTask(ctx, projectId, taskId, parsed.data);
+      return Response.json({ success: true, task }, { status: 200 });
+    }
+
     // TODO(M5-T1): comment and deleteComment intents (A21, A22)
     // TODO(M5-T2): deleteAttachment intent (A24)
 

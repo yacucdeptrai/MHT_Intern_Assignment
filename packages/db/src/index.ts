@@ -12,4 +12,5 @@ export * from "./repositories/taskStatus.repository";
 export * from "./repositories/task.repository";
 export * from "./repositories/taskAssignee.repository";
 export * from "./repositories/sprint.repository";
+export * from "./repositories/comment.repository";
 export * from "./schema";
