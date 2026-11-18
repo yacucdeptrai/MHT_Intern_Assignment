@@ -1,9 +1,17 @@
-import { createDatabase, inviteRepository, outboxJobRepository, type OutboxJob } from "@pm/db";
+import {
+  createDatabase,
+  inviteRepository,
+  outboxJobRepository,
+  projectRepository,
+  taskRepository,
+  type OutboxJob,
+} from "@pm/db";
 import {
   EmailInvitePayloadSchema,
   OUTBOX_BACKOFF_BASE_MS,
   OUTBOX_MAX_ATTEMPTS,
   OUTBOX_SWEEP_LIMIT,
+  SlackPostTaskPayloadSchema,
   type OutboxJobType,
 } from "@pm/domain";
 
@@ -60,9 +68,84 @@ async function handleInviteEmail(ctx: JobContext, job: OutboxJob): Promise<"DONE
   return "DONE";
 }
 
+async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DONE" | "SKIPPED"> {
+  const parsed = SlackPostTaskPayloadSchema.safeParse(JSON.parse(job.payload));
+  if (!parsed.success) {
+    return "SKIPPED";
+  }
+
+  const task = await taskRepository.findById(ctx.db, parsed.data.taskId);
+  if (!task || task.deletedAt !== null) {
+    return "SKIPPED";
+  }
+
+  // Sub-tasks are not posted (FR-27 criterion 3)
+  if (task.parentTaskId !== null) {
+    return "SKIPPED";
+  }
+
+  // Idempotency: if already posted, return DONE without re-posting (FR-27 criterion 4)
+  if (task.slackThreadTs) {
+    return "DONE";
+  }
+
+  // If Slack is not configured, return SKIPPED without making an external request (FR-27 criterion 2)
+  if (!ctx.env.SLACK_BOT_TOKEN || ctx.env.SLACK_BOT_TOKEN.trim() === "") {
+    return "SKIPPED";
+  }
+
+  const project = await projectRepository.findById(ctx.db, task.projectId);
+  if (!project || !project.slackChannelId || project.slackChannelId.trim() === "") {
+    return "SKIPPED";
+  }
+
+  // Format message text: *<CODE>-<number>* <title> · Priority: <priority> · Due: <dueDate or "none"> · <APP_BASE_URL>/projects/<projectId>/tasks/<taskId>
+  const appBaseUrl = ctx.env.APP_BASE_URL.replace(/\/+$/, "");
+  const taskUrl = `${appBaseUrl}/projects/${project.id}/tasks/${task.id}`;
+  const dueText = task.dueDate || "none";
+  const messageText = `*${project.code}-${task.number}* ${task.title} · Priority: ${task.priority} · Due: ${dueText} · ${taskUrl}`;
+
+  const res = await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ctx.env.SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      channel: project.slackChannelId,
+      text: messageText,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Slack chat.postMessage failed with HTTP ${res.status}`);
+  }
+
+  const data = await res.json<{ ok: boolean; ts?: string; error?: string }>();
+  if (!data.ok) {
+    if (data.error === "channel_not_found" || data.error === "not_in_channel") {
+      ctx.logger.warn(`Slack post skipped: ${data.error}`, {
+        jobId: job.id,
+        taskId: task.id,
+        channel: project.slackChannelId,
+        slackError: data.error,
+      });
+      return "SKIPPED";
+    }
+    throw new Error(`Slack API error: ${data.error ?? "unknown"}`);
+  }
+
+  if (data.ts) {
+    const now = ctx.clock.now();
+    await ctx.db.batch([taskRepository.updateSlackThreadTsStmt(ctx.db, task.id, data.ts, now)]);
+  }
+
+  return "DONE";
+}
+
 export const jobHandlers: Record<OutboxJobType, JobHandler> = {
   EMAIL_INVITE: handleInviteEmail,
-  SLACK_POST_TASK: () => Promise.resolve("SKIPPED"),
+  SLACK_POST_TASK: handleSlackPostTask,
   SLACK_UPDATE_THREAD: () => Promise.resolve("SKIPPED"),
   EMAIL_DEADLINE_REMINDER: () => Promise.resolve("SKIPPED"),
 };
