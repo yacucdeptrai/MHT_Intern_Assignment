@@ -75,6 +75,7 @@ import {
 import { loadProjectAccess } from "../utils/auth.server";
 import type { RequestContext } from "../utils/requestContext.server";
 import { buildCommentThreads } from "./comment.service";
+import { notificationService } from "./notification.service";
 import { dispatchOutbox } from "./outbox.service";
 
 export interface TaskDto extends TaskRow {
@@ -245,7 +246,14 @@ async function transitionWithReason(
   }
 
   ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
-  // TODO(M6-T2): publishNotifications after commit (A19 TASK_REJECTED / TASK_REOPENED)
+  if (notifications.length > 0) {
+    ctx.waitUntil(
+      notificationService.publishNotifications(
+        ctx,
+        notifications.map((n) => n.id),
+      ),
+    );
+  }
   ctx.logger.info(mode === "REJECT" ? "Task rejected" : "Task reopened", {
     taskId,
     projectId,
@@ -339,6 +347,17 @@ export const taskService = {
     const now = ctx.clock.now();
     const auditId = crypto.randomUUID();
 
+    const notificationRows = assigneeIds.map((assigneeId) => ({
+      id: crypto.randomUUID(),
+      userId: assigneeId,
+      type: "TASK_ASSIGNED" as const,
+      entityId: taskId,
+      projectId,
+      payload: { title: data.title, actorName: currentUser.fullName },
+      readAt: null,
+      createdAt: now,
+    }));
+
     const batchItems: (AppBatchItem | null)[] = [
       taskRepository.insertStmt(ctx.db, {
         id: taskId,
@@ -357,18 +376,7 @@ export const taskService = {
         updatedAt: now,
       }),
       ...taskAssigneeRepository.insertBatchStmt(ctx.db, taskId, assigneeIds, now),
-      ...assigneeIds.map((assigneeId) =>
-        notificationRepository.insertStmt(ctx.db, {
-          id: crypto.randomUUID(),
-          userId: assigneeId,
-          type: "TASK_ASSIGNED",
-          entityId: taskId,
-          projectId,
-          payload: { title: data.title, actorName: currentUser.fullName },
-          readAt: null,
-          createdAt: now,
-        }),
-      ),
+      ...notificationRows.map((n) => notificationRepository.insertStmt(ctx.db, n)),
       auditLogRepository.insertStmt(ctx.db, {
         id: auditId,
         actorId: currentUser.id,
@@ -414,7 +422,14 @@ export const taskService = {
     if (slackPostJobId) {
       ctx.waitUntil(dispatchOutbox(ctx, [slackPostJobId]));
     }
-    // TODO(M6-T2): publishNotifications after commit (A14 TASK_ASSIGNED)
+    if (notificationRows.length > 0) {
+      ctx.waitUntil(
+        notificationService.publishNotifications(
+          ctx,
+          notificationRows.map((n) => n.id),
+        ),
+      );
+    }
 
     const created = await taskRepository.findById(ctx.db, taskId);
     if (!created) {
@@ -1010,6 +1025,20 @@ export const taskService = {
     const now = ctx.clock.now();
     const auditId = crypto.randomUUID();
 
+    const notificationRows = newAssignees.map((userId) => ({
+      id: crypto.randomUUID(),
+      userId,
+      type: "TASK_ASSIGNED" as const,
+      entityId: taskId,
+      projectId,
+      payload: {
+        title: existing.title,
+        actorName: currentUser.fullName,
+      },
+      readAt: null,
+      createdAt: now,
+    }));
+
     // A17: update tasks.version (version guard); guard; delete task_assignees for the task; insert the new task_assignees; insert audit_logs TASK_ASSIGNED; insert notifications TASK_ASSIGNED (new assignees only)
     const batchItems: (AppBatchItem | null)[] = [
       taskRepository.updateVersionStmt(ctx.db, {
@@ -1032,21 +1061,7 @@ export const taskService = {
         },
         createdAt: now,
       }),
-      ...newAssignees.map((userId) =>
-        notificationRepository.insertStmt(ctx.db, {
-          id: crypto.randomUUID(),
-          userId,
-          type: "TASK_ASSIGNED",
-          entityId: taskId,
-          projectId,
-          payload: {
-            title: existing.title,
-            actorName: currentUser.fullName,
-          },
-          readAt: null,
-          createdAt: now,
-        }),
-      ),
+      ...notificationRows.map((n) => notificationRepository.insertStmt(ctx.db, n)),
     ];
 
     try {
@@ -1058,7 +1073,14 @@ export const taskService = {
       throw error;
     }
 
-    // TODO(M6-T2): publishNotifications after commit (A17 TASK_ASSIGNED)
+    if (notificationRows.length > 0) {
+      ctx.waitUntil(
+        notificationService.publishNotifications(
+          ctx,
+          notificationRows.map((n) => n.id),
+        ),
+      );
+    }
     ctx.logger.info("Task assignees updated", {
       taskId,
       projectId,
@@ -1387,7 +1409,14 @@ export const taskService = {
     }
 
     ctx.waitUntil(dispatchOutbox(ctx, [jobId]));
-    // TODO(M6-T2): publishNotifications after commit (A18 TASK_APPROVED)
+    if (notifications.length > 0) {
+      ctx.waitUntil(
+        notificationService.publishNotifications(
+          ctx,
+          notifications.map((n) => n.id),
+        ),
+      );
+    }
     ctx.logger.info("Task approved", { taskId, projectId });
 
     const detailData = await this.getTaskDetails(ctx, projectId, taskId);

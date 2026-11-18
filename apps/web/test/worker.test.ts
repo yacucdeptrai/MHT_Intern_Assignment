@@ -13,12 +13,12 @@ describe("GET /api/health", () => {
   });
 });
 
-describe("UserNotificationHub (stub until M6-T2)", () => {
-  it("is bound and answers 501 Not Implemented", async () => {
+describe("UserNotificationHub (M6-T2)", () => {
+  it("is bound and requires Upgrade: websocket", async () => {
     const hub = env.NOTIFICATION_HUB.get(env.NOTIFICATION_HUB.idFromName("user-1"));
 
     const response = await hub.fetch("https://hub/connect");
 
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(426);
   });
 });

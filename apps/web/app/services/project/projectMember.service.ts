@@ -34,6 +34,7 @@ import {
 import { loadProjectAccess } from "../../utils/auth.server";
 import type { RequestContext } from "../../utils/requestContext.server";
 import { inviteService } from "../invite.service";
+import { notificationService } from "../notification.service";
 
 /**
  * Shared last-PM guard for FR-10 c5 and FR-11 c2:
@@ -182,7 +183,7 @@ export const projectMemberService = {
       throw err;
     }
 
-    // TODO(M6-T2): publishNotifications after commit (A4 PROJECT_MEMBER_ADDED)
+    ctx.waitUntil(notificationService.publishNotifications(ctx, [notificationId]));
     ctx.logger.info("Project member added", {
       projectId,
       userId,

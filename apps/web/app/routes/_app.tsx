@@ -5,6 +5,7 @@ import { AdminShell } from "../components/layouts/AdminShell";
 import { MemberShell } from "../components/layouts/MemberShell";
 import { requireUser } from "../utils/auth.server";
 import { requestContextKey } from "../utils/requestContext.server";
+import { useRealtimeNotifications } from "../utils/useRealtimeNotifications";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const ctx = context.get(requestContextKey);
@@ -14,6 +15,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
 export default function AppLayout() {
   const { user } = useLoaderData<typeof loader>();
+  useRealtimeNotifications(Boolean(user));
 
   if (user.systemRole === "ADMIN" || user.systemRole === "PM") {
     return (
