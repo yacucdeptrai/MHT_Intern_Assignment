@@ -17,6 +17,9 @@ export interface AttachmentWithUploaderRow {
   createdAt: Date;
 }
 
+/** D1 rejects a single query with more than 100 bound parameters ("too many SQL variables"). */
+const D1_MAX_BOUND_PARAMETERS = 100;
+
 export const attachmentRepository = {
   insertStmt: (db: AppDatabase, data: NewAttachmentRow): BatchItem<"sqlite"> => {
     return db.insert(attachments).values(data);
@@ -67,12 +70,21 @@ export const attachmentRepository = {
     });
   },
 
+  /**
+   * Returns which of `storageKeys` have an attachment row. D1 allows at most 100 bound parameters
+   * per query, so the keys are looked up in chunks of `D1_MAX_BOUND_PARAMETERS`, whatever the caller's
+   * batch size.
+   */
   findExistingStorageKeys: async (db: AppDatabase, storageKeys: string[]): Promise<Set<string>> => {
-    if (storageKeys.length === 0) return new Set();
-    const rows = await db
-      .select({ storageKey: attachments.storageKey })
-      .from(attachments)
-      .where(inArray(attachments.storageKey, storageKeys));
-    return new Set(rows.map((r) => r.storageKey));
+    const found = new Set<string>();
+    for (let start = 0; start < storageKeys.length; start += D1_MAX_BOUND_PARAMETERS) {
+      const chunk = storageKeys.slice(start, start + D1_MAX_BOUND_PARAMETERS);
+      const rows = await db
+        .select({ storageKey: attachments.storageKey })
+        .from(attachments)
+        .where(inArray(attachments.storageKey, chunk));
+      for (const row of rows) found.add(row.storageKey);
+    }
+    return found;
   },
 };
