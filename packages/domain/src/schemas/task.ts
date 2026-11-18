@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TASK_PRIORITIES } from "../enums";
+import { REMINDER_KINDS, TASK_PRIORITIES } from "../enums";
 
 export const TaskCreateBaseSchema = z.object({
   title: z
@@ -219,3 +219,12 @@ export const SlackUpdateThreadPayloadSchema = z.object({
 });
 
 export type SlackUpdateThreadPayload = z.infer<typeof SlackUpdateThreadPayloadSchema>;
+
+export const EmailDeadlineReminderPayloadSchema = z.object({
+  taskId: z.string().min(1),
+  userId: z.string().min(1),
+  kind: z.enum(REMINDER_KINDS),
+  dueDate: z.string().min(1),
+});
+
+export type EmailDeadlineReminderPayload = z.infer<typeof EmailDeadlineReminderPayloadSchema>;

@@ -12,3 +12,4 @@ export * from "./tasks";
 export * from "./taskAssignees";
 export * from "./comments";
 export * from "./attachments";
+export * from "./reminderLog";
