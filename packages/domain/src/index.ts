@@ -15,6 +15,7 @@ export * from "./schemas/sprint";
 export * from "./schemas/audit";
 export * from "./schemas/comment";
 export * from "./schemas/attachment";
+export * from "./schemas/notification";
 export * from "./dates";
 export * from "./workflow";
 export * from "./policies/types";
