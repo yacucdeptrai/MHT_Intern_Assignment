@@ -86,4 +86,15 @@ export const outboxJobRepository = {
       .orderBy(asc(outboxJobs.nextAttemptAt))
       .limit(limit);
   },
+
+  async findSlackPostTaskJob(db: AppDatabase, taskId: string): Promise<OutboxJob | null> {
+    const [job] = await db
+      .select()
+      .from(outboxJobs)
+      .where(
+        and(eq(outboxJobs.type, "SLACK_POST_TASK"), sql`json_extract(${outboxJobs.payload}, '$.taskId') = ${taskId}`),
+      )
+      .limit(1);
+    return job ?? null;
+  },
 };

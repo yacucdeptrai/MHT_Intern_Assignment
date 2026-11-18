@@ -127,4 +127,30 @@ describe("Outbox and Invite repositories", () => {
     // Second acceptance touches 0 rows and is rejected by conflictGuardStmt
     await expect(db.batch([inviteRepository.acceptStmt(db, inviteId, now), conflictGuardStmt(db)])).rejects.toThrow();
   });
+
+  it("finds SLACK_POST_TASK job by taskId from payload using json_extract", async () => {
+    const db = createDatabase(env.DB);
+    const now = new Date();
+    const taskId = crypto.randomUUID();
+    const jobId = crypto.randomUUID();
+
+    const notFound = await outboxJobRepository.findSlackPostTaskJob(db, taskId);
+    expect(notFound).toBeNull();
+
+    await outboxJobRepository.insert(db, {
+      id: jobId,
+      type: "SLACK_POST_TASK",
+      payload: JSON.stringify({ taskId, title: "Test task" }),
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const found = await outboxJobRepository.findSlackPostTaskJob(db, taskId);
+    expect(found).not.toBeNull();
+    expect(found?.id).toBe(jobId);
+    expect(found?.type).toBe("SLACK_POST_TASK");
+  });
 });
