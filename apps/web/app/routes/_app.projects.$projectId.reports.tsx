@@ -17,7 +17,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export default function ProjectReportsPage() {
-  const { tab, memberReport, sprints, filters, permissions } = useLoaderData<typeof loader>();
+  const { tab, memberReport, projectReport, sprints, filters, permissions } = useLoaderData<typeof loader>();
 
   const currentTab = tab;
 
@@ -266,10 +266,371 @@ export default function ProjectReportsPage() {
         </div>
       )}
 
-      {/* Project Report Tab (Placeholder for M8-T5) */}
-      {currentTab === "project" && (
-        <div data-testid="project-report-section" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Project progress, completion rate, and bottlenecks.</p>
+      {/* Project Report Tab (FR-31) */}
+      {currentTab === "project" && projectReport && (
+        <div data-testid="project-report-section" className="space-y-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" data-testid="kpi-completion-rate">
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Task Completion Rate</div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-gray-900">{projectReport.completionRate}%</span>
+                <span className="text-xs text-gray-500">
+                  ({projectReport.doneTasks}/{projectReport.totalTasks} done)
+                </span>
+              </div>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className="h-full bg-green-500 transition-all duration-300"
+                  style={{ width: `${projectReport.completionRate}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" data-testid="kpi-total-tasks">
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Work Items</div>
+              <div className="mt-2 text-3xl font-extrabold text-gray-900">{projectReport.totalTasks}</div>
+              <div className="mt-3 text-xs text-gray-500">All non-archived tasks in project</div>
+            </div>
+
+            <div
+              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+              data-testid="kpi-bottlenecks-count"
+            >
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Review Bottlenecks</div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-amber-600">
+                  {projectReport.bottlenecks.staleReviews.length}
+                </span>
+                <span className="text-xs text-gray-500">stale reviews (&gt; 2 days)</span>
+              </div>
+              <div className="mt-3 text-xs text-gray-500">
+                {projectReport.bottlenecks.overdueByStatus.reduce((acc, s) => acc + s.overdueCount, 0)} overdue tasks
+              </div>
+            </div>
+          </div>
+
+          {/* Status Distribution */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm" data-testid="status-distribution">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Task Distribution by Status</h3>
+              <p className="text-xs text-gray-500">Breakdown of work items across workflow statuses.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Category
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Count
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Share
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {projectReport.statusDistribution.map((item) => (
+                    <tr
+                      key={item.statusId}
+                      data-testid={`status-dist-row-${item.statusId}`}
+                      className="hover:bg-gray-50/50"
+                    >
+                      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                        {item.statusName}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-xs">
+                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                          {item.category}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-gray-900">
+                        {item.taskCount}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        <div className="flex items-center gap-3">
+                          <div className="h-2 w-36 overflow-hidden rounded-full bg-gray-100">
+                            <div className="h-full bg-blue-500" style={{ width: `${item.percentage}%` }} />
+                          </div>
+                          <span className="w-10 text-xs font-medium text-gray-700">{item.percentage}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sprint Completion (P11) */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm" data-testid="sprint-completion-section">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Sprint Completion</h3>
+              <p className="text-xs text-gray-500">
+                Progress across past and active sprints (Done top-level tasks / non-archived top-level tasks).
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Sprint
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Dates
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                    >
+                      Completion Rate
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {projectReport.sprintCompletion.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">
+                        No sprints found for this project.
+                      </td>
+                    </tr>
+                  ) : (
+                    projectReport.sprintCompletion.map((sprint) => (
+                      <tr
+                        key={sprint.id}
+                        data-testid={`sprint-completion-row-${sprint.id}`}
+                        className="hover:bg-gray-50/50"
+                      >
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{sprint.name}</td>
+                        <td className="whitespace-nowrap px-4 py-4 text-xs">
+                          <span
+                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                              sprint.status === "ACTIVE"
+                                ? "bg-green-50 text-green-700 ring-green-600/20"
+                                : sprint.status === "COMPLETED"
+                                  ? "bg-gray-100 text-gray-700 ring-gray-500/20"
+                                  : "bg-blue-50 text-blue-700 ring-blue-600/20"
+                            }`}
+                          >
+                            {sprint.status}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-xs text-gray-500">
+                          {sprint.startDate} to {sprint.endDate}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm" data-testid="sprint-completion-value">
+                          {sprint.completionRate === null ? (
+                            <span className="text-gray-400 font-medium italic">No tasks</span>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <div className="h-2 w-32 overflow-hidden rounded-full bg-gray-100">
+                                <div className="h-full bg-green-500" style={{ width: `${sprint.completionRate}%` }} />
+                              </div>
+                              <span className="text-sm font-semibold text-gray-900">{sprint.completionRate}%</span>
+                              <span className="text-xs text-gray-500">
+                                ({sprint.completedCount}/{sprint.taskCount} done)
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Bottlenecks Section (P21) */}
+          <div className="space-y-6" data-testid="bottlenecks-section">
+            <h3 className="text-lg font-bold text-gray-900">Bottlenecks & Blockers</h3>
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Stale Reviews (FR-31 c3) */}
+              <div
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+                data-testid="stale-reviews-section"
+              >
+                <div className="border-b border-gray-200 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-900">Stale Reviews</h4>
+                      <p className="text-xs text-gray-500">Tasks in review for longer than 2 days.</p>
+                    </div>
+                    {projectReport.bottlenecks.staleReviews.length > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                        {projectReport.bottlenecks.staleReviews.length} pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200" data-testid="stale-reviews-table">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                        >
+                          Task
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
+                        >
+                          Time in Review
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                        >
+                          Assignees
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {projectReport.bottlenecks.staleReviews.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
+                            No stale reviews (&gt; 2 days).
+                          </td>
+                        </tr>
+                      ) : (
+                        projectReport.bottlenecks.staleReviews.map((task) => (
+                          <tr
+                            key={task.taskId}
+                            data-testid={`stale-review-row-${task.taskId}`}
+                            className="hover:bg-gray-50/50"
+                          >
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                              <div className="truncate max-w-xs">{task.title}</div>
+                              <div className="text-xs text-gray-500">{task.statusName}</div>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-4 text-right text-xs">
+                              <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                                {task.daysInReview} days
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-500">
+                              {task.assignees.length === 0 ? (
+                                <span className="italic text-gray-400">Unassigned</span>
+                              ) : (
+                                <div className="flex flex-col gap-0.5">
+                                  {task.assignees.map((a) => (
+                                    <span key={a.id} className="font-medium text-gray-800">
+                                      {a.fullName}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Overdue by Status */}
+              <div
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+                data-testid="overdue-by-status-section"
+              >
+                <div className="border-b border-gray-200 px-6 py-4">
+                  <h4 className="text-base font-semibold text-gray-900">Overdue Tasks by Status</h4>
+                  <p className="text-xs text-gray-500">Uncompleted tasks past due date, grouped by status.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200" data-testid="overdue-by-status-table">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                        >
+                          Status
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
+                        >
+                          Category
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-red-600"
+                        >
+                          Overdue Count
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {projectReport.bottlenecks.overdueByStatus.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
+                            No overdue tasks in this project.
+                          </td>
+                        </tr>
+                      ) : (
+                        projectReport.bottlenecks.overdueByStatus.map((item) => (
+                          <tr
+                            key={item.statusId}
+                            data-testid={`overdue-status-row-${item.statusId}`}
+                            className="hover:bg-gray-50/50"
+                          >
+                            <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                              {item.statusName}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-4 text-xs">
+                              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-bold text-red-600">
+                              <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700">
+                                {item.overdueCount}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
