@@ -13,6 +13,7 @@ import { NotFoundError } from "@pm/domain";
 
 import { loader as projectLayoutLoader } from "../../app/routes/_app.projects.$projectId";
 import { loader as projectMembersRouteLoader } from "../../app/routes/_app.projects.$projectId.members";
+import { loader as projectReportsRouteLoader } from "../../app/routes/_app.projects.$projectId.reports";
 import { loader as projectSprintsRouteLoader } from "../../app/routes/_app.projects.$projectId.sprints";
 import {
   action as taskDetailRouteAction,
@@ -515,5 +516,17 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
     const ctx = contextFor(db, world.users.nonMember);
     const args = await requestFor(`http://localhost/calendar?projectId=${world.projectId}`, world.users.nonMember, ctx);
     await expect(calendarRouteLoader(args)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("FR-30 c2 / P3: returns 404 Response when non-member requests /projects/:projectId/reports", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const ctx = contextFor(db, world.users.nonMember);
+    const args = await requestFor(`http://localhost/projects/${world.projectId}/reports`, world.users.nonMember, ctx);
+    const loaderArgs = {
+      ...args,
+      params: { projectId: world.projectId },
+    } as unknown as Parameters<typeof projectReportsRouteLoader>[0];
+    await expect(projectReportsRouteLoader(loaderArgs)).rejects.toMatchObject({ status: 404 });
   });
 });

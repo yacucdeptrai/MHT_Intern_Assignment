@@ -16,4 +16,5 @@ export * from "./repositories/comment.repository";
 export * from "./repositories/attachment.repository";
 export * from "./repositories/reminderLog.repository";
 export * from "./repositories/cronState.repository";
+export * from "./repositories/report.repository";
 export * from "./schema";

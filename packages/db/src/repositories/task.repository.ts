@@ -22,6 +22,7 @@ export interface CreateTaskInput {
   startDate?: string | null;
   dueDate?: string | null;
   createdById: string;
+  completedAt?: Date | null;
   statusChangedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -120,7 +121,7 @@ export const taskRepository = {
       createdById: input.createdById,
       slackThreadTs: null,
       statusChangedAt: input.statusChangedAt,
-      completedAt: null,
+      completedAt: input.completedAt ?? null,
       version: 1,
       createdAt: input.createdAt,
       updatedAt: input.updatedAt,
