@@ -12,6 +12,12 @@ const PING_INTERVAL_MS = 30000;
  */
 export function useRealtimeNotifications(enabled = true) {
   const revalidator = useRevalidator();
+  // useRevalidator() returns a new object whenever its state changes. Reading it through a ref keeps
+  // the effect below from re-running (and tearing down the socket) after every revalidation.
+  const revalidatorRef = useRef(revalidator);
+  useEffect(() => {
+    revalidatorRef.current = revalidator;
+  }, [revalidator]);
   const backoffRef = useRef(INITIAL_BACKOFF_MS);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -62,7 +68,7 @@ export function useRealtimeNotifications(enabled = true) {
 
         // On reconnect: refetch unread notifications so missed events during drop are updated (FR-26 c2)
         if (isReconnectingRef.current) {
-          void revalidator.revalidate();
+          void revalidatorRef.current.revalidate();
           isReconnectingRef.current = false;
         }
 
@@ -88,7 +94,7 @@ export function useRealtimeNotifications(enabled = true) {
         try {
           const data = JSON.parse(event.data) as { type?: unknown };
           if (data.type === "notification" || data.type === "unreadCount") {
-            void revalidator.revalidate();
+            void revalidatorRef.current.revalidate();
           }
         } catch {
           // Ignore invalid payload
@@ -131,5 +137,5 @@ export function useRealtimeNotifications(enabled = true) {
         ws = null;
       }
     };
-  }, [enabled, revalidator]);
+  }, [enabled]);
 }

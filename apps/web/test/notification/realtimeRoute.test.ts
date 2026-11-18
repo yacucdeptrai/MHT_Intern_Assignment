@@ -132,4 +132,54 @@ describe("GET /api/realtime route security (FR-26 c3, docs/07 §4, docs/09 §3.4
     expect(response.status).toBe(101);
     expect(response.webSocket).toBeDefined();
   });
+  it("security: a forged x-user-id header cannot bind the socket to another user's hub", async () => {
+    const { ctx, user, cookieHeader } = await createAuthenticatedUser();
+    const victimId = crypto.randomUUID();
+
+    const response = await realtimeLoader(
+      makeLoaderArgs(
+        new Request("http://localhost:5173/api/realtime", {
+          headers: {
+            Upgrade: "websocket",
+            Cookie: cookieHeader,
+            Origin: "http://localhost:5173",
+            "x-user-id": victimId,
+          },
+        }),
+        ctx,
+      ),
+    );
+    expect(response.status).toBe(101);
+    const socket = response.webSocket;
+    if (!socket) throw new Error("Missing socket");
+    socket.accept();
+    const received: string[] = [];
+    socket.addEventListener("message", (event) => {
+      received.push(typeof event.data === "string" ? event.data : "");
+    });
+
+    const dto = (userId: string, title: string) => ({
+      id: crypto.randomUUID(),
+      userId,
+      type: "TASK_ASSIGNED" as const,
+      entityId: "task-1",
+      projectId: "project-1",
+      payload: { title, actorName: "PM" },
+      readAt: null,
+      createdAt: new Date().toISOString(),
+      targetUrl: "/projects/project-1/tasks/task-1",
+    });
+
+    // A publish to the spoofed user's hub must not reach this socket...
+    await env.NOTIFICATION_HUB.get(env.NOTIFICATION_HUB.idFromName(victimId)).publish(dto(victimId, "for victim"));
+    expect(received).toHaveLength(0);
+
+    // ...while a publish to the session user's hub does.
+    await env.NOTIFICATION_HUB.get(env.NOTIFICATION_HUB.idFromName(user.id)).publish(dto(user.id, "for session user"));
+    expect(received).toHaveLength(1);
+    expect(JSON.parse(received[0] ?? "{}")).toMatchObject({
+      type: "notification",
+      notification: { userId: user.id, payload: { title: "for session user" } },
+    });
+  });
 });
