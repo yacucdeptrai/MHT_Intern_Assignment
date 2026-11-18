@@ -8,6 +8,11 @@ import { addMemberToNewProject, createSignedInMember } from "./helpers";
  * React StrictMode mounts effects twice, so a page may open and immediately close one extra socket;
  * tests therefore look at live sockets and at attempts counted from a settled baseline.
  */
+/** Builds close options without undefined keys (exactOptionalPropertyTypes). */
+function closeOptions(code: number | undefined, reason: string | undefined): { code?: number; reason?: string } {
+  return { ...(code === undefined ? {} : { code }), ...(reason === undefined ? {} : { reason }) };
+}
+
 async function trackRealtime(page: Page) {
   const state = { attempts: 0, refuse: false, live: new Set<WebSocketRoute>() };
   await page.routeWebSocket("**/api/realtime", (ws) => {
@@ -20,11 +25,11 @@ async function trackRealtime(page: Page) {
     state.live.add(ws);
     ws.onClose((code, reason) => {
       state.live.delete(ws);
-      void server.close({ code, reason });
+      void server.close(closeOptions(code, reason));
     });
     server.onClose((code, reason) => {
       state.live.delete(ws);
-      void ws.close({ code, reason });
+      void ws.close(closeOptions(code, reason));
     });
   });
   return state;

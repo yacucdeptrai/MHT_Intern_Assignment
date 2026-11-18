@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { createDatabase, taskStatusRepository, type AppDatabase } from "@pm/db";
 
@@ -18,7 +18,7 @@ import { createUser } from "../factories";
  */
 describe("realtime publish points (FR-26 c1, docs/04 publish column)", () => {
   let pending: Promise<unknown>[];
-  let publishSpy: ReturnType<typeof vi.spyOn<typeof notificationService, "publishNotifications">>;
+  let publishSpy: MockInstance<typeof notificationService.publishNotifications>;
 
   beforeEach(() => {
     pending = [];
