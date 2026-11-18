@@ -370,6 +370,12 @@ export const taskService = {
         entityType: "TASK",
         entityId: taskId,
         projectId,
+        changes: {
+          title: { from: null, to: data.title },
+          priority: { from: null, to: data.priority },
+          statusId: { from: null, to: defaultStatus.id },
+          statusName: { from: null, to: defaultStatus.name },
+        },
         createdAt: now,
       }),
     ];
@@ -692,10 +698,11 @@ export const taskService = {
       updatedAt: typeof st.updatedAt === "number" ? st.updatedAt : st.updatedAt.getTime(),
     }));
 
-    const [statuses, members, sprints] = await Promise.all([
+    const [statuses, members, sprints, history] = await Promise.all([
       taskStatusRepository.list(ctx.db),
       projectMemberRepository.listByProjectWithUser(ctx.db, projectId),
       sprintRepository.listByProject(ctx.db, projectId),
+      auditLogRepository.listByEntityWithActor(ctx.db, "TASK", taskId),
     ]);
 
     const actor = toActor(ctx.user, access);
@@ -768,6 +775,7 @@ export const taskService = {
     return {
       task,
       subTasks,
+      history,
       members: members.map((m) => ({
         id: m.userId,
         fullName: m.fullName,

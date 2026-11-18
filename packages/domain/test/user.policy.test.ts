@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canManageUsers } from "../src";
+import { canManageUsers, canViewAuditLog } from "../src";
 
 describe("canManageUsers policy", () => {
   it("allows system ADMIN to manage users", () => {
@@ -41,5 +41,31 @@ describe("canManageUsers policy", () => {
         isProjectArchived: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("canViewAuditLog policy (FR-24)", () => {
+  it("FR-24 c2: allows system ADMIN to view the system audit log", () => {
+    expect(
+      canViewAuditLog({
+        userId: "admin-1",
+        systemRole: "ADMIN",
+        projectRole: null,
+        isProjectArchived: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("FR-24 c4: denies PM, TEAM_LEAD, and MEMBER from viewing the system audit log", () => {
+    for (const systemRole of ["PM", "TEAM_LEAD", "MEMBER"] as const) {
+      expect(
+        canViewAuditLog({
+          userId: `user-${systemRole.toLowerCase()}`,
+          systemRole,
+          projectRole: "PM",
+          isProjectArchived: false,
+        }),
+      ).toBe(false);
+    }
   });
 });
