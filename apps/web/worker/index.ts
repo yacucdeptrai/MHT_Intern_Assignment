@@ -9,6 +9,21 @@ export { UserNotificationHub } from "./notificationHub";
 
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
 
+export function scheduledHandler(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+  const now = new Date(controller.scheduledTime);
+  ctx.waitUntil(
+    (async () => {
+      if (now.getUTCMinutes() === 0) {
+        // Hourly tasks run first, in sequence:
+        // M7-T4: await runDeadlineScan(env, now);
+        // M7-T5: await sweepOrphanFiles(env, now);
+        // M7-T5: await cleanupExpiredInvites(env, now);
+      }
+      await sweepOutbox(env, now);
+    })(),
+  );
+}
+
 export default {
   async fetch(request, env, ctx) {
     const context = new RouterContextProvider();
@@ -20,7 +35,6 @@ export default {
   },
 
   scheduled(controller, env, ctx) {
-    const now = new Date(controller.scheduledTime);
-    ctx.waitUntil(sweepOutbox(env, now));
+    scheduledHandler(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
