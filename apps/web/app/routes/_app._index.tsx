@@ -16,7 +16,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export default function MemberDashboardPage() {
-  const { user, inProgress, todayPriorities, unreadCount } = useLoaderData<typeof loader>();
+  const { user, inProgress, todayPriorities, overdue, unreadCount } = useLoaderData<typeof loader>();
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8" data-testid="personal-dashboard">
@@ -50,6 +50,59 @@ export default function MemberDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Overdue Tasks Widget (FR-34) */}
+      {overdue.length > 0 && (
+        <section
+          className="rounded-xl border border-red-200 bg-white p-6 shadow-xs space-y-4"
+          data-testid="overdue-widget"
+        >
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
+                Overdue Tasks
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">Tasks past their due date requiring immediate attention</p>
+            </div>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+              {overdue.length} {overdue.length === 1 ? "task" : "tasks"} overdue
+            </span>
+          </div>
+
+          <div className="divide-y divide-gray-100 space-y-3">
+            {overdue.map((task) => (
+              <div
+                key={task.id}
+                className="pt-3 first:pt-0 flex items-start justify-between gap-3"
+                data-testid="overdue-item"
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to={`/projects/${task.projectId}/tasks/${task.id}`}
+                    className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate block"
+                  >
+                    {task.projectCode ? `${task.projectCode}-${task.number}: ` : ""}
+                    {task.title}
+                  </Link>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="inline-flex items-center text-xs text-gray-500">{task.projectName}</span>
+                    <span className="inline-flex items-center text-xs text-red-600 font-medium">
+                      Due {task.dueDate}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                    {task.daysOverdue} {task.daysOverdue === 1 ? "day overdue" : "days overdue"}
+                  </span>
+                  {task.statusName && <span className="text-xs text-gray-500">{task.statusName}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Grid: Today's Priorities and In Progress */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,3 +1,4 @@
+import type { TaskPriority } from "../enums";
 import type { ProjectRiskItem } from "./project";
 import type { TaskListItem } from "./task";
 
@@ -10,6 +11,8 @@ export interface OverdueItem {
   title: string;
   dueDate: string;
   daysOverdue: number;
+  priority?: TaskPriority;
+  statusName?: string;
 }
 
 export interface DashboardLoaderData {

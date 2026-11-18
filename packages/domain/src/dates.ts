@@ -94,3 +94,27 @@ export function isTodayPriority(task: TaskDateTarget, now: Date = new Date()): b
 
   return false;
 }
+
+/**
+ * Calculates calendar days overdue in APP_TIMEZONE.
+ * Returns 0 if not overdue (today or in future).
+ */
+export function calculateDaysOverdue(dueDateStr: string, now: Date = new Date()): number {
+  const todayStr = getTodayDateString(now);
+  if (dueDateStr >= todayStr) {
+    return 0;
+  }
+  const dueParts = dueDateStr.split("-").map(Number);
+  const todayParts = todayStr.split("-").map(Number);
+  const dueYear = dueParts[0] ?? 1970;
+  const dueMonth = dueParts[1] ?? 1;
+  const dueDay = dueParts[2] ?? 1;
+  const todayYear = todayParts[0] ?? 1970;
+  const todayMonth = todayParts[1] ?? 1;
+  const todayDay = todayParts[2] ?? 1;
+
+  const dueUtc = Date.UTC(dueYear, dueMonth - 1, dueDay);
+  const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
+  const diffMs = todayUtc - dueUtc;
+  return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
+}

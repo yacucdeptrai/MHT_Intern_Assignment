@@ -185,4 +185,79 @@ describe("Dashboard Routes and Loaders (FR-33)", () => {
     const { request, ctx } = await createAuthenticatedRequest("http://localhost/admin", "MEMBER");
     await expect(adminIndexLoader(makeLoaderArgs(request, ctx))).rejects.toThrow();
   });
+
+  it("FR-34 c1: loader provides overdue items with daysOverdue in descending order", async () => {
+    const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost/", "MEMBER");
+    const now = ctx.clock.now();
+
+    const projectId = crypto.randomUUID();
+    const statusTodoId = crypto.randomUUID();
+    const statusName = `Todo-${crypto.randomUUID().slice(0, 6)}`;
+
+    await ctx.db.batch([
+      projectRepository.insertStmt(ctx.db, {
+        id: projectId,
+        code: `OVD${Date.now().toString().slice(-4)}`,
+        name: "Overdue Loader Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "ACTIVE",
+        createdById: userId,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      projectMemberRepository.insertStmt(ctx.db, {
+        projectId,
+        userId,
+        projectRole: "MEMBER",
+        createdAt: now,
+      }),
+      taskStatusRepository.insertStmt(ctx.db, {
+        id: statusTodoId,
+        name: statusName,
+        category: "TODO",
+        isDefault: false,
+        position: 1,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const task1Id = crypto.randomUUID();
+    const task2Id = crypto.randomUUID();
+
+    await ctx.db.batch([
+      taskRepository.insertStmt(ctx.db, {
+        id: task1Id,
+        projectId,
+        statusId: statusTodoId,
+        title: "Less overdue task",
+        dueDate: "2026-11-18",
+        createdById: userId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(ctx.db, task1Id, [userId], now),
+      taskRepository.insertStmt(ctx.db, {
+        id: task2Id,
+        projectId,
+        statusId: statusTodoId,
+        title: "More overdue task",
+        dueDate: "2026-11-15",
+        createdById: userId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(ctx.db, task2Id, [userId], now),
+    ]);
+
+    const result = await memberIndexLoader(makeLoaderArgs(request, ctx));
+    expect(result.overdue.length).toBe(2);
+    expect(result.overdue[0]?.id).toBe(task2Id); // 4 days overdue
+    expect(result.overdue[0]?.daysOverdue).toBe(4);
+    expect(result.overdue[1]?.id).toBe(task1Id); // 1 day overdue
+    expect(result.overdue[1]?.daysOverdue).toBe(1);
+  });
 });

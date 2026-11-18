@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDueSoon, isOverdue, isTodayPriority } from "../src/dates";
+import { calculateDaysOverdue, isDueSoon, isOverdue, isTodayPriority } from "../src/dates";
 
 describe("domain dates: isOverdue, isDueSoon, isTodayPriority (docs/09 §3.5)", () => {
   const baseTask = {
@@ -102,6 +102,36 @@ describe("domain dates: isOverdue, isDueSoon, isTodayPriority (docs/09 §3.5)", 
 
       // If due tomorrow, not overdue, and priority is LOW -> false
       expect(isTodayPriority({ ...baseTask, dueDate: "2026-11-21", priority: "LOW" }, middayInVN)).toBe(false);
+    });
+  });
+
+  describe("calculateDaysOverdue (FR-34 c1)", () => {
+    it("returns 0 when dueDate is today or in the future in APP_TIMEZONE", () => {
+      // 2026-11-20 10:00:00 +07:00
+      const now = new Date("2026-11-20T03:00:00.000Z");
+      expect(calculateDaysOverdue("2026-11-20", now)).toBe(0);
+      expect(calculateDaysOverdue("2026-11-25", now)).toBe(0);
+    });
+
+    it("calculates exact calendar days overdue in APP_TIMEZONE", () => {
+      // 2026-11-20 10:00:00 +07:00
+      const now = new Date("2026-11-20T03:00:00.000Z");
+      expect(calculateDaysOverdue("2026-11-19", now)).toBe(1);
+      expect(calculateDaysOverdue("2026-11-18", now)).toBe(2);
+      expect(calculateDaysOverdue("2026-11-15", now)).toBe(5);
+    });
+
+    it("handles late-night timezone edge correctly", () => {
+      // 2026-11-19 23:30:00 +07:00 (still 19th in VN)
+      const at2330 = new Date("2026-11-19T16:30:00.000Z");
+      expect(calculateDaysOverdue("2026-11-18", at2330)).toBe(1);
+      expect(calculateDaysOverdue("2026-11-19", at2330)).toBe(0);
+
+      // 2026-11-20 00:30:00 +07:00 (now 20th in VN)
+      const at0030 = new Date("2026-11-19T17:30:00.000Z");
+      expect(calculateDaysOverdue("2026-11-18", at0030)).toBe(2);
+      expect(calculateDaysOverdue("2026-11-19", at0030)).toBe(1);
+      expect(calculateDaysOverdue("2026-11-20", at0030)).toBe(0);
     });
   });
 });

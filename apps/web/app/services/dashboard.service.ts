@@ -1,5 +1,12 @@
-import type { AdminDashboardLoaderData, DashboardLoaderData, TaskAssigneeInfo, TaskListItem } from "@pm/domain";
+import type {
+  AdminDashboardLoaderData,
+  DashboardLoaderData,
+  OverdueItem,
+  TaskAssigneeInfo,
+  TaskListItem,
+} from "@pm/domain";
 import {
+  calculateDaysOverdue,
   ForbiddenError,
   getTodayDateString,
   isDueSoon,
@@ -92,10 +99,31 @@ export const dashboardService = {
     const inProgress = taskListItems.filter((t) => t.statusCategory === "IN_PROGRESS");
     const todayPriorities = taskListItems.filter((t) => t.isTodayPriority);
 
+    const overdue: OverdueItem[] = taskListItems
+      .filter((t) => t.isOverdue && t.dueDate)
+      .map((t) => ({
+        id: t.id,
+        projectId: t.projectId,
+        projectCode: t.projectCode,
+        projectName: t.projectName,
+        number: t.number,
+        title: t.title,
+        dueDate: t.dueDate as string,
+        daysOverdue: calculateDaysOverdue(t.dueDate as string, now),
+        priority: t.priority,
+        statusName: t.statusName,
+      }))
+      .sort((a, b) => {
+        if (b.daysOverdue !== a.daysOverdue) {
+          return b.daysOverdue - a.daysOverdue;
+        }
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+
     return {
       inProgress,
       todayPriorities,
-      overdue: [], // TODO(M8-T2): implement overdue widget
+      overdue,
       unreadCount,
     };
   },
