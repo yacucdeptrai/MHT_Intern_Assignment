@@ -1,6 +1,7 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Form, Link, useLoaderData, useParams } from "react-router";
-import { useState } from "react";
 
 import { APP_NAME } from "@pm/domain";
 
@@ -18,6 +19,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export default function ProjectReportsPage() {
+  const { t } = useTranslation();
   const { projectId } = useParams();
   const { tab, memberReport, projectReport, sprints, filters, permissions } = useLoaderData<typeof loader>();
   const [isExportingXlsx, setIsExportingXlsx] = useState(false);
@@ -33,9 +35,9 @@ export default function ProjectReportsPage() {
       const res = await fetch(`/api/projects/${projectId}/export?format=rows`);
       if (!res.ok) {
         if (res.status === 403) {
-          throw new Error("Forbidden: only project PM or Admin can export data");
+          throw new Error(t("project_reports.err_forbidden_export"));
         }
-        throw new Error("Failed to export data");
+        throw new Error(t("project_reports.err_failed_export"));
       }
       const data = await res.json<{ columns: string[]; rows: string[][]; fileName: string }>();
       const { buildXlsx } = await import("../utils/xlsxExport.client");
@@ -52,7 +54,7 @@ export default function ProjectReportsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Failed to export Excel file");
+      setExportError(err instanceof Error ? err.message : t("project_reports.err_failed_export_xlsx"));
     } finally {
       setIsExportingXlsx(false);
     }
@@ -73,8 +75,8 @@ export default function ProjectReportsPage() {
       {/* Header and Tab Switcher */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Reports</h2>
-          <p className="text-sm text-gray-500">Analyze team workload, task distribution, and performance.</p>
+          <h2 className="text-xl font-bold text-gray-900">{t("project_reports.title")}</h2>
+          <p className="text-sm text-gray-500">{t("project_reports.subtitle")}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -86,7 +88,7 @@ export default function ProjectReportsPage() {
                 data-testid="export-csv-btn"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
               >
-                Export CSV
+                {t("project_reports.btn_export_csv")}
               </a>
               <button
                 type="button"
@@ -97,7 +99,7 @@ export default function ProjectReportsPage() {
                 data-testid="export-xlsx-btn"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isExportingXlsx ? "Exporting..." : "Export Excel"}
+                {isExportingXlsx ? t("project_reports.btn_exporting") : t("project_reports.btn_export_xlsx")}
               </button>
             </div>
           )}
@@ -114,7 +116,7 @@ export default function ProjectReportsPage() {
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                 }`}
               >
-                Members
+                {t("project_reports.tab_members")}
               </Link>
             )}
             {permissions.canViewProjectReport && (
@@ -127,7 +129,7 @@ export default function ProjectReportsPage() {
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                 }`}
               >
-                Project
+                {t("project_reports.tab_project")}
               </Link>
             )}
           </div>
@@ -144,7 +146,7 @@ export default function ProjectReportsPage() {
 
               <div className="flex flex-col gap-1">
                 <label htmlFor="sprintId" className="text-xs font-semibold text-gray-700">
-                  Sprint
+                  {t("project_reports.filter_sprint")}
                 </label>
                 <select
                   id="sprintId"
@@ -153,7 +155,7 @@ export default function ProjectReportsPage() {
                   data-testid="sprint-filter-select"
                   className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                  <option value="">All Sprints</option>
+                  <option value="">{t("project_reports.filter_all_sprints")}</option>
                   {sprints.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -164,7 +166,7 @@ export default function ProjectReportsPage() {
 
               <div className="flex flex-col gap-1">
                 <label htmlFor="from" className="text-xs font-semibold text-gray-700">
-                  Completed From
+                  {t("project_reports.filter_completed_from")}
                 </label>
                 <input
                   type="date"
@@ -178,7 +180,7 @@ export default function ProjectReportsPage() {
 
               <div className="flex flex-col gap-1">
                 <label htmlFor="to" className="text-xs font-semibold text-gray-700">
-                  Completed To
+                  {t("project_reports.filter_completed_to")}
                 </label>
                 <input
                   type="date"
@@ -196,7 +198,7 @@ export default function ProjectReportsPage() {
                   data-testid="apply-filters-button"
                   className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                  Apply Filters
+                  {t("project_reports.btn_apply_filters")}
                 </button>
                 {(filters.sprintId || filters.from || filters.to) && (
                   <Link
@@ -204,7 +206,7 @@ export default function ProjectReportsPage() {
                     data-testid="clear-filters-button"
                     className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
-                    Clear
+                    {t("project_reports.btn_clear_filters")}
                   </Link>
                 )}
               </div>
@@ -221,55 +223,55 @@ export default function ProjectReportsPage() {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Member
+                      {t("project_reports.th_member")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Role
+                      {t("project_reports.th_role")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      To Do
+                      {t("project_reports.th_todo")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      In Progress
+                      {t("project_reports.th_in_progress")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Review
+                      {t("project_reports.th_review")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Done
+                      {t("project_reports.th_done")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-900"
                     >
-                      Total
+                      {t("project_reports.th_total")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-red-600"
                     >
-                      Overdue
+                      {t("project_reports.th_overdue")}
                     </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-green-700"
                     >
-                      Completed in Range
+                      {t("project_reports.th_completed_in_range")}
                     </th>
                   </tr>
                 </thead>
@@ -277,7 +279,7 @@ export default function ProjectReportsPage() {
                   {!memberReport || memberReport.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-6 py-8 text-center text-sm text-gray-500">
-                        No member statistics found for this project.
+                        {t("project_reports.no_members")}
                       </td>
                     </tr>
                   ) : (
@@ -345,11 +347,16 @@ export default function ProjectReportsPage() {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" data-testid="kpi-completion-rate">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Task Completion Rate</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {t("project_reports.kpi_completion_rate")}
+              </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-3xl font-extrabold text-gray-900">{projectReport.completionRate}%</span>
                 <span className="text-xs text-gray-500">
-                  ({projectReport.doneTasks}/{projectReport.totalTasks} done)
+                  {t("project_reports.kpi_completion_ratio", {
+                    done: projectReport.doneTasks,
+                    total: projectReport.totalTasks,
+                  })}
                 </span>
               </div>
               <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100">
@@ -361,24 +368,30 @@ export default function ProjectReportsPage() {
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" data-testid="kpi-total-tasks">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Work Items</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {t("project_reports.kpi_total_tasks")}
+              </div>
               <div className="mt-2 text-3xl font-extrabold text-gray-900">{projectReport.totalTasks}</div>
-              <div className="mt-3 text-xs text-gray-500">All non-archived tasks in project</div>
+              <div className="mt-3 text-xs text-gray-500">{t("project_reports.kpi_total_tasks_desc")}</div>
             </div>
 
             <div
               className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
               data-testid="kpi-bottlenecks-count"
             >
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Review Bottlenecks</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {t("project_reports.kpi_bottlenecks")}
+              </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-3xl font-extrabold text-amber-600">
                   {projectReport.bottlenecks.staleReviews.length}
                 </span>
-                <span className="text-xs text-gray-500">stale reviews (&gt; 2 days)</span>
+                <span className="text-xs text-gray-500">{t("project_reports.kpi_stale_reviews")}</span>
               </div>
               <div className="mt-3 text-xs text-gray-500">
-                {projectReport.bottlenecks.overdueByStatus.reduce((acc, s) => acc + s.overdueCount, 0)} overdue tasks
+                {t("project_reports.kpi_overdue_tasks", {
+                  count: projectReport.bottlenecks.overdueByStatus.reduce((acc, s) => acc + s.overdueCount, 0),
+                })}
               </div>
             </div>
           </div>
@@ -386,8 +399,10 @@ export default function ProjectReportsPage() {
           {/* Status Distribution */}
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm" data-testid="status-distribution">
             <div className="border-b border-gray-200 px-6 py-4">
-              <h3 className="text-base font-semibold text-gray-900">Task Distribution by Status</h3>
-              <p className="text-xs text-gray-500">Breakdown of work items across workflow statuses.</p>
+              <h3 className="text-base font-semibold text-gray-900">
+                {t("project_reports.status_distribution_title")}
+              </h3>
+              <p className="text-xs text-gray-500">{t("project_reports.status_distribution_desc")}</p>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -397,25 +412,25 @@ export default function ProjectReportsPage() {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Status
+                      {t("project_reports.th_status")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Category
+                      {t("project_reports.th_category")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Count
+                      {t("project_reports.th_count")}
                     </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Share
+                      {t("project_reports.th_share")}
                     </th>
                   </tr>
                 </thead>
@@ -455,10 +470,8 @@ export default function ProjectReportsPage() {
           {/* Sprint Completion (P11) */}
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm" data-testid="sprint-completion-section">
             <div className="border-b border-gray-200 px-6 py-4">
-              <h3 className="text-base font-semibold text-gray-900">Sprint Completion</h3>
-              <p className="text-xs text-gray-500">
-                Progress across past and active sprints (Done top-level tasks / non-archived top-level tasks).
-              </p>
+              <h3 className="text-base font-semibold text-gray-900">{t("project_reports.sprint_completion_title")}</h3>
+              <p className="text-xs text-gray-500">{t("project_reports.sprint_completion_desc")}</p>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -468,25 +481,25 @@ export default function ProjectReportsPage() {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Sprint
+                      {t("project_reports.th_sprint")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Status
+                      {t("project_reports.th_status")}
                     </th>
                     <th
                       scope="col"
                       className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Dates
+                      {t("project_reports.th_dates")}
                     </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                     >
-                      Completion Rate
+                      {t("project_reports.th_completion_rate")}
                     </th>
                   </tr>
                 </thead>
@@ -494,7 +507,7 @@ export default function ProjectReportsPage() {
                   {projectReport.sprintCompletion.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">
-                        No sprints found for this project.
+                        {t("project_reports.no_sprints")}
                       </td>
                     </tr>
                   ) : (
@@ -519,11 +532,11 @@ export default function ProjectReportsPage() {
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-xs text-gray-500">
-                          {sprint.startDate} to {sprint.endDate}
+                          {t("project_reports.date_range", { start: sprint.startDate, end: sprint.endDate })}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm" data-testid="sprint-completion-value">
                           {sprint.completionRate === null ? (
-                            <span className="text-gray-400 font-medium italic">No tasks</span>
+                            <span className="text-gray-400 font-medium italic">{t("project_reports.no_tasks")}</span>
                           ) : (
                             <div className="flex items-center gap-3">
                               <div className="h-2 w-32 overflow-hidden rounded-full bg-gray-100">
@@ -531,7 +544,10 @@ export default function ProjectReportsPage() {
                               </div>
                               <span className="text-sm font-semibold text-gray-900">{sprint.completionRate}%</span>
                               <span className="text-xs text-gray-500">
-                                ({sprint.completedCount}/{sprint.taskCount} done)
+                                {t("project_reports.tasks_done_ratio", {
+                                  completed: sprint.completedCount,
+                                  total: sprint.taskCount,
+                                })}
                               </span>
                             </div>
                           )}
@@ -546,7 +562,7 @@ export default function ProjectReportsPage() {
 
           {/* Bottlenecks Section (P21) */}
           <div className="space-y-6" data-testid="bottlenecks-section">
-            <h3 className="text-lg font-bold text-gray-900">Bottlenecks & Blockers</h3>
+            <h3 className="text-lg font-bold text-gray-900">{t("project_reports.bottlenecks_title")}</h3>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Stale Reviews (FR-31 c3) */}
@@ -557,12 +573,16 @@ export default function ProjectReportsPage() {
                 <div className="border-b border-gray-200 px-6 py-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-base font-semibold text-gray-900">Stale Reviews</h4>
-                      <p className="text-xs text-gray-500">Tasks in review for longer than 2 days.</p>
+                      <h4 className="text-base font-semibold text-gray-900">
+                        {t("project_reports.stale_reviews_title")}
+                      </h4>
+                      <p className="text-xs text-gray-500">{t("project_reports.stale_reviews_desc")}</p>
                     </div>
                     {projectReport.bottlenecks.staleReviews.length > 0 && (
                       <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                        {projectReport.bottlenecks.staleReviews.length} pending
+                        {t("project_reports.stale_reviews_pending", {
+                          count: projectReport.bottlenecks.staleReviews.length,
+                        })}
                       </span>
                     )}
                   </div>
@@ -575,19 +595,19 @@ export default function ProjectReportsPage() {
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                         >
-                          Task
+                          {t("project_reports.th_task")}
                         </th>
                         <th
                           scope="col"
                           className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600"
                         >
-                          Time in Review
+                          {t("project_reports.th_time_in_review")}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                         >
-                          Assignees
+                          {t("project_reports.th_assignees")}
                         </th>
                       </tr>
                     </thead>
@@ -595,7 +615,7 @@ export default function ProjectReportsPage() {
                       {projectReport.bottlenecks.staleReviews.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
-                            No stale reviews (&gt; 2 days).
+                            {t("project_reports.no_stale_reviews")}
                           </td>
                         </tr>
                       ) : (
@@ -611,12 +631,12 @@ export default function ProjectReportsPage() {
                             </td>
                             <td className="whitespace-nowrap px-4 py-4 text-right text-xs">
                               <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                                {task.daysInReview} days
+                                {t("project_reports.days_in_review", { days: task.daysInReview })}
                               </span>
                             </td>
                             <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-500">
                               {task.assignees.length === 0 ? (
-                                <span className="italic text-gray-400">Unassigned</span>
+                                <span className="italic text-gray-400">{t("project_reports.unassigned")}</span>
                               ) : (
                                 <div className="flex flex-col gap-0.5">
                                   {task.assignees.map((a) => (
@@ -641,8 +661,10 @@ export default function ProjectReportsPage() {
                 data-testid="overdue-by-status-section"
               >
                 <div className="border-b border-gray-200 px-6 py-4">
-                  <h4 className="text-base font-semibold text-gray-900">Overdue Tasks by Status</h4>
-                  <p className="text-xs text-gray-500">Uncompleted tasks past due date, grouped by status.</p>
+                  <h4 className="text-base font-semibold text-gray-900">
+                    {t("project_reports.overdue_by_status_title")}
+                  </h4>
+                  <p className="text-xs text-gray-500">{t("project_reports.overdue_by_status_desc")}</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200" data-testid="overdue-by-status-table">
@@ -652,19 +674,19 @@ export default function ProjectReportsPage() {
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                         >
-                          Status
+                          {t("project_reports.th_status")}
                         </th>
                         <th
                           scope="col"
                           className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
                         >
-                          Category
+                          {t("project_reports.th_category")}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-red-600"
                         >
-                          Overdue Count
+                          {t("project_reports.th_overdue_count")}
                         </th>
                       </tr>
                     </thead>
@@ -672,7 +694,7 @@ export default function ProjectReportsPage() {
                       {projectReport.bottlenecks.overdueByStatus.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
-                            No overdue tasks in this project.
+                            {t("project_reports.no_overdue_tasks")}
                           </td>
                         </tr>
                       ) : (
