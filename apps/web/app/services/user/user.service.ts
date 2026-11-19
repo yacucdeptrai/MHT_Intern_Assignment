@@ -48,7 +48,10 @@ export const userService = {
     const email = input.email.trim().toLowerCase();
     const existing = await userRepository.findByEmail(ctx.db, email, { includeDeleted: true });
     if (existing) {
-      throw new ValidationError("Email is already in use", { email: ["Email is already in use"] });
+      throw new ValidationError("Email is already in use", {
+        key: "errors.user_email_in_use",
+        fieldErrors: { email: ["Email is already in use"] },
+      });
     }
 
     const userId = crypto.randomUUID();
@@ -103,7 +106,10 @@ export const userService = {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("UNIQUE") || msg.includes("uq_users_email")) {
-        throw new ValidationError("Email is already in use", { email: ["Email is already in use"] });
+        throw new ValidationError("Email is already in use", {
+          key: "errors.user_email_in_use",
+          fieldErrors: { email: ["Email is already in use"] },
+        });
       }
       throw err;
     }
@@ -137,7 +143,7 @@ export const userService = {
 
     const target = await userRepository.findById(ctx.db, input.userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     const dataToUpdate: Record<string, unknown> = {};
@@ -164,7 +170,10 @@ export const userService = {
       if (normalized !== target.email) {
         const existing = await userRepository.findByEmail(ctx.db, normalized, { includeDeleted: true });
         if (existing && existing.id !== input.userId) {
-          throw new ValidationError("Email is already in use", { email: ["Email is already in use"] });
+          throw new ValidationError("Email is already in use", {
+            key: "errors.user_email_in_use",
+            fieldErrors: { email: ["Email is already in use"] },
+          });
         }
         dataToUpdate.email = normalized;
         changes.email = { from: target.email, to: normalized };
@@ -173,12 +182,16 @@ export const userService = {
 
     if (input.systemRole !== undefined && input.systemRole !== target.systemRole) {
       if (actor.userId === input.userId && input.systemRole !== "ADMIN") {
-        throw new ValidationError("You cannot change your own access");
+        throw new ValidationError("You cannot change your own access", {
+          key: "errors.user_change_own_access_forbidden",
+        });
       }
       if (target.systemRole === "ADMIN" && input.systemRole !== "ADMIN") {
         const adminCount = await userRepository.countAdmins(ctx.db);
         if (adminCount <= 1) {
-          throw new ValidationError("At least one administrator is required");
+          throw new ValidationError("At least one administrator is required", {
+            key: "errors.user_at_least_one_admin",
+          });
         }
       }
       dataToUpdate.systemRole = input.systemRole;
@@ -222,14 +235,17 @@ export const userService = {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("UNIQUE") || msg.includes("uq_users_email")) {
-        throw new ValidationError("Email is already in use", { email: ["Email is already in use"] });
+        throw new ValidationError("Email is already in use", {
+          key: "errors.user_email_in_use",
+          fieldErrors: { email: ["Email is already in use"] },
+        });
       }
       throw err;
     }
 
     const updated = await userRepository.findById(ctx.db, input.userId);
     if (!updated) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     return {
@@ -251,18 +267,20 @@ export const userService = {
       throw new ForbiddenError();
     }
     if (actor.userId === userId) {
-      throw new ValidationError("You cannot change your own access");
+      throw new ValidationError("You cannot change your own access", {
+        key: "errors.user_change_own_access_forbidden",
+      });
     }
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     if (target.systemRole === "ADMIN") {
       const adminCount = await userRepository.countAdmins(ctx.db);
       if (adminCount <= 1) {
-        throw new ValidationError("At least one administrator is required");
+        throw new ValidationError("At least one administrator is required", { key: "errors.user_at_least_one_admin" });
       }
     }
 
@@ -291,7 +309,7 @@ export const userService = {
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     const now = ctx.clock.now();
@@ -317,18 +335,20 @@ export const userService = {
       throw new ForbiddenError();
     }
     if (actor.userId === userId) {
-      throw new ValidationError("You cannot change your own access");
+      throw new ValidationError("You cannot change your own access", {
+        key: "errors.user_change_own_access_forbidden",
+      });
     }
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     if (target.systemRole === "ADMIN") {
       const adminCount = await userRepository.countAdmins(ctx.db);
       if (adminCount <= 1) {
-        throw new ValidationError("At least one administrator is required");
+        throw new ValidationError("At least one administrator is required", { key: "errors.user_at_least_one_admin" });
       }
     }
 
@@ -355,18 +375,20 @@ export const userService = {
       throw new ForbiddenError();
     }
     if (actor.userId === userId && newRole !== "ADMIN") {
-      throw new ValidationError("You cannot change your own access");
+      throw new ValidationError("You cannot change your own access", {
+        key: "errors.user_change_own_access_forbidden",
+      });
     }
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     if (target.systemRole === "ADMIN" && newRole !== "ADMIN") {
       const adminCount = await userRepository.countAdmins(ctx.db);
       if (adminCount <= 1) {
-        throw new ValidationError("At least one administrator is required");
+        throw new ValidationError("At least one administrator is required", { key: "errors.user_at_least_one_admin" });
       }
     }
 

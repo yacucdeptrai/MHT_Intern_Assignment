@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { VALIDATION_MESSAGES } from "@pm/domain";
+import { VALIDATION_MESSAGES, WORKFLOW_ERROR_KEYS } from "@pm/domain";
 import en from "../../app/i18n/en.json";
 import vi from "../../app/i18n/vi.json";
 
@@ -45,6 +45,11 @@ function findUsedKeysInCode(): Set<string> {
 
   // Include dynamic validation message keys generated from domain schemas
   for (const key of Object.keys(VALIDATION_MESSAGES)) {
+    used.add(key);
+  }
+
+  // Include domain workflow error keys
+  for (const key of WORKFLOW_ERROR_KEYS) {
     used.add(key);
   }
 

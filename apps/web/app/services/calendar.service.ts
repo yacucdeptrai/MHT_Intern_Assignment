@@ -8,7 +8,7 @@ import type { RequestContext } from "../utils/requestContext.server";
 export const calendarService = {
   async getCalendarData(ctx: RequestContext, query: CalendarQuery): Promise<CalendarLoaderData> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const now = ctx.clock.now();

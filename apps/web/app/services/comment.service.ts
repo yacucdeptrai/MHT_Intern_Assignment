@@ -75,23 +75,25 @@ export function buildCommentThreads(rows: readonly CommentWithAuthorRow[], actor
 export const commentService = {
   async addComment(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<CommentDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
     const currentUser = ctx.user;
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canCreateComment(actor)) {
-      throw new ForbiddenError("You do not have permission to comment on this task");
+      throw new ForbiddenError("You do not have permission to comment on this task", {
+        key: "errors.comment_create_forbidden",
+      });
     }
 
     const task = await taskRepository.findById(ctx.db, taskId);
     if (!task || task.projectId !== projectId || task.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     const parsed = CommentCreateSchema.safeParse(rawInput);
@@ -104,7 +106,10 @@ export const commentService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid comment data", fieldErrors);
+      throw new ValidationError("Invalid comment data", {
+        key: "errors.comment_invalid_data",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data = parsed.data;
@@ -114,12 +119,18 @@ export const commentService = {
       const parent = await commentRepository.findByIdIncludingDeleted(ctx.db, data.parentCommentId);
       if (!parent || parent.taskId !== taskId) {
         throw new ValidationError("Parent comment not found", {
-          parentCommentId: ["Parent comment not found"],
+          key: "errors.comment_parent_not_found",
+          fieldErrors: {
+            parentCommentId: ["Parent comment not found"],
+          },
         });
       }
       if (parent.deletedAt !== null && parent.parentCommentId !== null) {
         throw new ValidationError("Cannot reply to a deleted comment", {
-          parentCommentId: ["Cannot reply to a deleted comment"],
+          key: "errors.comment_reply_deleted",
+          fieldErrors: {
+            parentCommentId: ["Cannot reply to a deleted comment"],
+          },
         });
       }
       // FR-19 c2: re-point a reply-to-reply to the root comment so threads stay one level deep
@@ -197,18 +208,18 @@ export const commentService = {
 
   async deleteComment(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<void> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
     const currentUser = ctx.user;
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const task = await taskRepository.findById(ctx.db, taskId);
     if (!task || task.projectId !== projectId || task.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     const parsed = CommentIdSchema.safeParse(rawInput);
@@ -221,17 +232,22 @@ export const commentService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid comment delete request", fieldErrors);
+      throw new ValidationError("Invalid comment delete request", {
+        key: "errors.comment_delete_invalid",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const existing = await commentRepository.findByIdIncludingDeleted(ctx.db, parsed.data.commentId);
     if (!existing || existing.taskId !== taskId) {
-      throw new NotFoundError("Comment not found");
+      throw new NotFoundError("Comment not found", { key: "errors.comment_not_found" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canDeleteComment(actor, { authorId: existing.authorId })) {
-      throw new ForbiddenError("You do not have permission to delete this comment");
+      throw new ForbiddenError("You do not have permission to delete this comment", {
+        key: "errors.comment_delete_forbidden",
+      });
     }
 
     const now = ctx.clock.now();
@@ -240,7 +256,7 @@ export const commentService = {
       await ctx.db.batch([commentRepository.softDeleteStmt(ctx.db, existing.id, now), conflictGuardStmt(ctx.db)]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Comment has already been deleted");
+        throw new ConflictError("Comment has already been deleted", { key: "errors.comment_conflict_deleted" });
       }
       throw error;
     }

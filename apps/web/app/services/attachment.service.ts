@@ -35,41 +35,54 @@ export const attachmentService = {
     input: AttachmentUploadInput,
   ): Promise<AttachmentDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("You must be logged in to upload attachments");
+      throw new UnauthorizedError("You must be logged in to upload attachments", {
+        key: "errors.attachment_login_required",
+      });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     const actor = toActor(ctx.user, access);
 
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     if (!canUploadAttachment(actor)) {
-      throw new ForbiddenError("You cannot upload attachments to this project");
+      throw new ForbiddenError("You cannot upload attachments to this project", {
+        key: "errors.attachment_upload_forbidden",
+      });
     }
 
     const task = await taskRepository.findById(ctx.db, taskId);
     if (!task || task.projectId !== projectId || task.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     if (input.size > MAX_ATTACHMENT_BYTES || input.bytes.length > MAX_ATTACHMENT_BYTES) {
       throw new ValidationError("File is larger than 10 MB", {
-        file: ["File is larger than 10 MB"],
+        key: "errors.attachment_file_too_large",
+        fieldErrors: {
+          file: ["File is larger than 10 MB"],
+        },
       });
     }
 
     if (input.size < 1 || input.bytes.length < 1) {
       throw new ValidationError("File cannot be empty", {
-        file: ["File cannot be empty"],
+        key: "errors.attachment_file_empty",
+        fieldErrors: {
+          file: ["File cannot be empty"],
+        },
       });
     }
 
     const validatedType = validateAttachmentContentType(input.bytes, input.contentType);
     if (!validatedType) {
       throw new ValidationError("Unsupported or disguised file format", {
-        file: ["Unsupported or disguised file format"],
+        key: "errors.attachment_unsupported_format",
+        fieldErrors: {
+          file: ["Unsupported or disguised file format"],
+        },
       });
     }
 
@@ -158,12 +171,12 @@ export const attachmentService = {
 
     const attachment = await attachmentRepository.findById(ctx.db, attachmentId);
     if (!attachment) {
-      throw new NotFoundError("Attachment not found");
+      throw new NotFoundError("Attachment not found", { key: "errors.attachment_not_found" });
     }
 
     const task = await taskRepository.findById(ctx.db, attachment.taskId);
     if (!task || (explicitProjectId && task.projectId !== explicitProjectId) || task.deletedAt !== null) {
-      throw new NotFoundError("Attachment not found");
+      throw new NotFoundError("Attachment not found", { key: "errors.attachment_not_found" });
     }
 
     // Non-members receive 404 (FR-18 c3, P3)
@@ -172,7 +185,7 @@ export const attachmentService = {
     const storage = ctx.storage ?? new R2FileStorage(ctx.env.FILES);
     const stored = await storage.get(attachment.storageKey);
     if (!stored) {
-      throw new NotFoundError("Attachment file not found");
+      throw new NotFoundError("Attachment file not found", { key: "errors.attachment_file_not_found" });
     }
 
     return {
@@ -190,30 +203,32 @@ export const attachmentService = {
     input: AttachmentIdInput,
   ): Promise<void> {
     if (!ctx.user) {
-      throw new UnauthorizedError("You must be logged in to delete attachments");
+      throw new UnauthorizedError("You must be logged in to delete attachments", {
+        key: "errors.attachment_delete_login_required",
+      });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     const actor = toActor(ctx.user, access);
 
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     // The task must belong to the project whose access was checked; otherwise a lead of one
     // project could delete another project's attachments by posting their own projectId.
     const task = await taskRepository.findById(ctx.db, taskId);
     if (!task || task.projectId !== projectId) {
-      throw new NotFoundError("Attachment not found");
+      throw new NotFoundError("Attachment not found", { key: "errors.attachment_not_found" });
     }
 
     const attachment = await attachmentRepository.findById(ctx.db, input.attachmentId);
     if (!attachment || attachment.taskId !== taskId) {
-      throw new NotFoundError("Attachment not found");
+      throw new NotFoundError("Attachment not found", { key: "errors.attachment_not_found" });
     }
 
     if (!canDeleteAttachment(actor, attachment)) {
-      throw new ForbiddenError("You cannot delete this attachment");
+      throw new ForbiddenError("You cannot delete this attachment", { key: "errors.attachment_delete_forbidden" });
     }
 
     const now = ctx.clock.now();
@@ -237,7 +252,9 @@ export const attachmentService = {
       ]);
     } catch (err: unknown) {
       if (isVersionConflict(err)) {
-        throw new ConflictError("This attachment was already deleted or modified");
+        throw new ConflictError("This attachment was already deleted or modified", {
+          key: "errors.attachment_conflict",
+        });
       }
       throw err;
     }

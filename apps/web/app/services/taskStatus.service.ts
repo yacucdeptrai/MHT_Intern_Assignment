@@ -55,11 +55,13 @@ const DEFAULT_STATUS_SEEDS: Array<{
 
 function requireStatusAdmin(ctx: RequestContext) {
   if (!ctx.user) {
-    throw new ForbiddenError("Authentication required");
+    throw new ForbiddenError("Authentication required", { key: "errors.authentication_required" });
   }
   const actor = toActor(ctx.user);
   if (!canManageStatuses(actor)) {
-    throw new ForbiddenError("You do not have permission to manage statuses");
+    throw new ForbiddenError("You do not have permission to manage statuses", {
+      key: "errors.status_manage_forbidden",
+    });
   }
   return ctx.user;
 }
@@ -78,14 +80,20 @@ export const taskStatusService = {
 
     const parsed = StatusCreateSchema.safeParse(input);
     if (!parsed.success) {
-      throw new ValidationError("Invalid status data", extractFieldErrors(parsed.error));
+      throw new ValidationError("Invalid status data", {
+        key: "errors.status_invalid_data",
+        fieldErrors: extractFieldErrors(parsed.error),
+      });
     }
 
     const { name, category } = parsed.data;
 
     const existing = await taskStatusRepository.findByName(ctx.db, name);
     if (existing) {
-      throw new ValidationError("Status name already exists", { name: ["Status name already exists"] });
+      throw new ValidationError("Status name already exists", {
+        key: "errors.status_name_exists",
+        fieldErrors: { name: ["Status name already exists"] },
+      });
     }
 
     const allStatuses = await taskStatusRepository.list(ctx.db);
@@ -125,7 +133,7 @@ export const taskStatusService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Status was modified concurrently");
+        throw new ConflictError("Status was modified concurrently", { key: "errors.status_conflict" });
       }
       throw error;
     }
@@ -139,20 +147,26 @@ export const taskStatusService = {
 
     const parsed = StatusUpdateSchema.safeParse(input);
     if (!parsed.success) {
-      throw new ValidationError("Invalid status data", extractFieldErrors(parsed.error));
+      throw new ValidationError("Invalid status data", {
+        key: "errors.status_invalid_data",
+        fieldErrors: extractFieldErrors(parsed.error),
+      });
     }
 
     const { statusId, name, category } = parsed.data;
 
     const current = await taskStatusRepository.findById(ctx.db, statusId);
     if (!current) {
-      throw new NotFoundError("Status not found");
+      throw new NotFoundError("Status not found", { key: "errors.status_not_found" });
     }
 
     if (name && name.toLowerCase() !== current.name.toLowerCase()) {
       const existingName = await taskStatusRepository.findByName(ctx.db, name);
       if (existingName && existingName.id !== statusId) {
-        throw new ValidationError("Status name already exists", { name: ["Status name already exists"] });
+        throw new ValidationError("Status name already exists", {
+          key: "errors.status_name_exists",
+          fieldErrors: { name: ["Status name already exists"] },
+        });
       }
     }
 
@@ -160,7 +174,9 @@ export const taskStatusService = {
       // FR-20 c4: Changing category is rejected if any task uses the status. Otherwise allowed.
       const taskCount = await taskRepository.countByStatusId(ctx.db, current.id);
       if (taskCount > 0) {
-        throw new ValidationError("Cannot change status category when tasks use this status");
+        throw new ValidationError("Cannot change status category when tasks use this status", {
+          key: "errors.status_category_in_use",
+        });
       }
     }
 
@@ -199,7 +215,7 @@ export const taskStatusService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Status was modified concurrently");
+        throw new ConflictError("Status was modified concurrently", { key: "errors.status_conflict" });
       }
       throw error;
     }
@@ -213,7 +229,10 @@ export const taskStatusService = {
 
     const parsed = StatusReorderSchema.safeParse(input);
     if (!parsed.success) {
-      throw new ValidationError("Invalid reorder data", extractFieldErrors(parsed.error));
+      throw new ValidationError("Invalid reorder data", {
+        key: "errors.status_reorder_invalid",
+        fieldErrors: extractFieldErrors(parsed.error),
+      });
     }
 
     const { orderedIds } = parsed.data;
@@ -227,7 +246,7 @@ export const taskStatusService = {
       await ctx.db.batch(compactBatch(stmts));
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Statuses were modified concurrently");
+        throw new ConflictError("Statuses were modified concurrently", { key: "errors.statuses_conflict" });
       }
       throw error;
     }
@@ -240,13 +259,16 @@ export const taskStatusService = {
 
     const parsed = StatusIdSchema.safeParse(input);
     if (!parsed.success) {
-      throw new ValidationError("Invalid status ID", extractFieldErrors(parsed.error));
+      throw new ValidationError("Invalid status ID", {
+        key: "errors.status_id_invalid",
+        fieldErrors: extractFieldErrors(parsed.error),
+      });
     }
 
     const { statusId } = parsed.data;
     const target = await taskStatusRepository.findById(ctx.db, statusId);
     if (!target) {
-      throw new NotFoundError("Status not found");
+      throw new NotFoundError("Status not found", { key: "errors.status_not_found" });
     }
 
     if (target.isDefault) {
@@ -283,7 +305,7 @@ export const taskStatusService = {
       await ctx.db.batch(compactBatch(batchItems));
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Status was modified concurrently");
+        throw new ConflictError("Status was modified concurrently", { key: "errors.status_conflict" });
       }
       throw error;
     }
@@ -301,23 +323,31 @@ export const taskStatusService = {
 
     const parsed = StatusIdSchema.safeParse(input);
     if (!parsed.success) {
-      throw new ValidationError("Invalid status ID", extractFieldErrors(parsed.error));
+      throw new ValidationError("Invalid status ID", {
+        key: "errors.status_id_invalid",
+        fieldErrors: extractFieldErrors(parsed.error),
+      });
     }
 
     const { statusId } = parsed.data;
     const target = await taskStatusRepository.findById(ctx.db, statusId);
     if (!target) {
-      throw new NotFoundError("Status not found");
+      throw new NotFoundError("Status not found", { key: "errors.status_not_found" });
     }
 
     if (target.isDefault) {
-      throw new ValidationError("Cannot delete category default status");
+      throw new ValidationError("Cannot delete category default status", {
+        key: "errors.status_delete_default_forbidden",
+      });
     }
 
     // FR-20 c3: "Given a status used by any task, including archived tasks, When the Admin deletes it, Then the request is rejected with 400 'This status is in use by N tasks'."
     const taskCount = await taskRepository.countByStatusId(ctx.db, target.id);
     if (taskCount > 0) {
-      throw new ValidationError(`This status is in use by ${taskCount} tasks`);
+      throw new ValidationError(`This status is in use by ${taskCount} tasks`, {
+        key: "errors.status_in_use",
+        params: { count: taskCount },
+      });
     }
 
     const now = ctx.clock.now();
@@ -344,7 +374,7 @@ export const taskStatusService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Status was modified concurrently");
+        throw new ConflictError("Status was modified concurrently", { key: "errors.status_conflict" });
       }
       throw error;
     }

@@ -30,7 +30,7 @@ export const notificationService = {
     rawQuery?: unknown,
   ): Promise<{ notifications: Page<NotificationDto>; unreadCount: number }> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const query = NotificationListQuerySchema.parse(rawQuery ?? {});
@@ -55,13 +55,13 @@ export const notificationService = {
 
   async markRead(ctx: RequestContext, notificationId: string): Promise<void> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const existing = await notificationRepository.findById(ctx.db, notificationId);
     // Security check: must only ever touch caller's own rows; other user's notification returns 404
     if (!existing || existing.userId !== ctx.user.id) {
-      throw new NotFoundError("Notification not found");
+      throw new NotFoundError("Notification not found", { key: "errors.notification_not_found" });
     }
 
     if (existing.readAt === null) {
@@ -77,7 +77,7 @@ export const notificationService = {
 
   async markAllRead(ctx: RequestContext): Promise<void> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const now = ctx.clock.now();

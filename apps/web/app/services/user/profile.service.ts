@@ -36,10 +36,10 @@ export const profileService = {
   async getProfile(ctx: RequestContext, userId: string): Promise<ProfileDetailsResult> {
     const user = await userRepository.findById(ctx.db, userId);
     if (!user) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
     if (user.status === "LOCKED") {
-      throw new ForbiddenError("Account is locked");
+      throw new ForbiddenError("Account is locked", { key: "errors.account_is_locked" });
     }
 
     const profile: ProfileDto = {
@@ -62,15 +62,15 @@ export const profileService = {
 
   async updateProfile(ctx: RequestContext, userId: string, input: ProfileUpdateInput): Promise<ProfileDto> {
     if (!ctx.user || ctx.user.id !== userId) {
-      throw new ForbiddenError("You can only update your own profile");
+      throw new ForbiddenError("You can only update your own profile", { key: "errors.profile_update_own_only" });
     }
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
     if (target.status === "LOCKED") {
-      throw new ForbiddenError("Account is locked");
+      throw new ForbiddenError("Account is locked", { key: "errors.account_is_locked" });
     }
 
     const trimmedName = input.fullName.trim();
@@ -119,7 +119,7 @@ export const profileService = {
 
     const updated = await userRepository.findById(ctx.db, userId);
     if (!updated) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
 
     return {
@@ -136,21 +136,24 @@ export const profileService = {
 
   async changePassword(ctx: RequestContext, userId: string, input: ChangePasswordInput): Promise<void> {
     if (!ctx.user || ctx.user.id !== userId) {
-      throw new ForbiddenError("You can only change your own password");
+      throw new ForbiddenError("You can only change your own password", { key: "errors.profile_password_own_only" });
     }
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
     if (target.status === "LOCKED") {
-      throw new ForbiddenError("Account is locked");
+      throw new ForbiddenError("Account is locked", { key: "errors.account_is_locked" });
     }
 
     if (target.passwordHash !== null && target.passwordIterations !== null) {
       if (!input.currentPassword) {
         throw new ValidationError("Current password is required", {
-          currentPassword: ["Current password is required"],
+          key: "errors.profile_current_password_required",
+          fieldErrors: {
+            currentPassword: ["Current password is required"],
+          },
         });
       }
       const isValid = await verifyPassword(input.currentPassword, {
@@ -159,7 +162,10 @@ export const profileService = {
       });
       if (!isValid) {
         throw new ValidationError("Current password is incorrect", {
-          currentPassword: ["Current password is incorrect"],
+          key: "errors.profile_current_password_incorrect",
+          fieldErrors: {
+            currentPassword: ["Current password is incorrect"],
+          },
         });
       }
     }
@@ -190,7 +196,7 @@ export const profileService = {
   async getAvatar(ctx: RequestContext, userId: string): Promise<StoredFile | null> {
     const user = await userRepository.findById(ctx.db, userId);
     if (!user) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
     if (!user.avatarKey) {
       return null;
@@ -201,20 +207,23 @@ export const profileService = {
 
   async updateAvatar(ctx: RequestContext, userId: string, file: AvatarUploadInput): Promise<{ avatarKey: string }> {
     if (!ctx.user || ctx.user.id !== userId) {
-      throw new ForbiddenError("You can only update your own avatar");
+      throw new ForbiddenError("You can only update your own avatar", { key: "errors.profile_avatar_own_only" });
     }
 
     const target = await userRepository.findById(ctx.db, userId);
     if (!target) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found", { key: "errors.user_not_found" });
     }
     if (target.status === "LOCKED") {
-      throw new ForbiddenError("Account is locked");
+      throw new ForbiddenError("Account is locked", { key: "errors.account_is_locked" });
     }
 
     if (file.size > MAX_AVATAR_BYTES) {
       throw new ValidationError("Avatar must be at most 10 MB", {
-        file: ["Avatar must be at most 10 MB"],
+        key: "errors.profile_avatar_too_large",
+        fieldErrors: {
+          file: ["Avatar must be at most 10 MB"],
+        },
       });
     }
 
@@ -222,7 +231,10 @@ export const profileService = {
     const detectedType = detectImageMimeType(file.bytes);
     if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.contentType as AllowedAvatarMimeType) || detectedType === null) {
       throw new ValidationError("Avatar must be a PNG, JPEG, or WebP image", {
-        file: ["Avatar must be a PNG, JPEG, or WebP image"],
+        key: "errors.profile_avatar_invalid_format",
+        fieldErrors: {
+          file: ["Avatar must be a PNG, JPEG, or WebP image"],
+        },
       });
     }
 

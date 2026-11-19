@@ -17,7 +17,7 @@ export async function projectSettingsAction(
     await requireUser(ctx, request);
 
     if (!projectId) {
-      throw new NotFoundError("Project not found");
+      throw new NotFoundError("Project not found", { key: "errors.project_not_found" });
     }
 
     const formData = await request.formData();

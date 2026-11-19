@@ -91,11 +91,17 @@ async function assertSprintAssignable(ctx: RequestContext, projectId: string, sp
   const sprint = await sprintRepository.findByIdIncludingArchived(ctx.db, sprintId);
   if (!sprint || sprint.projectId !== projectId) {
     throw new ValidationError("Sprint does not belong to this project", {
-      sprintId: ["Sprint does not belong to this project"],
+      key: "errors.sprint_not_in_project",
+      fieldErrors: {
+        sprintId: ["Sprint does not belong to this project"],
+      },
     });
   }
   if (sprint.deletedAt !== null) {
-    throw new ValidationError("Sprint is archived", { sprintId: ["Sprint is archived"] });
+    throw new ValidationError("Sprint is archived", {
+      key: "errors.sprint_is_archived",
+      fieldErrors: { sprintId: ["Sprint is archived"] },
+    });
   }
 }
 
@@ -107,27 +113,27 @@ async function transitionWithReason(
   mode: "REJECT" | "REOPEN",
 ): Promise<TaskRow["id"]> {
   if (!ctx.user) {
-    throw new UnauthorizedError("Authentication required");
+    throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
   }
   const currentUser = ctx.user;
 
   const access = await loadProjectAccess(ctx, projectId);
   if (access.isArchived) {
-    throw new ForbiddenError("This project is archived");
+    throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
   }
 
   const existing = await taskRepository.findDetailsById(ctx.db, taskId);
   if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
-    throw new NotFoundError("Task not found");
+    throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
   }
 
   const actor = toActor(currentUser, access);
   if (mode === "REJECT") {
     if (!canApproveTask(actor)) {
-      throw new ForbiddenError("You cannot reject this task");
+      throw new ForbiddenError("You cannot reject this task", { key: "errors.task_reject_forbidden" });
     }
   } else if (!canReopenTask(actor)) {
-    throw new ForbiddenError("You cannot reopen this task");
+    throw new ForbiddenError("You cannot reopen this task", { key: "errors.task_reopen_forbidden" });
   }
 
   let inProgressStatus = await taskStatusRepository.findDefaultByCategory(ctx.db, "IN_PROGRESS");
@@ -153,7 +159,10 @@ async function transitionWithReason(
         fieldErrors[field].push(issue.message);
       }
     }
-    throw new ValidationError(firstMessage ?? "A reason is required", fieldErrors);
+    throw new ValidationError(firstMessage ?? "A reason is required", {
+      key: "validation.reason_required",
+      fieldErrors,
+    });
   }
   const data: TaskReasonInput = parsed.data;
 
@@ -240,7 +249,9 @@ async function transitionWithReason(
     );
   } catch (error) {
     if (isVersionConflict(error)) {
-      throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+      throw new ConflictError("This task was changed by someone else. Reload to see the latest version.", {
+        key: "errors.task_conflict",
+      });
     }
     throw error;
   }
@@ -266,7 +277,7 @@ async function transitionWithReason(
 export const taskService = {
   async createTask(ctx: RequestContext, projectId: string, rawInput: unknown): Promise<TaskDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
     const currentUser = ctx.user;
 
@@ -280,7 +291,7 @@ export const taskService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid task data", fieldErrors);
+      throw new ValidationError("Invalid task data", { key: "errors.task_invalid_data", fieldErrors: fieldErrors });
     }
 
     const data: TaskCreateInput = parsed.data;
@@ -288,26 +299,33 @@ export const taskService = {
     // Load project access (throws NotFoundError 404 for non-members)
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(ctx.user, access);
     if (!canCreateTask(actor)) {
-      throw new ForbiddenError("You do not have permission to create tasks in this project");
+      throw new ForbiddenError("You do not have permission to create tasks in this project", {
+        key: "errors.task_create_forbidden",
+      });
     }
 
     // Validate assignees if provided
     const assigneeIds = data.assigneeIds;
     if (assigneeIds.length > 0) {
       if (!canAssignTask(actor)) {
-        throw new ForbiddenError("Only project leads and admins can assign tasks");
+        throw new ForbiddenError("Only project leads and admins can assign tasks", {
+          key: "errors.task_assign_forbidden",
+        });
       }
 
       for (const assigneeId of assigneeIds) {
         const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, assigneeId);
         if (!member) {
           throw new ValidationError("Assignees must be project members", {
-            assigneeIds: ["Assignees must be project members"],
+            key: "errors.task_assignees_must_be_members",
+            fieldErrors: {
+              assigneeIds: ["Assignees must be project members"],
+            },
           });
         }
       }
@@ -319,12 +337,18 @@ export const taskService = {
       const parent = await taskRepository.findById(ctx.db, data.parentTaskId);
       if (!parent || parent.projectId !== projectId) {
         throw new ValidationError("Parent task not found in this project", {
-          parentTaskId: ["Parent task not found in this project"],
+          key: "errors.task_parent_not_found",
+          fieldErrors: {
+            parentTaskId: ["Parent task not found in this project"],
+          },
         });
       }
       if (parent.parentTaskId) {
         throw new ValidationError("Sub-tasks cannot have sub-tasks", {
-          parentTaskId: ["Sub-tasks cannot have sub-tasks"],
+          key: "errors.task_subtask_nesting_forbidden",
+          fieldErrors: {
+            parentTaskId: ["Sub-tasks cannot have sub-tasks"],
+          },
         });
       }
       // FR-17 c1: Sub-tasks inherit parent's sprint; any user-supplied sprintId is ignored
@@ -456,12 +480,12 @@ export const taskService = {
     canAssign: boolean;
   }> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const filters = ProjectTaskFiltersSchema.parse(rawFilters ?? {});
@@ -560,7 +584,7 @@ export const taskService = {
 
   async listMyTasks(ctx: RequestContext, rawFilters: unknown): Promise<MyTasksLoaderData> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const filters = MyTaskFiltersSchema.parse(rawFilters ?? {});
@@ -668,13 +692,13 @@ export const taskService = {
 
   async getTaskDetails(ctx: RequestContext, projectId: string, taskId: string): Promise<TaskDetailLoaderData> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     const taskRow = await taskRepository.findDetailsById(ctx.db, taskId);
     if (!taskRow || taskRow.projectId !== projectId || taskRow.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     const now = ctx.clock.now();
@@ -844,7 +868,7 @@ export const taskService = {
 
   async updateTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const parsed = TaskUpdateSchema.safeParse(rawInput);
@@ -857,7 +881,10 @@ export const taskService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid task update data", fieldErrors);
+      throw new ValidationError("Invalid task update data", {
+        key: "errors.task_update_invalid",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data: TaskUpdateInput = parsed.data;
@@ -865,17 +892,17 @@ export const taskService = {
     // Load project access (throws NotFoundError 404 for non-members)
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const existing = await taskRepository.findDetailsById(ctx.db, taskId);
     if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     // FR-13 c4: Tasks in DONE status are frozen
     if (existing.statusCategory === "DONE") {
-      throw new ForbiddenError("Reopen the task to edit it");
+      throw new ForbiddenError("Reopen the task to edit it", { key: "errors.workflow_reopen_to_edit" });
     }
 
     // Check editor permission
@@ -883,7 +910,7 @@ export const taskService = {
     const assigneeIds = currentAssignees.map((a) => a.userId);
     const actor = toActor(ctx.user, access);
     if (!canEditTask(actor, { createdById: existing.createdById, assigneeIds, category: existing.statusCategory })) {
-      throw new ForbiddenError("You do not have permission to edit this task");
+      throw new ForbiddenError("You do not have permission to edit this task", { key: "errors.task_edit_forbidden" });
     }
 
     // Check dates order against existing values
@@ -891,7 +918,10 @@ export const taskService = {
     const dueDate = data.dueDate !== undefined ? data.dueDate : existing.dueDate;
     if (startDate && dueDate && dueDate < startDate) {
       throw new ValidationError("Due date must be on or after start date", {
-        dueDate: ["Due date must be on or after start date"],
+        key: "errors.due_date_order",
+        fieldErrors: {
+          dueDate: ["Due date must be on or after start date"],
+        },
       });
     }
 
@@ -962,7 +992,9 @@ export const taskService = {
       await ctx.db.batch(compactBatch(batchItems));
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.", {
+          key: "errors.task_conflict",
+        });
       }
       throw error;
     }
@@ -973,7 +1005,7 @@ export const taskService = {
 
   async assignTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
     const currentUser = ctx.user;
 
@@ -987,7 +1019,10 @@ export const taskService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid task assignment data", fieldErrors);
+      throw new ValidationError("Invalid task assignment data", {
+        key: "errors.task_assignment_invalid",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data: TaskAssignInput = parsed.data;
@@ -995,18 +1030,20 @@ export const taskService = {
     // Load project access (throws NotFoundError 404 for non-members)
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const existing = await taskRepository.findById(ctx.db, taskId);
     if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     // Check permission (canAssignTask)
     const actor = toActor(ctx.user, access);
     if (!canAssignTask(actor)) {
-      throw new ForbiddenError("Only project leads and admins can assign tasks");
+      throw new ForbiddenError("Only project leads and admins can assign tasks", {
+        key: "errors.task_assign_forbidden",
+      });
     }
 
     // FR-15 c2: Validate all assignees are current project members
@@ -1014,7 +1051,10 @@ export const taskService = {
       const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, assigneeId);
       if (!member) {
         throw new ValidationError("Assignees must be project members", {
-          assigneeIds: ["Assignees must be project members"],
+          key: "errors.task_assignees_must_be_members",
+          fieldErrors: {
+            assigneeIds: ["Assignees must be project members"],
+          },
         });
       }
     }
@@ -1068,7 +1108,9 @@ export const taskService = {
       await ctx.db.batch(compactBatch(batchItems));
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.", {
+          key: "errors.task_conflict",
+        });
       }
       throw error;
     }
@@ -1094,7 +1136,7 @@ export const taskService = {
 
   async archiveTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<void> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const parsed = TaskArchiveSchema.safeParse(rawInput);
@@ -1107,7 +1149,10 @@ export const taskService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid task archive data", fieldErrors);
+      throw new ValidationError("Invalid task archive data", {
+        key: "errors.task_archive_invalid",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data: TaskArchiveInput = parsed.data;
@@ -1115,12 +1160,12 @@ export const taskService = {
     // Load project access (throws NotFoundError 404 for non-members)
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const existing = await taskRepository.findById(ctx.db, taskId);
     if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     const currentAssignees = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
@@ -1132,7 +1177,9 @@ export const taskService = {
 
     const actor = toActor(ctx.user, access);
     if (!canArchiveTask(actor, target)) {
-      throw new ForbiddenError("You do not have permission to archive this task");
+      throw new ForbiddenError("You do not have permission to archive this task", {
+        key: "errors.task_archive_forbidden",
+      });
     }
 
     const now = ctx.clock.now();
@@ -1168,7 +1215,9 @@ export const taskService = {
       await ctx.db.batch(compactBatch(batchItems));
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.", {
+          key: "errors.task_conflict",
+        });
       }
       throw error;
     }
@@ -1187,27 +1236,27 @@ export const taskService = {
     rawInput: unknown,
   ): Promise<TaskDetailDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
     const currentUser = ctx.user;
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const existing = await taskRepository.findDetailsById(ctx.db, taskId);
     if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     const assigneeIds = await taskAssigneeRepository.findUserIdsByTaskId(ctx.db, taskId);
     const actor = toActor(currentUser, access);
     if (!canEditTask(actor, { createdById: existing.createdById, assigneeIds, category: "TODO" })) {
-      throw new ForbiddenError("You do not have permission to edit this task");
+      throw new ForbiddenError("You do not have permission to edit this task", { key: "errors.task_edit_forbidden" });
     }
     if (!canEditTask(actor, { createdById: existing.createdById, assigneeIds, category: existing.statusCategory })) {
-      throw new ForbiddenError("Reopen the task to edit it");
+      throw new ForbiddenError("Reopen the task to edit it", { key: "errors.workflow_reopen_to_edit" });
     }
 
     const parsed = TaskStatusChangeSchema.safeParse(rawInput);
@@ -1220,13 +1269,19 @@ export const taskService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid status change data", fieldErrors);
+      throw new ValidationError("Invalid status change data", {
+        key: "errors.task_status_change_invalid",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data: TaskStatusChangeInput = parsed.data;
     const targetStatus = await taskStatusRepository.findById(ctx.db, data.statusId);
     if (!targetStatus) {
-      throw new ValidationError("Status not found", { statusId: ["Status not found"] });
+      throw new ValidationError("Status not found", {
+        key: "errors.status_not_found",
+        fieldErrors: { statusId: ["Status not found"] },
+      });
     }
 
     assertTransitionAllowed(existing.statusCategory, targetStatus.category, "UPDATE");
@@ -1275,7 +1330,9 @@ export const taskService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.", {
+          key: "errors.task_conflict",
+        });
       }
       throw error;
     }
@@ -1294,23 +1351,23 @@ export const taskService = {
 
   async approveTask(ctx: RequestContext, projectId: string, taskId: string, rawInput: unknown): Promise<TaskDetailDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
     const currentUser = ctx.user;
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const existing = await taskRepository.findDetailsById(ctx.db, taskId);
     if (!existing || existing.projectId !== projectId || existing.deletedAt !== null) {
-      throw new NotFoundError("Task not found");
+      throw new NotFoundError("Task not found", { key: "errors.task_not_found" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canApproveTask(actor)) {
-      throw new ForbiddenError("You cannot approve this task");
+      throw new ForbiddenError("You cannot approve this task", { key: "errors.task_approve_forbidden" });
     }
 
     const parsed = TaskApproveSchema.safeParse(rawInput);
@@ -1323,7 +1380,10 @@ export const taskService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid approval data", fieldErrors);
+      throw new ValidationError("Invalid approval data", {
+        key: "errors.task_approval_invalid",
+        fieldErrors: fieldErrors,
+      });
     }
     const data: TaskApproveInput = parsed.data;
 
@@ -1403,7 +1463,9 @@ export const taskService = {
       );
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This task was changed by someone else. Reload to see the latest version.", {
+          key: "errors.task_conflict",
+        });
       }
       throw error;
     }

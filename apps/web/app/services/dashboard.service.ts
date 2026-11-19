@@ -27,7 +27,7 @@ import type { RequestContext } from "../utils/requestContext.server";
 export const dashboardService = {
   async getPersonalDashboard(ctx: RequestContext): Promise<DashboardLoaderData> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const now = ctx.clock.now();
@@ -130,11 +130,11 @@ export const dashboardService = {
 
   async getAdminDashboard(ctx: RequestContext): Promise<AdminDashboardLoaderData> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     if (ctx.user.systemRole !== "ADMIN" && ctx.user.systemRole !== "PM") {
-      throw new ForbiddenError("Insufficient permissions");
+      throw new ForbiddenError("Insufficient permissions", { key: "errors.insufficient_permissions" });
     }
 
     const now = ctx.clock.now();
