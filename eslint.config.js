@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import i18nextPlugin from "eslint-plugin-i18next";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -107,6 +108,23 @@ export default tseslint.config(
                 "Do not import SheetJS (xlsx) on the server. Build .xlsx in the browser to respect Workers Free 10ms CPU limit.",
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["apps/web/app/components/i18n/**/*.{ts,tsx}", "apps/web/app/routes/login.tsx"],
+    plugins: {
+      i18next: i18nextPlugin,
+    },
+    rules: {
+      "i18next/no-literal-string": [
+        "error",
+        {
+          mode: "jsx-only",
+          "jsx-attributes": {
+            include: ["title", "placeholder", "aria-label", "alt"],
+          },
         },
       ],
     },

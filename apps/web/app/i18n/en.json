@@ -1,0 +1,21 @@
+{
+  "common": {
+    "language": "Language",
+    "vietnamese": "Vietnamese",
+    "english": "English",
+    "switch_to_vi": "Switch to Vietnamese",
+    "switch_to_en": "Switch to English"
+  },
+  "auth": {
+    "title": "Project & Task Management",
+    "subtitle": "Sign in with your email and password",
+    "email": "Email address",
+    "email_placeholder": "name@company.com",
+    "password": "Password",
+    "sign_in": "Sign in",
+    "signing_in": "Signing in...",
+    "or_continue_with": "Or continue with",
+    "continue_with_google": "Continue with Google",
+    "continue_with_microsoft": "Continue with Microsoft"
+  }
+}
