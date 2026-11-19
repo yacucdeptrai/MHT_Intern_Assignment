@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -16,6 +17,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export default function AdminDashboardPage() {
+  const { t } = useTranslation();
   const { user, projectsAtRisk, inProgress, todayPriorities, overdue, unreadCount } = useLoaderData<typeof loader>();
   const isAdmin = user.systemRole === "ADMIN";
 
@@ -23,9 +25,9 @@ export default function AdminDashboardPage() {
     <div className="p-8 max-w-7xl mx-auto space-y-8" data-testid="admin-dashboard">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Admin Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t("admin_dashboard.title")}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Welcome back, {user.fullName}. You are signed in as an organization {user.systemRole}.
+            {t("admin_dashboard.subtitle", { name: user.fullName, role: user.systemRole })}
           </p>
         </div>
 
@@ -38,7 +40,9 @@ export default function AdminDashboardPage() {
             >
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
               <span>
-                {unreadCount} unread {unreadCount === 1 ? "notification" : "notifications"}
+                {unreadCount === 1
+                  ? t("admin_dashboard.unread_count_one", { count: unreadCount })
+                  : t("admin_dashboard.unread_count_other", { count: unreadCount })}
               </span>
             </Link>
           ) : (
@@ -46,7 +50,7 @@ export default function AdminDashboardPage() {
               to="/notifications"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors"
             >
-              <span>Notifications up to date</span>
+              <span>{t("admin_dashboard.notifications_up_to_date")}</span>
             </Link>
           )}
         </div>
@@ -61,10 +65,12 @@ export default function AdminDashboardPage() {
           <div>
             <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
-              Projects at Risk
+              {t("admin_dashboard.projects_at_risk_title")}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Active projects with overdue tasks requiring attention ({isAdmin ? "Organization-wide" : "Your projects"})
+              {isAdmin
+                ? t("admin_dashboard.projects_at_risk_subtitle_org")
+                : t("admin_dashboard.projects_at_risk_subtitle_user")}
             </p>
           </div>
           <span
@@ -74,28 +80,30 @@ export default function AdminDashboardPage() {
                 : "bg-gray-50 text-gray-700 border border-gray-200"
             }`}
           >
-            {projectsAtRisk.length} {projectsAtRisk.length === 1 ? "project" : "projects"}
+            {projectsAtRisk.length === 1
+              ? t("admin_dashboard.projects_count_one", { count: projectsAtRisk.length })
+              : t("admin_dashboard.projects_count_other", { count: projectsAtRisk.length })}
           </span>
         </div>
 
         {projectsAtRisk.length === 0 ? (
-          <p className="text-sm text-gray-500 italic py-4 text-center">No projects currently at risk.</p>
+          <p className="text-sm text-gray-500 italic py-4 text-center">{t("admin_dashboard.no_projects_at_risk")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead>
                 <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <th scope="col" className="py-2.5 pl-2 pr-4">
-                    Code
+                    {t("admin_dashboard.th_code")}
                   </th>
                   <th scope="col" className="py-2.5 px-4">
-                    Project Name
+                    {t("admin_dashboard.th_project_name")}
                   </th>
                   <th scope="col" className="py-2.5 px-4 text-center">
-                    Overdue Tasks
+                    {t("admin_dashboard.th_overdue_tasks")}
                   </th>
                   <th scope="col" className="py-2.5 pl-4 pr-2 text-right">
-                    Action
+                    {t("admin_dashboard.th_action")}
                   </th>
                 </tr>
               </thead>
@@ -106,7 +114,7 @@ export default function AdminDashboardPage() {
                     <td className="py-3 px-4 font-medium text-gray-900">{p.name}</td>
                     <td className="py-3 px-4 text-center">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                        {p.overdueCount} overdue
+                        {t("admin_dashboard.badge_overdue", { count: p.overdueCount })}
                       </span>
                     </td>
                     <td className="py-3 pl-4 pr-2 text-right">
@@ -114,7 +122,7 @@ export default function AdminDashboardPage() {
                         to={`/projects/${p.id}`}
                         className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
                       >
-                        View Project →
+                        {t("admin_dashboard.btn_view_project")}
                       </Link>
                     </td>
                   </tr>
@@ -135,12 +143,14 @@ export default function AdminDashboardPage() {
             <div>
               <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
-                Your Overdue Tasks
+                {t("admin_dashboard.overdue_tasks_title")}
               </h2>
-              <p className="text-xs text-gray-500 mt-0.5">Tasks assigned to you past their deadline</p>
+              <p className="text-xs text-gray-500 mt-0.5">{t("admin_dashboard.overdue_tasks_subtitle")}</p>
             </div>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-              {overdue.length} {overdue.length === 1 ? "task" : "tasks"} overdue
+              {overdue.length === 1
+                ? t("admin_dashboard.overdue_tasks_count_one", { count: overdue.length })
+                : t("admin_dashboard.overdue_tasks_count_other", { count: overdue.length })}
             </span>
           </div>
 
@@ -162,13 +172,15 @@ export default function AdminDashboardPage() {
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     <span className="inline-flex items-center text-xs text-gray-500">{task.projectName}</span>
                     <span className="inline-flex items-center text-xs text-red-600 font-medium">
-                      Due {task.dueDate}
+                      {t("admin_dashboard.due_date", { date: task.dueDate })}
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                    {task.daysOverdue} {task.daysOverdue === 1 ? "day overdue" : "days overdue"}
+                    {task.daysOverdue === 1
+                      ? t("admin_dashboard.days_overdue_one", { count: task.daysOverdue })
+                      : t("admin_dashboard.days_overdue_other", { count: task.daysOverdue })}
                   </span>
                   {task.statusName && <span className="text-xs text-gray-500">{task.statusName}</span>}
                 </div>
@@ -187,8 +199,8 @@ export default function AdminDashboardPage() {
         >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Your Priorities Today</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Assigned overdue, due today, or high/urgent tasks</p>
+              <h2 className="text-base font-semibold text-gray-900">{t("admin_dashboard.priorities_title")}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{t("admin_dashboard.priorities_subtitle")}</p>
             </div>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
               {todayPriorities.length}
@@ -197,7 +209,7 @@ export default function AdminDashboardPage() {
 
           <div className="pt-4 flex-1">
             {todayPriorities.length === 0 ? (
-              <p className="text-sm text-gray-500 italic py-4 text-center">No priority tasks for today.</p>
+              <p className="text-sm text-gray-500 italic py-4 text-center">{t("admin_dashboard.no_priorities")}</p>
             ) : (
               <div className="divide-y divide-gray-100 space-y-3">
                 {todayPriorities.slice(0, 5).map((task) => (
@@ -214,7 +226,7 @@ export default function AdminDashboardPage() {
                         <span className="text-xs text-gray-500">{task.projectName}</span>
                         {task.isOverdue && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">
-                            Overdue
+                            {t("admin_dashboard.badge_overdue_tag")}
                           </span>
                         )}
                       </div>
@@ -234,8 +246,8 @@ export default function AdminDashboardPage() {
         >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Your In-Progress Tasks</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Tasks currently in active progress</p>
+              <h2 className="text-base font-semibold text-gray-900">{t("admin_dashboard.in_progress_title")}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{t("admin_dashboard.in_progress_subtitle")}</p>
             </div>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200">
               {inProgress.length}
@@ -244,7 +256,7 @@ export default function AdminDashboardPage() {
 
           <div className="pt-4 flex-1">
             {inProgress.length === 0 ? (
-              <p className="text-sm text-gray-500 italic py-4 text-center">No tasks currently in progress.</p>
+              <p className="text-sm text-gray-500 italic py-4 text-center">{t("admin_dashboard.no_in_progress")}</p>
             ) : (
               <div className="divide-y divide-gray-100 space-y-3">
                 {inProgress.slice(0, 5).map((task) => (
@@ -275,16 +287,16 @@ export default function AdminDashboardPage() {
       {/* Navigation Shortcuts */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-2">
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
-          <h2 className="text-base font-semibold text-gray-900">Projects</h2>
+          <h2 className="text-base font-semibold text-gray-900">{t("admin_dashboard.card_projects_title")}</h2>
           <p className="text-sm text-gray-600">
-            {isAdmin ? "Oversee, configure, and monitor all organization projects." : "Manage projects you coordinate."}
+            {isAdmin ? t("admin_dashboard.card_projects_desc_admin") : t("admin_dashboard.card_projects_desc_pm")}
           </p>
           <div className="pt-2">
             <Link
               to="/projects"
               className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
             >
-              View Projects →
+              {t("admin_dashboard.btn_view_projects")}
             </Link>
           </div>
         </div>
@@ -292,29 +304,27 @@ export default function AdminDashboardPage() {
         {isAdmin ? (
           <>
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
-              <h2 className="text-base font-semibold text-gray-900">User Management</h2>
-              <p className="text-sm text-gray-600">
-                Invite new team members, manage account status, and assign system permissions.
-              </p>
+              <h2 className="text-base font-semibold text-gray-900">{t("admin_dashboard.card_users_title")}</h2>
+              <p className="text-sm text-gray-600">{t("admin_dashboard.card_users_desc")}</p>
               <div className="pt-2">
                 <Link
                   to="/admin/users"
                   className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
-                  Manage Users →
+                  {t("admin_dashboard.btn_manage_users")}
                 </Link>
               </div>
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
-              <h2 className="text-base font-semibold text-gray-900">Task Statuses</h2>
-              <p className="text-sm text-gray-600">Configure system-wide workflow statuses and category defaults.</p>
+              <h2 className="text-base font-semibold text-gray-900">{t("admin_dashboard.card_statuses_title")}</h2>
+              <p className="text-sm text-gray-600">{t("admin_dashboard.card_statuses_desc")}</p>
               <div className="pt-2">
                 <Link
                   to="/admin/statuses"
                   className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
-                  Configure Statuses →
+                  {t("admin_dashboard.btn_configure_statuses")}
                 </Link>
               </div>
             </div>
@@ -322,14 +332,14 @@ export default function AdminDashboardPage() {
         ) : null}
 
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs space-y-3">
-          <h2 className="text-base font-semibold text-gray-900">My Tasks</h2>
-          <p className="text-sm text-gray-600">Track tasks assigned to you or waiting for your review.</p>
+          <h2 className="text-base font-semibold text-gray-900">{t("admin_dashboard.card_my_tasks_title")}</h2>
+          <p className="text-sm text-gray-600">{t("admin_dashboard.card_my_tasks_desc")}</p>
           <div className="pt-2">
             <Link
               to="/my-tasks"
               className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
             >
-              Go to My Tasks →
+              {t("admin_dashboard.btn_go_to_my_tasks")}
             </Link>
           </div>
         </div>

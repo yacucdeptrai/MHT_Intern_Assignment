@@ -133,6 +133,10 @@ export default tseslint.config(
       "apps/web/app/routes/_app.calendar.tsx",
       "apps/web/app/routes/_app.notifications.tsx",
       "apps/web/app/routes/_app.profile.tsx",
+      "apps/web/app/routes/_app.admin._index.tsx",
+      "apps/web/app/routes/_app.admin.users.tsx",
+      "apps/web/app/routes/_app.admin.statuses.tsx",
+      "apps/web/app/routes/_app.admin.audit-log.tsx",
     ],
     plugins: {
       i18next: i18nextPlugin,

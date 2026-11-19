@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
@@ -31,6 +32,7 @@ interface ActionData {
 }
 
 export default function AdminStatusesPage() {
+  const { t } = useTranslation();
   const { statuses } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -79,10 +81,10 @@ export default function AdminStatusesPage() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Task Statuses</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Configure system-wide task workflow statuses and category defaults.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            {t("admin_statuses.title")}
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t("admin_statuses.subtitle")}</p>
         </div>
         <button
           type="button"
@@ -91,7 +93,7 @@ export default function AdminStatusesPage() {
           }}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
-          Add Status
+          {t("admin_statuses.btn_add_status")}
         </button>
       </div>
 
@@ -105,22 +107,22 @@ export default function AdminStatusesPage() {
           <thead className="bg-slate-50 dark:bg-slate-900/50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Order
+                {t("admin_statuses.th_order")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Name
+                {t("admin_statuses.th_name")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Category
+                {t("admin_statuses.th_category")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Default
+                {t("admin_statuses.th_default")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Tasks
+                {t("admin_statuses.th_tasks")}
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Actions
+                {t("admin_statuses.th_actions")}
               </th>
             </tr>
           </thead>
@@ -136,7 +138,7 @@ export default function AdminStatusesPage() {
                         handleMove(index, "up");
                       }}
                       className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label="Move up"
+                      aria-label={t("admin_statuses.aria_move_up")}
                     >
                       ↑
                     </button>
@@ -147,7 +149,7 @@ export default function AdminStatusesPage() {
                         handleMove(index, "down");
                       }}
                       className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label="Move down"
+                      aria-label={t("admin_statuses.aria_move_down")}
                     >
                       ↓
                     </button>
@@ -165,7 +167,7 @@ export default function AdminStatusesPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                   {status.isDefault ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                      Default
+                      {t("admin_statuses.badge_default")}
                     </span>
                   ) : (
                     <Form method="post" className="inline">
@@ -176,7 +178,7 @@ export default function AdminStatusesPage() {
                         disabled={isSubmitting}
                         className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
                       >
-                        Set default
+                        {t("admin_statuses.btn_set_default")}
                       </button>
                     </Form>
                   )}
@@ -192,14 +194,14 @@ export default function AdminStatusesPage() {
                     }}
                     className="text-blue-600 dark:text-blue-400 hover:text-blue-900"
                   >
-                    Edit
+                    {t("admin_statuses.btn_edit")}
                   </button>
                   {!status.isDefault && (
                     <Form
                       method="post"
                       className="inline"
                       onSubmit={(e) => {
-                        if (!confirm(`Are you sure you want to delete status "${status.name}"?`)) {
+                        if (!confirm(t("admin_statuses.confirm_delete", { name: status.name }))) {
                           e.preventDefault();
                         }
                       }}
@@ -211,7 +213,7 @@ export default function AdminStatusesPage() {
                         disabled={isSubmitting}
                         className="text-red-600 dark:text-red-400 hover:text-red-900 disabled:opacity-50"
                       >
-                        Delete
+                        {t("admin_statuses.btn_delete")}
                       </button>
                     </Form>
                   )}
@@ -226,7 +228,9 @@ export default function AdminStatusesPage() {
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add New Status</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              {t("admin_statuses.modal_add_title")}
+            </h2>
             <Form
               method="post"
               className="space-y-4"
@@ -237,7 +241,7 @@ export default function AdminStatusesPage() {
               <input type="hidden" name="intent" value="create" />
               <div>
                 <label htmlFor="create-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Status Name
+                  {t("admin_statuses.label_status_name")}
                 </label>
                 <input
                   id="create-name"
@@ -254,7 +258,7 @@ export default function AdminStatusesPage() {
                   htmlFor="create-category"
                   className="block text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
-                  Category
+                  {t("admin_statuses.label_category")}
                 </label>
                 <select
                   id="create-category"
@@ -278,14 +282,14 @@ export default function AdminStatusesPage() {
                   }}
                   className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200"
                 >
-                  Cancel
+                  {t("admin_statuses.btn_cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Saving..." : "Create"}
+                  {isSubmitting ? t("admin_statuses.btn_saving") : t("admin_statuses.btn_create")}
                 </button>
               </div>
             </Form>
@@ -297,13 +301,15 @@ export default function AdminStatusesPage() {
       {editingStatus && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Edit Status</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              {t("admin_statuses.modal_edit_title")}
+            </h2>
             <Form method="post" className="space-y-4">
               <input type="hidden" name="intent" value="update" />
               <input type="hidden" name="statusId" value={editingStatus.id} />
               <div>
                 <label htmlFor="edit-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Status Name
+                  {t("admin_statuses.label_status_name")}
                 </label>
                 <input
                   id="edit-name"
@@ -323,14 +329,14 @@ export default function AdminStatusesPage() {
                   }}
                   className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200"
                 >
-                  Cancel
+                  {t("admin_statuses.btn_cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Saving..." : "Update"}
+                  {isSubmitting ? t("admin_statuses.btn_saving") : t("admin_statuses.btn_update")}
                 </button>
               </div>
             </Form>
