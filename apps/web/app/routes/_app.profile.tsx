@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
 
@@ -23,6 +24,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation();
   const { profile, memberships, hasPassword } = useLoaderData<typeof loader>();
   const actionData = useActionData<ProfileActionData>();
   const navigation = useNavigation();
@@ -48,13 +50,13 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8" data-testid="profile-page">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">User Profile</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your personal information, avatar, and security settings.</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t("profile.title")}</h1>
+        <p className="text-sm text-gray-500 mt-1">{t("profile.subtitle")}</p>
       </div>
 
       {actionData?.success && (
         <div className="p-4 rounded-md bg-green-50 border border-green-200 text-sm text-green-800" role="status">
-          {actionData.message ?? "Profile updated successfully."}
+          {actionData.message ?? t("profile.msg_profile_updated")}
         </div>
       )}
 
@@ -66,7 +68,7 @@ export default function ProfilePage() {
 
       {/* Avatar Section */}
       <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Profile Photo</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{t("profile.photo_title")}</h2>
         <div className="flex flex-col sm:flex-row items-center gap-6">
           <div className="relative">
             <img
@@ -105,10 +107,10 @@ export default function ProfilePage() {
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 data-testid="avatar-upload-button"
               >
-                {isAvatarUploading ? "Uploading..." : "Upload Photo"}
+                {isAvatarUploading ? t("profile.btn_uploading") : t("profile.btn_upload_photo")}
               </button>
             </avatarFetcher.Form>
-            <p className="text-xs text-gray-500">PNG, JPEG, or WebP up to 10 MB.</p>
+            <p className="text-xs text-gray-500">{t("profile.photo_hint")}</p>
             {avatarError && <p className="text-xs text-red-600">{avatarError}</p>}
           </div>
         </div>
@@ -117,8 +119,8 @@ export default function ProfilePage() {
       {/* Personal Information Form */}
       <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Contact details and organization attributes.</p>
+          <h2 className="text-lg font-semibold text-gray-900">{t("profile.personal_info_title")}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{t("profile.personal_info_subtitle")}</p>
         </div>
 
         <Form method="post" className="space-y-4">
@@ -127,7 +129,7 @@ export default function ProfilePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
-                Full Name
+                {t("profile.label_fullname")}
               </label>
               <input
                 id="fullName"
@@ -143,7 +145,7 @@ export default function ProfilePage() {
 
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                Phone Number
+                {t("profile.label_phone")}
               </label>
               <input
                 id="phone"
@@ -158,7 +160,7 @@ export default function ProfilePage() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-500">
-                Email Address
+                {t("profile.label_email")}
               </label>
               <input
                 id="email"
@@ -168,12 +170,12 @@ export default function ProfilePage() {
                 className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed shadow-sm"
                 data-testid="profile-email-readonly"
               />
-              <p className="mt-1 text-xs text-gray-400">Email cannot be changed directly.</p>
+              <p className="mt-1 text-xs text-gray-400">{t("profile.hint_email")}</p>
             </div>
 
             <div>
               <label htmlFor="department" className="block text-sm font-medium text-gray-500">
-                Department
+                {t("profile.label_department")}
               </label>
               <input
                 id="department"
@@ -183,12 +185,12 @@ export default function ProfilePage() {
                 className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed shadow-sm"
                 data-testid="profile-department-readonly"
               />
-              <p className="mt-1 text-xs text-gray-400">Department is managed by administrators.</p>
+              <p className="mt-1 text-xs text-gray-400">{t("profile.hint_department")}</p>
             </div>
 
             <div>
               <label htmlFor="systemRole" className="block text-sm font-medium text-gray-500">
-                System Role
+                {t("profile.label_system_role")}
               </label>
               <input
                 id="systemRole"
@@ -198,7 +200,7 @@ export default function ProfilePage() {
                 className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed shadow-sm"
                 data-testid="profile-role-readonly"
               />
-              <p className="mt-1 text-xs text-gray-400">Role permissions are configured by administrators.</p>
+              <p className="mt-1 text-xs text-gray-400">{t("profile.hint_system_role")}</p>
             </div>
           </div>
 
@@ -209,7 +211,7 @@ export default function ProfilePage() {
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
               data-testid="profile-save-button"
             >
-              {isProfileSubmitting ? "Saving..." : "Save Changes"}
+              {isProfileSubmitting ? t("profile.btn_saving") : t("profile.btn_save_changes")}
             </button>
           </div>
         </Form>
@@ -219,12 +221,10 @@ export default function ProfilePage() {
       <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-6">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            {hasPassword ? "Change Password" : "Set Account Password"}
+            {hasPassword ? t("profile.security_change_pwd") : t("profile.security_set_pwd")}
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            {hasPassword
-              ? "Ensure your account is using a long, secure password (at least 10 characters)."
-              : "You currently sign in via SSO. Setting a password allows signing in with your email and password."}
+            {hasPassword ? t("profile.hint_has_pwd") : t("profile.hint_no_pwd")}
           </p>
         </div>
 
@@ -234,7 +234,7 @@ export default function ProfilePage() {
           {hasPassword && (
             <div>
               <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700">
-                Current Password
+                {t("profile.label_current_pwd")}
               </label>
               <input
                 id="currentPassword"
@@ -250,7 +250,7 @@ export default function ProfilePage() {
 
           <div>
             <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
-              New Password
+              {t("profile.label_new_pwd")}
             </label>
             <input
               id="newPassword"
@@ -266,7 +266,7 @@ export default function ProfilePage() {
 
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-              Confirm New Password
+              {t("profile.label_confirm_pwd")}
             </label>
             <input
               id="confirmPassword"
@@ -286,7 +286,11 @@ export default function ProfilePage() {
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
             data-testid="change-password-button"
           >
-            {isPasswordSubmitting ? "Updating..." : hasPassword ? "Update Password" : "Set Password"}
+            {isPasswordSubmitting
+              ? t("profile.btn_updating_pwd")
+              : hasPassword
+                ? t("profile.btn_update_pwd")
+                : t("profile.btn_set_pwd")}
           </button>
         </Form>
       </section>
@@ -294,22 +298,22 @@ export default function ProfilePage() {
       {/* Project Memberships */}
       <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Project Memberships</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Projects you are assigned to and your role in each.</p>
+          <h2 className="text-lg font-semibold text-gray-900">{t("profile.memberships_title")}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{t("profile.memberships_subtitle")}</p>
         </div>
 
         {memberships.length === 0 ? (
           <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-500">You are not a member of any projects yet.</p>
+            <p className="text-sm text-gray-500">{t("profile.empty_memberships")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Project Code</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Name</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Role</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t("profile.th_project_code")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t("profile.th_name")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t("profile.th_role")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">

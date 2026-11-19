@@ -128,6 +128,11 @@ export default tseslint.config(
       "apps/web/app/routes/_app.projects.$projectId.tasks.$taskId.tsx",
       "apps/web/app/routes/_app.projects.$projectId.sprints.tsx",
       "apps/web/app/routes/_app.projects.$projectId.reports.tsx",
+      "apps/web/app/routes/_app._index.tsx",
+      "apps/web/app/routes/_app.my-tasks.tsx",
+      "apps/web/app/routes/_app.calendar.tsx",
+      "apps/web/app/routes/_app.notifications.tsx",
+      "apps/web/app/routes/_app.profile.tsx",
     ],
     plugins: {
       i18next: i18nextPlugin,
