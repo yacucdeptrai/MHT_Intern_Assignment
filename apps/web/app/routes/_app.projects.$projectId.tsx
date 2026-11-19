@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { NavLink, Outlet, useLoaderData } from "react-router";
 
@@ -20,14 +21,24 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 
 export default function ProjectLayout() {
   const { project, permissions } = useLoaderData<typeof loader>();
+  const { t } = useTranslation();
 
   const navItems = [
-    { name: "Tasks", to: `/projects/${project.id}`, end: true },
-    { name: "Sprints", to: `/projects/${project.id}/sprints`, end: false },
-    { name: "Members", to: `/projects/${project.id}/members`, end: false },
-    ...(permissions.canManageProject ? [{ name: "Settings", to: `/projects/${project.id}/settings`, end: false }] : []),
+    { id: "tasks", label: t("project_layout.tab_tasks"), to: `/projects/${project.id}`, end: true },
+    { id: "sprints", label: t("project_layout.tab_sprints"), to: `/projects/${project.id}/sprints`, end: false },
+    { id: "members", label: t("project_layout.tab_members"), to: `/projects/${project.id}/members`, end: false },
+    ...(permissions.canManageProject
+      ? [
+          {
+            id: "settings",
+            label: t("project_layout.tab_settings"),
+            to: `/projects/${project.id}/settings`,
+            end: false,
+          },
+        ]
+      : []),
     ...(permissions.canViewMemberReport || permissions.canViewProjectReport
-      ? [{ name: "Reports", to: `/projects/${project.id}/reports`, end: false }]
+      ? [{ id: "reports", label: t("project_layout.tab_reports"), to: `/projects/${project.id}/reports`, end: false }]
       : []),
   ];
 
@@ -47,7 +58,7 @@ export default function ProjectLayout() {
                 </h1>
                 {project.isArchived ? (
                   <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20">
-                    Archived
+                    {t("project_layout.status_archived")}
                   </span>
                 ) : (
                   <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
@@ -61,7 +72,9 @@ export default function ProjectLayout() {
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Your Role:</span>
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {t("project_layout.your_role")}
+              </span>
               <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800">
                 {project.projectRole}
               </span>
@@ -70,10 +83,10 @@ export default function ProjectLayout() {
 
           {/* Navigation Tabs */}
           <div className="mt-6 border-b border-gray-200">
-            <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+            <nav className="-mb-px flex space-x-6" aria-label={t("project_layout.aria_tabs")}>
               {navItems.map((item) => (
                 <NavLink
-                  key={item.name}
+                  key={item.id}
                   to={item.to}
                   end={item.end}
                   className={({ isActive }) =>
@@ -83,9 +96,9 @@ export default function ProjectLayout() {
                         : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
                     }`
                   }
-                  data-testid={`tab-${item.name.toLowerCase()}`}
+                  data-testid={`tab-${item.id}`}
                 >
-                  {item.name}
+                  {item.label}
                 </NavLink>
               ))}
             </nav>
