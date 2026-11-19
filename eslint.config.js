@@ -89,4 +89,26 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: [
+      "apps/web/app/services/**/*.ts",
+      "apps/web/app/routes/**/*.ts",
+      "apps/web/app/routes/**/*.tsx",
+      "apps/web/worker/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "xlsx",
+              message:
+                "Do not import SheetJS (xlsx) on the server. Build .xlsx in the browser to respect Workers Free 10ms CPU limit.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

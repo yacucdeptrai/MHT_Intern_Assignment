@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import { taskAssignees, type TaskAssigneeRow } from "../schema/taskAssignees";
@@ -64,5 +64,22 @@ export const taskAssigneeRepository = {
       .from(taskAssignees)
       .innerJoin(users, eq(taskAssignees.userId, users.id))
       .where(inArray(taskAssignees.taskId, taskIds));
+  },
+
+  listAssigneesByProjectId: async (
+    db: AppDatabase,
+    projectId: string,
+  ): Promise<Array<{ taskId: string; fullName: string }>> => {
+    const { users } = await import("../schema/users");
+    return db
+      .select({
+        taskId: taskAssignees.taskId,
+        fullName: users.fullName,
+      })
+      .from(taskAssignees)
+      .innerJoin(users, eq(taskAssignees.userId, users.id))
+      .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
+      .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+      .orderBy(asc(users.fullName));
   },
 };
