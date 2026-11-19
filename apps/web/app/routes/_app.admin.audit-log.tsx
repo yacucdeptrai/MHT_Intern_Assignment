@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Form, Link, useLoaderData } from "react-router";
 
@@ -28,6 +29,7 @@ function buildPageHref(filters: AdminAuditLogLoaderData["filters"], targetPage: 
 }
 
 export default function AdminAuditLogPage() {
+  const { t } = useTranslation();
   const { entries, filters, actors } = useLoaderData<typeof loader>();
   const startItem = entries.total === 0 ? 0 : (entries.page - 1) * entries.pageSize + 1;
   const endItem = Math.min(entries.page * entries.pageSize, entries.total);
@@ -36,10 +38,8 @@ export default function AdminAuditLogPage() {
     <div className="min-h-screen bg-gray-50 p-6 md:p-10">
       <div className="mx-auto max-w-7xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">System Audit Log</h1>
-          <p className="text-sm text-gray-600">
-            Trace who changed what and when across users, projects, tasks, sprints, and statuses.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("admin_audit.title")}</h1>
+          <p className="text-sm text-gray-600">{t("admin_audit.subtitle")}</p>
         </div>
 
         <Form
@@ -49,7 +49,7 @@ export default function AdminAuditLogPage() {
         >
           <div>
             <label htmlFor="audit-filter-actor" className="block text-xs font-medium text-gray-700">
-              Actor
+              {t("admin_audit.label_actor")}
             </label>
             <select
               id="audit-filter-actor"
@@ -58,10 +58,10 @@ export default function AdminAuditLogPage() {
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               data-testid="filter-actor"
             >
-              <option value="">All Actors</option>
+              <option value="">{t("admin_audit.all_actors")}</option>
               {actors.map((actor) => (
                 <option key={actor.id} value={actor.id}>
-                  {actor.isDeleted ? "Deleted user" : `${actor.fullName} (${actor.email})`}
+                  {actor.isDeleted ? t("admin_audit.deleted_user") : `${actor.fullName} (${actor.email})`}
                 </option>
               ))}
             </select>
@@ -69,7 +69,7 @@ export default function AdminAuditLogPage() {
 
           <div>
             <label htmlFor="audit-filter-entity-type" className="block text-xs font-medium text-gray-700">
-              Entity Type
+              {t("admin_audit.label_entity_type")}
             </label>
             <select
               id="audit-filter-entity-type"
@@ -78,7 +78,7 @@ export default function AdminAuditLogPage() {
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               data-testid="filter-entity-type"
             >
-              <option value="">All Entity Types</option>
+              <option value="">{t("admin_audit.all_entity_types")}</option>
               {AUDIT_ENTITY_TYPES.map((entityType) => (
                 <option key={entityType} value={entityType}>
                   {entityType}
@@ -89,7 +89,7 @@ export default function AdminAuditLogPage() {
 
           <div>
             <label htmlFor="audit-filter-action" className="block text-xs font-medium text-gray-700">
-              Action
+              {t("admin_audit.label_action")}
             </label>
             <select
               id="audit-filter-action"
@@ -98,7 +98,7 @@ export default function AdminAuditLogPage() {
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               data-testid="filter-action"
             >
-              <option value="">All Actions</option>
+              <option value="">{t("admin_audit.all_actions")}</option>
               {AUDIT_ACTIONS.map((action) => (
                 <option key={action} value={action}>
                   {action}
@@ -109,7 +109,7 @@ export default function AdminAuditLogPage() {
 
           <div>
             <label htmlFor="audit-filter-from" className="block text-xs font-medium text-gray-700">
-              From Date
+              {t("admin_audit.label_from_date")}
             </label>
             <input
               id="audit-filter-from"
@@ -123,7 +123,7 @@ export default function AdminAuditLogPage() {
 
           <div>
             <label htmlFor="audit-filter-to" className="block text-xs font-medium text-gray-700">
-              To Date
+              {t("admin_audit.label_to_date")}
             </label>
             <input
               id="audit-filter-to"
@@ -141,14 +141,14 @@ export default function AdminAuditLogPage() {
               className="rounded-md bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               data-testid="btn-apply-audit-filters"
             >
-              Filter
+              {t("admin_audit.btn_filter")}
             </button>
             <Link
               to="/admin/audit-log"
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
               data-testid="btn-reset-audit-filters"
             >
-              Reset
+              {t("admin_audit.btn_reset")}
             </Link>
           </div>
         </Form>
@@ -160,18 +160,18 @@ export default function AdminAuditLogPage() {
           >
             <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
               <tr>
-                <th className="px-6 py-3">Timestamp</th>
-                <th className="px-6 py-3">Actor</th>
-                <th className="px-6 py-3">Action</th>
-                <th className="px-6 py-3">Entity</th>
-                <th className="px-6 py-3">Changes</th>
+                <th className="px-6 py-3">{t("admin_audit.th_timestamp")}</th>
+                <th className="px-6 py-3">{t("admin_audit.th_actor")}</th>
+                <th className="px-6 py-3">{t("admin_audit.th_action")}</th>
+                <th className="px-6 py-3">{t("admin_audit.th_entity")}</th>
+                <th className="px-6 py-3">{t("admin_audit.th_changes")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {entries.items.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-gray-500" data-testid="audit-empty-state">
-                    No audit log entries match the selected filters.
+                    {t("admin_audit.empty_audit")}
                   </td>
                 </tr>
               ) : (
@@ -191,12 +191,16 @@ export default function AdminAuditLogPage() {
                       <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-700">
                         <div className="font-semibold text-gray-900">{entry.entityType}</div>
                         <div className="font-mono text-gray-500">{entry.entityId}</div>
-                        {entry.projectCode ? <div className="text-gray-500">Project: {entry.projectCode}</div> : null}
+                        {entry.projectCode ? (
+                          <div className="text-gray-500">
+                            {t("admin_audit.project_prefix", { code: entry.projectCode })}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-6 py-4 text-xs text-gray-700">
                         {reason ? (
                           <p className="mb-1 rounded bg-amber-50 px-2 py-1 text-amber-900">
-                            <span className="font-semibold">Reason:</span> {reason}
+                            <span className="font-semibold">{t("admin_audit.reason_prefix")}</span> {reason}
                           </p>
                         ) : null}
                         {diffs.length === 0 && !reason ? (
@@ -226,7 +230,12 @@ export default function AdminAuditLogPage() {
           data-testid="audit-pagination"
         >
           <span>
-            Showing {startItem}–{endItem} of {entries.total} entries ({entries.pageSize} per page)
+            {t("admin_audit.pagination_showing", {
+              start: startItem,
+              end: endItem,
+              total: entries.total,
+              pageSize: entries.pageSize,
+            })}
           </span>
           <div className="flex items-center gap-2">
             {entries.page > 1 ? (
@@ -235,11 +244,14 @@ export default function AdminAuditLogPage() {
                 className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 data-testid="audit-prev-page"
               >
-                Previous
+                {t("admin_audit.btn_previous")}
               </Link>
             ) : null}
             <span className="text-xs font-medium text-gray-700">
-              Page {entries.page} of {entries.totalPages}
+              {t("admin_audit.pagination_page", {
+                page: entries.page,
+                totalPages: entries.totalPages,
+              })}
             </span>
             {entries.page < entries.totalPages ? (
               <Link
@@ -247,7 +259,7 @@ export default function AdminAuditLogPage() {
                 className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 data-testid="audit-next-page"
               >
-                Next
+                {t("admin_audit.btn_next")}
               </Link>
             ) : null}
           </div>

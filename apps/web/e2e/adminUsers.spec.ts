@@ -17,11 +17,12 @@ test.describe("Admin User Management Journey", () => {
 
     // 2. Open User Management
     await page.goto("/admin/users");
-    await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toHaveText("User Management");
+    /* cspell:disable */
+    await expect(page.getByRole("heading", { level: 1, name: /User Management|Quản lý người dùng/i })).toBeVisible();
 
     // 3. Open Create User Modal
-    const createButton = page.getByRole("button", { name: "+ Create User" });
-    const modalHeading = page.getByRole("heading", { level: 2, name: "Create New User" });
+    const createButton = page.getByRole("button", { name: /^(\+ Create User|\+ Thêm người dùng)$/i });
+    const modalHeading = page.getByRole("heading", { level: 2, name: /Create New User|Tạo người dùng mới/i });
     await expect(async () => {
       await createButton.click();
       await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -31,14 +32,17 @@ test.describe("Admin User Management Journey", () => {
     const testEmail = `intern.${uniqueId}@example.com`;
     const testName = `Intern Engineer ${uniqueId}`;
 
-    await page.getByLabel("Full Name").fill(testName);
-    await page.getByLabel("Email Address").fill(testEmail);
-    await page.getByLabel("Department (Optional)").fill("Platform");
-    await page.getByRole("button", { name: "Create User", exact: true }).click();
+    await page.getByLabel(/Full Name|Họ và tên/i).fill(testName);
+    await page.getByLabel(/Email Address|Địa chỉ email/i).fill(testEmail);
+    await page.getByLabel(/Department \(Optional\)|Phòng ban \(Tùy chọn\)/i).fill("Platform");
+    await page.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
 
     // 4. Verify Success & Invite Link
-    await expect(page.getByText("User account created successfully!")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Copy Link" })).toBeVisible();
+    await expect(
+      page.getByText(/User account created successfully!|Tài khoản người dùng đã được tạo thành công!/i),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Copy Link|Sao chép liên kết/i })).toBeVisible();
+    /* cspell:enable */
 
     // 5. Verify user appears in table
     await expect(page.getByText(testName)).toBeVisible();

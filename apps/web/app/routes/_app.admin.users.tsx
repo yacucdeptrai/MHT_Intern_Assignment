@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 
@@ -33,6 +34,7 @@ interface ActionData {
 }
 
 export default function AdminUsersPage() {
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -66,18 +68,19 @@ export default function AdminUsersPage() {
         {/* Page Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-            <p className="text-sm text-gray-600">Create, edit, lock, unlock, and manage organization user accounts.</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t("admin_users.title")}</h1>
+            <p className="text-sm text-gray-600">{t("admin_users.subtitle")}</p>
           </div>
           <div>
             <button
               type="button"
+              data-testid="btn-open-create-user"
               onClick={() => {
                 setIsCreateOpen(true);
               }}
               className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              + Create User
+              {t("admin_users.btn_create_user")}
             </button>
           </div>
         </div>
@@ -92,10 +95,8 @@ export default function AdminUsersPage() {
         {/* Invite Link Success Banner */}
         {actionData?.success && actionData.inviteUrl ? (
           <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-900">
-            <h3 className="text-sm font-semibold text-green-800">User account created successfully!</h3>
-            <p className="mt-1 text-sm text-green-700">
-              Copy this one-time invite link and send it to the user so they can set their password:
-            </p>
+            <h3 className="text-sm font-semibold text-green-800">{t("admin_users.success_created_title")}</h3>
+            <p className="mt-1 text-sm text-green-700">{t("admin_users.success_created_desc")}</p>
             <div className="mt-3 flex items-center gap-2">
               <input
                 type="text"
@@ -110,7 +111,7 @@ export default function AdminUsersPage() {
                 }}
                 className="rounded-md bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800"
               >
-                {copiedLink ? "Copied!" : "Copy Link"}
+                {copiedLink ? t("admin_users.btn_copied") : t("admin_users.btn_copy_link")}
               </button>
             </div>
           </div>
@@ -123,7 +124,7 @@ export default function AdminUsersPage() {
               type="search"
               name="q"
               defaultValue={searchParams.get("q") ?? ""}
-              placeholder="Search by name or email..."
+              placeholder={t("admin_users.search_placeholder")}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -134,9 +135,9 @@ export default function AdminUsersPage() {
               defaultValue={searchParams.get("status") ?? ""}
               className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">All Statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="LOCKED">Locked</option>
+              <option value="">{t("admin_users.filter_all_statuses")}</option>
+              <option value="ACTIVE">{t("admin_users.filter_status_active")}</option>
+              <option value="LOCKED">{t("admin_users.filter_status_locked")}</option>
             </select>
           </div>
 
@@ -146,11 +147,11 @@ export default function AdminUsersPage() {
               defaultValue={searchParams.get("systemRole") ?? ""}
               className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">All Roles</option>
-              <option value="ADMIN">Admin</option>
-              <option value="PM">PM</option>
-              <option value="TEAM_LEAD">Team Lead</option>
-              <option value="MEMBER">Member</option>
+              <option value="">{t("admin_users.filter_all_roles")}</option>
+              <option value="ADMIN">{t("admin_users.filter_role_admin")}</option>
+              <option value="PM">{t("admin_users.filter_role_pm")}</option>
+              <option value="TEAM_LEAD">{t("admin_users.filter_role_team_lead")}</option>
+              <option value="MEMBER">{t("admin_users.filter_role_member")}</option>
             </select>
           </div>
 
@@ -158,7 +159,7 @@ export default function AdminUsersPage() {
             type="submit"
             className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
           >
-            Filter
+            {t("admin_users.btn_filter")}
           </button>
         </Form>
 
@@ -167,19 +168,19 @@ export default function AdminUsersPage() {
           <table className="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-600">
             <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
               <tr>
-                <th className="px-6 py-3">Full Name</th>
-                <th className="px-6 py-3">Email</th>
-                <th className="px-6 py-3">Role</th>
-                <th className="px-6 py-3">Department</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3 text-right">Actions</th>
+                <th className="px-6 py-3">{t("admin_users.th_full_name")}</th>
+                <th className="px-6 py-3">{t("admin_users.th_email")}</th>
+                <th className="px-6 py-3">{t("admin_users.th_role")}</th>
+                <th className="px-6 py-3">{t("admin_users.th_department")}</th>
+                <th className="px-6 py-3">{t("admin_users.th_status")}</th>
+                <th className="px-6 py-3 text-right">{t("admin_users.th_actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {loaderData.users.items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                    No users found matching the filter criteria.
+                    {t("admin_users.no_users_found")}
                   </td>
                 </tr>
               ) : (
@@ -211,7 +212,7 @@ export default function AdminUsersPage() {
                           }}
                           className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
                         >
-                          Edit
+                          {t("admin_users.btn_edit")}
                         </button>
 
                         <Form method="post" className="inline">
@@ -226,7 +227,7 @@ export default function AdminUsersPage() {
                                 : "text-green-600 hover:bg-green-50"
                             }`}
                           >
-                            {u.status === "ACTIVE" ? "Lock" : "Unlock"}
+                            {u.status === "ACTIVE" ? t("admin_users.btn_lock") : t("admin_users.btn_unlock")}
                           </button>
                         </Form>
 
@@ -234,7 +235,7 @@ export default function AdminUsersPage() {
                           method="post"
                           className="inline"
                           onSubmit={(e) => {
-                            if (!confirm(`Are you sure you want to delete ${u.fullName}?`)) {
+                            if (!confirm(t("admin_users.confirm_delete", { name: u.fullName }))) {
                               e.preventDefault();
                             }
                           }}
@@ -246,7 +247,7 @@ export default function AdminUsersPage() {
                             disabled={isSubmitting}
                             className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
                           >
-                            Delete
+                            {t("admin_users.btn_delete")}
                           </button>
                         </Form>
                       </div>
@@ -263,15 +264,16 @@ export default function AdminUsersPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
               <div className="flex items-center justify-between border-b pb-3">
-                <h2 className="text-lg font-semibold text-gray-900">Create New User</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{t("admin_users.modal_create_title")}</h2>
                 <button
                   type="button"
                   onClick={() => {
                     setIsCreateOpen(false);
                   }}
                   className="text-gray-400 hover:text-gray-600"
+                  aria-label={t("admin_users.modal_close")}
                 >
-                  ✕
+                  <span aria-hidden="true">&times;</span>
                 </button>
               </div>
 
@@ -287,7 +289,7 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label htmlFor="create-fullName" className="block text-sm font-medium text-gray-700">
-                    Full Name
+                    {t("admin_users.label_full_name")}
                   </label>
                   <input
                     id="create-fullName"
@@ -302,7 +304,7 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label htmlFor="create-email" className="block text-sm font-medium text-gray-700">
-                    Email Address
+                    {t("admin_users.label_email")}
                   </label>
                   <input
                     id="create-email"
@@ -317,7 +319,7 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label htmlFor="create-systemRole" className="block text-sm font-medium text-gray-700">
-                    System Role
+                    {t("admin_users.label_system_role")}
                   </label>
                   <select
                     id="create-systemRole"
@@ -325,16 +327,16 @@ export default function AdminUsersPage() {
                     defaultValue={actionData?.values?.systemRole ?? "MEMBER"}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="MEMBER">Member</option>
-                    <option value="TEAM_LEAD">Team Lead</option>
-                    <option value="PM">Project Manager (PM)</option>
-                    <option value="ADMIN">Administrator</option>
+                    <option value="MEMBER">{t("admin_users.role_member")}</option>
+                    <option value="TEAM_LEAD">{t("admin_users.role_team_lead")}</option>
+                    <option value="PM">{t("admin_users.role_pm")}</option>
+                    <option value="ADMIN">{t("admin_users.role_admin")}</option>
                   </select>
                 </div>
 
                 <div>
                   <label htmlFor="create-department" className="block text-sm font-medium text-gray-700">
-                    Department (Optional)
+                    {t("admin_users.label_department")}
                   </label>
                   <input
                     id="create-department"
@@ -353,14 +355,15 @@ export default function AdminUsersPage() {
                     }}
                     className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    Cancel
+                    {t("admin_users.btn_cancel")}
                   </button>
                   <button
                     type="submit"
+                    data-testid="btn-submit-create-user"
                     disabled={isSubmitting}
                     className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {isSubmitting ? "Creating..." : "Create User"}
+                    {isSubmitting ? t("admin_users.btn_creating") : t("admin_users.btn_submit_create")}
                   </button>
                 </div>
               </Form>
@@ -373,15 +376,18 @@ export default function AdminUsersPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
               <div className="flex items-center justify-between border-b pb-3">
-                <h2 className="text-lg font-semibold text-gray-900">Edit User: {editingUser.fullName}</h2>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {t("admin_users.modal_edit_title", { name: editingUser.fullName })}
+                </h2>
                 <button
                   type="button"
                   onClick={() => {
                     setEditingUser(null);
                   }}
                   className="text-gray-400 hover:text-gray-600"
+                  aria-label={t("admin_users.modal_close")}
                 >
-                  ✕
+                  <span aria-hidden="true">&times;</span>
                 </button>
               </div>
 
@@ -397,7 +403,7 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label htmlFor="edit-fullName" className="block text-sm font-medium text-gray-700">
-                    Full Name
+                    {t("admin_users.label_full_name")}
                   </label>
                   <input
                     id="edit-fullName"
@@ -411,7 +417,7 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label htmlFor="edit-email" className="block text-sm font-medium text-gray-700">
-                    Email Address
+                    {t("admin_users.label_email")}
                   </label>
                   <input
                     id="edit-email"
@@ -425,7 +431,7 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label htmlFor="edit-systemRole" className="block text-sm font-medium text-gray-700">
-                    System Role
+                    {t("admin_users.label_system_role")}
                   </label>
                   <select
                     id="edit-systemRole"
@@ -433,16 +439,16 @@ export default function AdminUsersPage() {
                     defaultValue={editingUser.systemRole}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="MEMBER">Member</option>
-                    <option value="TEAM_LEAD">Team Lead</option>
-                    <option value="PM">Project Manager (PM)</option>
-                    <option value="ADMIN">Administrator</option>
+                    <option value="MEMBER">{t("admin_users.role_member")}</option>
+                    <option value="TEAM_LEAD">{t("admin_users.role_team_lead")}</option>
+                    <option value="PM">{t("admin_users.role_pm")}</option>
+                    <option value="ADMIN">{t("admin_users.role_admin")}</option>
                   </select>
                 </div>
 
                 <div>
                   <label htmlFor="edit-department" className="block text-sm font-medium text-gray-700">
-                    Department
+                    {t("admin_users.label_department_edit")}
                   </label>
                   <input
                     id="edit-department"
@@ -461,14 +467,14 @@ export default function AdminUsersPage() {
                     }}
                     className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    Cancel
+                    {t("admin_users.btn_cancel")}
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
                     className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {isSubmitting ? "Saving..." : "Save Changes"}
+                    {isSubmitting ? t("admin_users.btn_saving") : t("admin_users.btn_save_changes")}
                   </button>
                 </div>
               </Form>
