@@ -85,6 +85,7 @@ test.describe("Journey 2: Admin User Management (FR-03, FR-04)", () => {
     const lockBtn = memberRow.getByRole("button", { name: /Lock|Khóa/i });
     await expect(lockBtn).toBeVisible();
     await lockBtn.click();
+    await expect(memberRow.getByRole("button", { name: /Unlock|Mở khóa/i })).toBeVisible();
 
     // Member navigates to another page
     await member.page.goto("/profile");
