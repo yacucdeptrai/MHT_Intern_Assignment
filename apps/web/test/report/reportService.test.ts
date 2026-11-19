@@ -5,6 +5,7 @@ import {
   createDatabase,
   projectMemberRepository,
   projectRepository,
+  sprintRepository,
   taskAssigneeRepository,
   taskRepository,
   taskStatusRepository,
@@ -523,5 +524,112 @@ describe("reportService.getProjectReport (FR-31)", () => {
     expect(doneDist?.percentage).toBe(50);
     expect(report.bottlenecks).toBeDefined();
     expect(report.sprintCompletion).toBeDefined();
+  });
+  it('FR-31 c2: a sprint with no top-level tasks reports completion as null (shown as "No tasks"), not 0%', async () => {
+    const now = new Date("2026-11-19T10:00:00+07:00");
+    const db = createDatabase(env.DB);
+    const pmId = crypto.randomUUID();
+    await userRepository.insert(db, {
+      id: pmId,
+      email: `pm-c2-${pmId}@example.com`,
+      fullName: "PM Sprint Report",
+      systemRole: "MEMBER",
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const projectId = crypto.randomUUID();
+    const todoId = crypto.randomUUID();
+    const doneId = crypto.randomUUID();
+    const emptySprintId = crypto.randomUUID();
+    const busySprintId = crypto.randomUUID();
+    await db.batch([
+      projectRepository.insertStmt(db, {
+        id: projectId,
+        code: `C2${projectId.slice(0, 6).toUpperCase()}`,
+        name: "Sprint Completion Report",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "ACTIVE",
+        createdById: pmId,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      projectMemberRepository.insertStmt(db, { projectId, userId: pmId, projectRole: "PM", createdAt: now }),
+      taskStatusRepository.insertStmt(db, {
+        id: todoId,
+        name: `To Do ${todoId}`,
+        category: "TODO",
+        position: 1,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskStatusRepository.insertStmt(db, {
+        id: doneId,
+        name: `Done ${doneId}`,
+        category: "DONE",
+        position: 2,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+    await sprintRepository.insert(db, {
+      id: emptySprintId,
+      projectId,
+      name: "Empty sprint",
+      startDate: "2026-11-01",
+      endDate: "2026-11-14",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await sprintRepository.insert(db, {
+      id: busySprintId,
+      projectId,
+      name: "Busy sprint",
+      startDate: "2026-11-15",
+      endDate: "2026-11-28",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.batch([
+      taskRepository.insertStmt(db, {
+        id: crypto.randomUUID(),
+        projectId,
+        sprintId: busySprintId,
+        statusId: doneId,
+        title: "Done in busy sprint",
+        createdById: pmId,
+        statusChangedAt: now,
+        completedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      taskRepository.insertStmt(db, {
+        id: crypto.randomUUID(),
+        projectId,
+        sprintId: busySprintId,
+        statusId: todoId,
+        title: "Open in busy sprint",
+        createdById: pmId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+
+    const ctx = createMockContext(
+      { id: pmId, systemRole: "MEMBER", email: "pm-c2@example.com", fullName: "PM Sprint Report", status: "ACTIVE" },
+      now,
+    );
+    const report = await reportService.getProjectReport(ctx, projectId);
+
+    const empty = report.sprintCompletion.find((sprint) => sprint.id === emptySprintId);
+    const busy = report.sprintCompletion.find((sprint) => sprint.id === busySprintId);
+    expect(empty).toBeDefined();
+    expect(empty?.completionRate).toBeNull();
+    expect(busy?.completionRate).toBe(50);
   });
 });
