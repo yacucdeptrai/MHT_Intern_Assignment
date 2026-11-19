@@ -19,6 +19,8 @@ export * from "./schemas/attachment";
 export * from "./schemas/notification";
 export * from "./schemas/calendar";
 export * from "./schemas/report";
+export * from "./schemas/export";
+export * from "./export";
 export * from "./dates";
 export * from "./workflow";
 export * from "./policies/types";

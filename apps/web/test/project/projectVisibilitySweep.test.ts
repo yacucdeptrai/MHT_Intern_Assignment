@@ -22,6 +22,7 @@ import {
 import { loader as attachmentDownloadLoader } from "../../app/routes/api.attachments.$attachmentId";
 import { action as attachmentUploadAction } from "../../app/routes/api.attachments.upload";
 import { loader as calendarRouteLoader } from "../../app/routes/_app.calendar";
+import { loader as exportRouteLoader } from "../../app/routes/api.projects.$projectId.export";
 import { projectService } from "../../app/services/project/project.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
 import { requestContextKey } from "../../app/utils/requestContext.server";
@@ -528,5 +529,22 @@ describe("Route-Level 404 Sweep over Project Routes (docs/09 §3.1)", () => {
       params: { projectId: world.projectId },
     } as unknown as Parameters<typeof projectReportsRouteLoader>[0];
     await expect(projectReportsRouteLoader(loaderArgs)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("FR-32 c3 / P3: returns 404 Response when non-member requests /api/projects/:projectId/export", async () => {
+    const db = createDatabase(env.DB);
+    const world = await buildTestWorld(db);
+    const ctx = contextFor(db, world.users.nonMember);
+    const args = await requestFor(
+      `http://localhost/api/projects/${world.projectId}/export?format=csv`,
+      world.users.nonMember,
+      ctx,
+    );
+    const loaderArgs = {
+      ...args,
+      params: { projectId: world.projectId },
+    } as unknown as Parameters<typeof exportRouteLoader>[0];
+    const res = await exportRouteLoader(loaderArgs);
+    expect(res.status).toBe(404);
   });
 });

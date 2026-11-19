@@ -353,6 +353,47 @@ export const taskRepository = {
     });
   },
 
+  listForExport: async (
+    db: AppDatabase,
+    projectId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      number: number;
+      title: string;
+      statusName: string;
+      statusCategory: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
+      priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+      sprintName: string | null;
+      startDate: string | null;
+      dueDate: string | null;
+      deletedAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  > => {
+    return db
+      .select({
+        id: tasks.id,
+        number: tasks.number,
+        title: tasks.title,
+        statusName: taskStatuses.name,
+        statusCategory: taskStatuses.category,
+        priority: tasks.priority,
+        sprintName: sprints.name,
+        startDate: tasks.startDate,
+        dueDate: tasks.dueDate,
+        deletedAt: tasks.deletedAt,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+      .leftJoin(sprints, eq(tasks.sprintId, sprints.id))
+      .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+      .orderBy(asc(tasks.number));
+  },
+
   listProjectTasks: async (
     db: AppDatabase,
     filter: ListProjectTasksFilter,

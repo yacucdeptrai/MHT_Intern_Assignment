@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { Form, Link, useLoaderData } from "react-router";
+import { Form, Link, useLoaderData, useParams } from "react-router";
+import { useState } from "react";
 
 import { APP_NAME } from "@pm/domain";
 
@@ -17,12 +18,58 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export default function ProjectReportsPage() {
+  const { projectId } = useParams();
   const { tab, memberReport, projectReport, sprints, filters, permissions } = useLoaderData<typeof loader>();
+  const [isExportingXlsx, setIsExportingXlsx] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const currentTab = tab;
 
+  const handleExportXlsx = async () => {
+    if (!projectId) return;
+    setIsExportingXlsx(true);
+    setExportError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/export?format=rows`);
+      if (!res.ok) {
+        if (res.status === 403) {
+          throw new Error("Forbidden: only project PM or Admin can export data");
+        }
+        throw new Error("Failed to export data");
+      }
+      const data = await res.json<{ columns: string[]; rows: string[][]; fileName: string }>();
+      const { buildXlsx } = await import("../utils/xlsxExport.client");
+      const bytes = await buildXlsx(data.columns, data.rows);
+      const blob = new Blob([bytes as unknown as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Failed to export Excel file");
+    } finally {
+      setIsExportingXlsx(false);
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="project-reports-page">
+      {exportError && (
+        <div
+          role="alert"
+          data-testid="export-error-msg"
+          className="rounded-lg bg-red-50 p-3 text-sm text-red-700 border border-red-200"
+        >
+          {exportError}
+        </div>
+      )}
+
       {/* Header and Tab Switcher */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-4">
         <div>
@@ -30,34 +77,60 @@ export default function ProjectReportsPage() {
           <p className="text-sm text-gray-500">Analyze team workload, task distribution, and performance.</p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
-          {permissions.canViewMemberReport && (
-            <Link
-              to="?tab=members"
-              data-testid="tab-members"
-              className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                currentTab === "members"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              }`}
-            >
-              Members
-            </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {permissions.canExportProject && projectId && (
+            <div className="flex items-center gap-2">
+              <a
+                href={`/api/projects/${projectId}/export?format=csv`}
+                download
+                data-testid="export-csv-btn"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+              >
+                Export CSV
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleExportXlsx();
+                }}
+                disabled={isExportingXlsx}
+                data-testid="export-xlsx-btn"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExportingXlsx ? "Exporting..." : "Export Excel"}
+              </button>
+            </div>
           )}
-          {permissions.canViewProjectReport && (
-            <Link
-              to="?tab=project"
-              data-testid="tab-project"
-              className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                currentTab === "project"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              }`}
-            >
-              Project
-            </Link>
-          )}
+
+          {/* Tab Switcher */}
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+            {permissions.canViewMemberReport && (
+              <Link
+                to="?tab=members"
+                data-testid="tab-members"
+                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  currentTab === "members"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                }`}
+              >
+                Members
+              </Link>
+            )}
+            {permissions.canViewProjectReport && (
+              <Link
+                to="?tab=project"
+                data-testid="tab-project"
+                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  currentTab === "project"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                }`}
+              >
+                Project
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
