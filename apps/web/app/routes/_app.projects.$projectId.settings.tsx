@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
@@ -31,6 +32,7 @@ interface ActionData {
 }
 
 export default function ProjectSettingsPage() {
+  const { t } = useTranslation();
   const { project, permissions } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -52,7 +54,7 @@ export default function ProjectSettingsPage() {
       {/* Global Banners */}
       {project.isArchived ? (
         <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800 border border-amber-200">
-          This project is archived and read-only. Settings cannot be modified.
+          {t("project_settings.archived_banner")}
         </div>
       ) : null}
 
@@ -61,7 +63,7 @@ export default function ProjectSettingsPage() {
           className="rounded-lg bg-green-50 p-4 text-sm text-green-700 border border-green-200"
           data-testid="success-banner"
         >
-          Project settings updated successfully.
+          {t("project_settings.success_banner")}
         </div>
       ) : null}
 
@@ -73,7 +75,7 @@ export default function ProjectSettingsPage() {
 
       {/* Main Settings Form */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">General Settings</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-6">{t("project_settings.title")}</h2>
         <Form method="post" className="space-y-6" data-testid="update-project-form">
           <input type="hidden" name="intent" value="update" />
 
@@ -81,7 +83,7 @@ export default function ProjectSettingsPage() {
             {/* Project Code (Read-only, immutable per FR-08 c2) */}
             <div>
               <label htmlFor="code" className="block text-sm font-medium text-gray-700">
-                Project Code
+                {t("project_settings.code_label")}
               </label>
               <div className="mt-1">
                 <input
@@ -94,13 +96,13 @@ export default function ProjectSettingsPage() {
                   className="block w-full uppercase font-mono rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 shadow-sm cursor-not-allowed"
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Project code cannot be changed once created.</p>
+              <p className="mt-1 text-xs text-gray-500">{t("project_settings.code_hint")}</p>
             </div>
 
             {/* Status */}
             <div>
               <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                Project Status <span className="text-red-500">*</span>
+                {t("project_settings.status_label")} <span className="text-red-500">*</span>
               </label>
               <div className="mt-1">
                 <select
@@ -130,7 +132,7 @@ export default function ProjectSettingsPage() {
             {/* Name */}
             <div className="sm:col-span-2">
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Project Name <span className="text-red-500">*</span>
+                {t("project_settings.name_label")} <span className="text-red-500">*</span>
               </label>
               <div className="mt-1">
                 <input
@@ -140,7 +142,7 @@ export default function ProjectSettingsPage() {
                   required
                   disabled={project.isArchived}
                   defaultValue={values.name ?? project.name}
-                  placeholder="e.g. Next-Gen Mobile Banking"
+                  placeholder={t("project_settings.name_placeholder")}
                   data-testid="input-name"
                   className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                     nameError
@@ -159,7 +161,7 @@ export default function ProjectSettingsPage() {
             {/* Description */}
             <div className="sm:col-span-2">
               <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Description
+                {t("project_settings.desc_label")}
               </label>
               <div className="mt-1">
                 <textarea
@@ -168,7 +170,7 @@ export default function ProjectSettingsPage() {
                   rows={3}
                   disabled={project.isArchived}
                   defaultValue={values.description ?? project.description ?? ""}
-                  placeholder="Brief summary of project scope, objectives, and deliverables."
+                  placeholder={t("project_settings.desc_placeholder")}
                   data-testid="input-description"
                   className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                     descriptionError
@@ -187,7 +189,7 @@ export default function ProjectSettingsPage() {
             {/* Budget */}
             <div>
               <label htmlFor="budget" className="block text-sm font-medium text-gray-700">
-                Budget (VND)
+                {t("project_settings.budget_label")}
               </label>
               <div className="mt-1">
                 <input
@@ -198,7 +200,7 @@ export default function ProjectSettingsPage() {
                   step="1"
                   disabled={project.isArchived}
                   defaultValue={values.budget ?? (project.budget !== null ? String(project.budget) : "")}
-                  placeholder="e.g. 50000000"
+                  placeholder={t("project_settings.budget_placeholder")}
                   data-testid="input-budget"
                   className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                     budgetError
@@ -217,7 +219,7 @@ export default function ProjectSettingsPage() {
             {/* Slack Channel */}
             <div>
               <label htmlFor="slackChannelId" className="block text-sm font-medium text-gray-700">
-                Slack Channel ID
+                {t("project_settings.slack_label")}
               </label>
               <div className="mt-1">
                 <input
@@ -226,7 +228,7 @@ export default function ProjectSettingsPage() {
                   name="slackChannelId"
                   disabled={project.isArchived}
                   defaultValue={values.slackChannelId ?? project.slackChannelId ?? ""}
-                  placeholder="e.g. C0123456789"
+                  placeholder={t("project_settings.slack_placeholder")}
                   data-testid="input-slack-channel"
                   className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                     slackChannelError
@@ -245,7 +247,7 @@ export default function ProjectSettingsPage() {
             {/* Timeline: Start Date */}
             <div>
               <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                Start Date <span className="text-red-500">*</span>
+                {t("project_settings.start_date_label")} <span className="text-red-500">*</span>
               </label>
               <div className="mt-1">
                 <input
@@ -273,7 +275,7 @@ export default function ProjectSettingsPage() {
             {/* Timeline: End Date */}
             <div>
               <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
-                End Date <span className="text-red-500">*</span>
+                {t("project_settings.end_date_label")} <span className="text-red-500">*</span>
               </label>
               <div className="mt-1">
                 <input
@@ -306,7 +308,7 @@ export default function ProjectSettingsPage() {
               data-testid="save-settings-button"
               className="inline-flex justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 transition-colors"
             >
-              {isSubmitting ? "Saving..." : "Save Changes"}
+              {isSubmitting ? t("project_settings.btn_saving") : t("project_settings.btn_save")}
             </button>
           </div>
         </Form>
@@ -315,20 +317,13 @@ export default function ProjectSettingsPage() {
       {/* Danger Zone */}
       {permissions.canManageProject && !project.isArchived ? (
         <div className="rounded-xl border border-red-200 bg-white p-6 shadow-sm" data-testid="danger-zone">
-          <h2 className="text-lg font-semibold text-red-600 mb-2">Danger Zone</h2>
-          <p className="text-sm text-gray-600 mb-6">
-            Archiving a project soft deletes it and makes all tasks and settings read-only. Members will no longer see
-            this project in their workspace. Only System Administrators can access archived projects.
-          </p>
+          <h2 className="text-lg font-semibold text-red-600 mb-2">{t("project_settings.danger_title")}</h2>
+          <p className="text-sm text-gray-600 mb-6">{t("project_settings.danger_desc")}</p>
           <Form
             method="post"
             data-testid="archive-project-form"
             onSubmit={(e) => {
-              if (
-                !confirm(
-                  "Are you sure you want to archive this project? It will become read-only and hidden from members.",
-                )
-              ) {
+              if (!confirm(t("project_settings.confirm_archive"))) {
                 e.preventDefault();
               }
             }}
@@ -340,7 +335,7 @@ export default function ProjectSettingsPage() {
               data-testid="archive-project-button"
               className="inline-flex justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 transition-colors"
             >
-              {isSubmitting ? "Archiving..." : "Archive Project"}
+              {isSubmitting ? t("project_settings.btn_archiving") : t("project_settings.btn_archive")}
             </button>
           </Form>
         </div>

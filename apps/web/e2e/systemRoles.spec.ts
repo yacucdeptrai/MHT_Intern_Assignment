@@ -42,6 +42,6 @@ test.describe("System Role Assignment Journey (FR-04)", () => {
     await page.getByRole("button", { name: "Save Changes" }).click();
 
     // 6. Verify row now displays PM role badge
-    await expect(userRow.getByText("PM")).toBeVisible();
+    await expect(userRow.getByText("PM", { exact: true })).toBeVisible();
   });
 });

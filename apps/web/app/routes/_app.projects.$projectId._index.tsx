@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   Form,
@@ -41,6 +42,7 @@ interface ActionData {
 }
 
 export default function ProjectIndexPage() {
+  const { t } = useTranslation();
   const headerData = useRouteLoaderData<ProjectHeaderLoaderData>("routes/_app.projects.$projectId");
   const { tasks, members, statuses, sprints, filters, canCreate, canAssign } = useLoaderData<ProjectTasksLoaderData>();
   const actionData = useActionData<ActionData>();
@@ -72,9 +74,11 @@ export default function ProjectIndexPage() {
       {/* Action bar */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Project Tasks</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t("project_tasks.title")}</h2>
           <p className="mt-1 text-sm text-gray-500">
-            {tasks.total} {tasks.total === 1 ? "task" : "tasks"} in this project
+            {tasks.total === 1
+              ? t("project_tasks.count_one", { count: tasks.total })
+              : t("project_tasks.count_other", { count: tasks.total })}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -87,7 +91,7 @@ export default function ProjectIndexPage() {
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
               data-testid="create-task-button"
             >
-              + New Task
+              {t("project_tasks.btn_new_task")}
             </button>
           ) : null}
         </div>
@@ -104,7 +108,7 @@ export default function ProjectIndexPage() {
         <Form method="get" className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end">
           <div>
             <label htmlFor="filter-status" className="block text-xs font-medium text-gray-700">
-              Status
+              {t("project_tasks.filter_status")}
             </label>
             <select
               id="filter-status"
@@ -113,7 +117,7 @@ export default function ProjectIndexPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-status-select"
             >
-              <option value="">All Statuses</option>
+              <option value="">{t("project_tasks.all_statuses")}</option>
               {statuses.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -124,7 +128,7 @@ export default function ProjectIndexPage() {
 
           <div>
             <label htmlFor="filter-assignee" className="block text-xs font-medium text-gray-700">
-              Assignee
+              {t("project_tasks.filter_assignee")}
             </label>
             <select
               id="filter-assignee"
@@ -133,7 +137,7 @@ export default function ProjectIndexPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-assignee-select"
             >
-              <option value="">All Assignees</option>
+              <option value="">{t("project_tasks.all_assignees")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.fullName}
@@ -144,7 +148,7 @@ export default function ProjectIndexPage() {
 
           <div>
             <label htmlFor="filter-priority" className="block text-xs font-medium text-gray-700">
-              Priority
+              {t("project_tasks.filter_priority")}
             </label>
             <select
               id="filter-priority"
@@ -153,7 +157,7 @@ export default function ProjectIndexPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-priority-select"
             >
-              <option value="">All Priorities</option>
+              <option value="">{t("project_tasks.all_priorities")}</option>
               {TASK_PRIORITIES.map((p: TaskPriority) => (
                 <option key={p} value={p}>
                   {p}
@@ -164,7 +168,7 @@ export default function ProjectIndexPage() {
 
           <div>
             <label htmlFor="filter-sprint" className="block text-xs font-medium text-gray-700">
-              Sprint
+              {t("project_tasks.filter_sprint")}
             </label>
             <select
               id="filter-sprint"
@@ -173,7 +177,7 @@ export default function ProjectIndexPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-sprint-select"
             >
-              <option value="">All Sprints</option>
+              <option value="">{t("project_tasks.all_sprints")}</option>
               {sprints.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -188,14 +192,14 @@ export default function ProjectIndexPage() {
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm"
               data-testid="apply-filters-button"
             >
-              Apply
+              {t("project_tasks.btn_apply")}
             </button>
             <Link
               to=""
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-center"
               data-testid="reset-filters-link"
             >
-              Reset
+              {t("project_tasks.btn_reset")}
             </Link>
           </div>
         </Form>
@@ -205,8 +209,8 @@ export default function ProjectIndexPage() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         {tasks.items.length === 0 ? (
           <div className="p-12 text-center" data-testid="empty-tasks">
-            <h3 className="text-base font-medium text-gray-900">No tasks yet</h3>
-            <p className="mt-1 text-sm text-gray-500">No tasks match your criteria in this project.</p>
+            <h3 className="text-base font-medium text-gray-900">{t("project_tasks.empty_title")}</h3>
+            <p className="mt-1 text-sm text-gray-500">{t("project_tasks.empty_desc")}</p>
             {canCreate ? (
               <div className="mt-6">
                 <button
@@ -216,7 +220,7 @@ export default function ProjectIndexPage() {
                   }}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                 >
-                  + Create Task
+                  {t("project_tasks.btn_create_task")}
                 </button>
               </div>
             ) : null}
@@ -226,19 +230,19 @@ export default function ProjectIndexPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Key
+                  {t("project_tasks.th_key")}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Title
+                  {t("project_tasks.th_title")}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Priority
+                  {t("project_tasks.th_priority")}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Status
+                  {t("project_tasks.th_status")}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Due Date
+                  {t("project_tasks.th_due_date")}
                 </th>
               </tr>
             </thead>
@@ -283,11 +287,11 @@ export default function ProjectIndexPage() {
                         <span>{task.dueDate ?? "—"}</span>
                         {task.isOverdue ? (
                           <span className="inline-flex rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                            OVERDUE
+                            {t("project_tasks.badge_overdue")}
                           </span>
                         ) : task.isDueSoon ? (
                           <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                            DUE SOON
+                            {t("project_tasks.badge_due_soon")}
                           </span>
                         ) : null}
                       </div>
@@ -306,8 +310,11 @@ export default function ProjectIndexPage() {
             data-testid="pagination-bar"
           >
             <div className="text-sm text-gray-500">
-              Showing {(tasks.page - 1) * tasks.pageSize + 1} to {Math.min(tasks.page * tasks.pageSize, tasks.total)} of{" "}
-              {tasks.total} tasks
+              {t("project_tasks.pagination_showing", {
+                from: (tasks.page - 1) * tasks.pageSize + 1,
+                to: Math.min(tasks.page * tasks.pageSize, tasks.total),
+                total: tasks.total,
+              })}
             </div>
             <div className="flex items-center gap-2">
               {tasks.page > 1 ? (
@@ -316,15 +323,18 @@ export default function ProjectIndexPage() {
                   className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   data-testid="prev-page-button"
                 >
-                  Previous
+                  {t("project_tasks.pagination_prev")}
                 </Link>
               ) : (
                 <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
-                  Previous
+                  {t("project_tasks.pagination_prev")}
                 </span>
               )}
               <span className="text-sm font-medium text-gray-700" data-testid="page-indicator">
-                Page {tasks.page} of {tasks.totalPages}
+                {t("project_tasks.pagination_page", {
+                  page: tasks.page,
+                  totalPages: tasks.totalPages,
+                })}
               </span>
               {tasks.page < tasks.totalPages ? (
                 <Link
@@ -332,11 +342,11 @@ export default function ProjectIndexPage() {
                   className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   data-testid="next-page-button"
                 >
-                  Next
+                  {t("project_tasks.pagination_next")}
                 </Link>
               ) : (
                 <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
-                  Next
+                  {t("project_tasks.pagination_next")}
                 </span>
               )}
             </div>
@@ -349,15 +359,16 @@ export default function ProjectIndexPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
-              <h3 className="text-lg font-semibold text-gray-900">Create New Task</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t("project_tasks.modal_title")}</h3>
               <button
                 type="button"
                 onClick={() => {
                   setIsModalOpen(false);
                 }}
                 className="text-gray-400 hover:text-gray-600"
+                aria-label={t("project_tasks.modal_close")}
               >
-                ✕
+                <span aria-hidden="true">&times;</span>
               </button>
             </div>
 
@@ -366,7 +377,7 @@ export default function ProjectIndexPage() {
 
               <div>
                 <label htmlFor="task-title" className="block text-sm font-medium text-gray-700">
-                  Task Title *
+                  {t("project_tasks.modal_task_title")}
                 </label>
                 <input
                   id="task-title"
@@ -374,7 +385,7 @@ export default function ProjectIndexPage() {
                   name="title"
                   required
                   defaultValue={actionData?.values?.title ?? ""}
-                  placeholder="Short, descriptive title"
+                  placeholder={t("project_tasks.placeholder_title")}
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   data-testid="task-title-input"
                 />
@@ -385,14 +396,14 @@ export default function ProjectIndexPage() {
 
               <div>
                 <label htmlFor="task-desc" className="block text-sm font-medium text-gray-700">
-                  Description
+                  {t("project_tasks.modal_description")}
                 </label>
                 <textarea
                   id="task-desc"
                   name="description"
                   rows={3}
                   defaultValue={actionData?.values?.description ?? ""}
-                  placeholder="Task details and expectations"
+                  placeholder={t("project_tasks.placeholder_description")}
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   data-testid="task-description-input"
                 />
@@ -404,7 +415,7 @@ export default function ProjectIndexPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="task-priority" className="block text-sm font-medium text-gray-700">
-                    Priority
+                    {t("project_tasks.modal_priority")}
                   </label>
                   <select
                     id="task-priority"
@@ -422,7 +433,7 @@ export default function ProjectIndexPage() {
                 </div>
                 <div>
                   <label htmlFor="task-due" className="block text-sm font-medium text-gray-700">
-                    Due Date
+                    {t("project_tasks.modal_due_date")}
                   </label>
                   <input
                     id="task-due"
@@ -440,7 +451,7 @@ export default function ProjectIndexPage() {
 
               <div>
                 <label htmlFor="task-start" className="block text-sm font-medium text-gray-700">
-                  Start Date
+                  {t("project_tasks.modal_start_date")}
                 </label>
                 <input
                   id="task-start"
@@ -454,7 +465,9 @@ export default function ProjectIndexPage() {
 
               {canAssign && members.length > 0 ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Assignees</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t("project_tasks.modal_assignees")}
+                  </label>
                   <div className="mt-2 max-h-36 overflow-y-auto space-y-1 rounded-lg border border-gray-200 p-2">
                     {members.map((member) => (
                       <label key={member.id} className="flex items-center gap-2 text-sm text-gray-700">
@@ -481,7 +494,7 @@ export default function ProjectIndexPage() {
                   }}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
-                  Cancel
+                  {t("project_tasks.btn_cancel")}
                 </button>
                 <button
                   type="submit"
@@ -489,7 +502,7 @@ export default function ProjectIndexPage() {
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
                   data-testid="task-submit-button"
                 >
-                  {isSubmitting ? "Creating..." : "Create Task"}
+                  {isSubmitting ? t("project_tasks.btn_submitting") : t("project_tasks.btn_submit")}
                 </button>
               </div>
             </Form>

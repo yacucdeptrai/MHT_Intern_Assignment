@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
 
@@ -33,6 +34,7 @@ interface ActionData {
 }
 
 export default function ProjectMembersPage() {
+  const { t } = useTranslation();
   const { members, pendingInvites, permissions, isArchived } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -74,7 +76,7 @@ export default function ProjectMembersPage() {
       {/* Read-only / archived banner */}
       {isArchived ? (
         <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800 border border-amber-200">
-          This project is archived and read-only. Members cannot be modified.
+          {t("project_members.archived_banner")}
         </div>
       ) : null}
 
@@ -84,7 +86,7 @@ export default function ProjectMembersPage() {
           className="rounded-lg bg-green-50 p-4 text-sm text-green-700 border border-green-200"
           data-testid="success-banner"
         >
-          Operation completed successfully.
+          {t("project_members.success_banner")}
         </div>
       ) : null}
 
@@ -94,10 +96,8 @@ export default function ProjectMembersPage() {
           className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900 border border-blue-200 space-y-2"
           data-testid="invite-url-box"
         >
-          <div className="font-semibold text-blue-950">Invite Link Generated!</div>
-          <p className="text-blue-800 text-xs">
-            Share this link with the recipient so they can accept their invitation and join the project:
-          </p>
+          <div className="font-semibold text-blue-950">{t("project_members.invite_url_title")}</div>
+          <p className="text-blue-800 text-xs">{t("project_members.invite_url_desc")}</p>
           <div className="flex items-center gap-2 pt-1">
             <input
               type="text"
@@ -114,7 +114,7 @@ export default function ProjectMembersPage() {
               className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-500"
               data-testid="copy-invite-url-btn"
             >
-              {copied ? "Copied!" : "Copy Link"}
+              {copied ? t("project_members.btn_copied") : t("project_members.btn_copy")}
             </button>
           </div>
         </div>
@@ -132,31 +132,31 @@ export default function ProjectMembersPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Add Existing Member Card */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Add Existing User</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-4">{t("project_members.add_user_title")}</h2>
             <Form method="post" className="space-y-4" data-testid="add-member-form">
               <input type="hidden" name="intent" value="add" />
 
               <div>
                 <label htmlFor="searchQuery" className="block text-xs font-medium text-gray-700 mb-1">
-                  Search Active Users
+                  {t("project_members.search_users_label")}
                 </label>
                 <input
                   id="searchQuery"
                   type="text"
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  placeholder="Type name or email to search..."
+                  placeholder={t("project_members.search_placeholder")}
                   className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   data-testid="search-user-input"
                 />
               </div>
 
               {searchFetcher.state === "loading" ? (
-                <p className="text-xs text-gray-500 italic">Searching...</p>
+                <p className="text-xs text-gray-500 italic">{t("project_members.searching")}</p>
               ) : searchResults.length > 0 ? (
                 <div>
                   <label htmlFor="userId" className="block text-xs font-medium text-gray-700 mb-1">
-                    Select User
+                    {t("project_members.select_user_label")}
                   </label>
                   <select
                     id="userId"
@@ -168,7 +168,7 @@ export default function ProjectMembersPage() {
                     className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     data-testid="search-user-select"
                   >
-                    <option value="">-- Choose user --</option>
+                    <option value="">{t("project_members.choose_user_option")}</option>
                     {searchResults.map((u) => (
                       <option key={u.id} value={u.id} data-testid={`user-option-${u.id}`}>
                         {u.fullName} ({u.email})
@@ -177,14 +177,14 @@ export default function ProjectMembersPage() {
                   </select>
                 </div>
               ) : searchQuery.trim().length > 0 ? (
-                <p className="text-xs text-gray-500 italic">No non-member active users found.</p>
+                <p className="text-xs text-gray-500 italic">{t("project_members.no_users_found")}</p>
               ) : null}
 
               {userError ? <p className="text-xs text-red-600">{userError}</p> : null}
 
               <div>
                 <label htmlFor="addRole" className="block text-xs font-medium text-gray-700 mb-1">
-                  Project Role
+                  {t("project_members.project_role_label")}
                 </label>
                 <select
                   id="addRole"
@@ -210,20 +210,20 @@ export default function ProjectMembersPage() {
                 className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
                 data-testid="add-member-submit-btn"
               >
-                {isSubmitting ? "Adding..." : "Add to Project"}
+                {isSubmitting ? t("project_members.btn_adding") : t("project_members.btn_add")}
               </button>
             </Form>
           </div>
 
           {/* Invite New User by Email Card */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Invite by Email</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-4">{t("project_members.invite_email_title")}</h2>
             <Form method="post" className="space-y-4" data-testid="invite-member-form">
               <input type="hidden" name="intent" value="invite" />
 
               <div>
                 <label htmlFor="inviteEmail" className="block text-xs font-medium text-gray-700 mb-1">
-                  Email Address
+                  {t("project_members.invite_email_label")}
                 </label>
                 <input
                   id="inviteEmail"
@@ -233,7 +233,7 @@ export default function ProjectMembersPage() {
                   onChange={(e) => {
                     setInviteEmail(e.target.value);
                   }}
-                  placeholder="new-teammate@example.com"
+                  placeholder={t("project_members.invite_email_placeholder")}
                   required
                   className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   data-testid="invite-email-input"
@@ -243,7 +243,7 @@ export default function ProjectMembersPage() {
 
               <div>
                 <label htmlFor="inviteRole" className="block text-xs font-medium text-gray-700 mb-1">
-                  Assigned Project Role
+                  {t("project_members.assigned_role_label")}
                 </label>
                 <select
                   id="inviteRole"
@@ -269,7 +269,7 @@ export default function ProjectMembersPage() {
                 className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
                 data-testid="invite-submit-btn"
               >
-                {isSubmitting ? "Inviting..." : "Send Invitation"}
+                {isSubmitting ? t("project_members.btn_inviting") : t("project_members.btn_invite")}
               </button>
             </Form>
           </div>
@@ -279,7 +279,9 @@ export default function ProjectMembersPage() {
       {/* Members List Table */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Project Members ({members.length})</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {t("project_members.members_count", { count: members.length })}
+          </h2>
         </div>
 
         <div className="overflow-x-auto">
@@ -287,15 +289,17 @@ export default function ProjectMembersPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Member
+                  {t("project_members.th_member")}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Joined
+                  {t("project_members.th_role")}
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t("project_members.th_joined")}
                 </th>
                 {permissions.canManageMembers && !isArchived ? (
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    {t("project_members.th_actions")}
                   </th>
                 ) : null}
               </tr>
@@ -354,7 +358,7 @@ export default function ProjectMembersPage() {
                       <Form
                         method="post"
                         onSubmit={(e) => {
-                          if (!confirm(`Are you sure you want to remove ${member.fullName} from this project?`)) {
+                          if (!confirm(t("project_members.confirm_remove", { name: member.fullName }))) {
                             e.preventDefault();
                           }
                         }}
@@ -366,7 +370,7 @@ export default function ProjectMembersPage() {
                           className="text-red-600 hover:text-red-900 text-xs font-medium"
                           data-testid={`remove-member-btn-${member.userId}`}
                         >
-                          Remove
+                          {t("project_members.btn_remove")}
                         </button>
                       </Form>
                     </td>
@@ -382,7 +386,9 @@ export default function ProjectMembersPage() {
       {pendingInvites.length > 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-base font-semibold text-gray-900">Pending Invitations ({pendingInvites.length})</h2>
+            <h2 className="text-base font-semibold text-gray-900">
+              {t("project_members.pending_count", { count: pendingInvites.length })}
+            </h2>
           </div>
 
           <div className="overflow-x-auto">
@@ -390,16 +396,16 @@ export default function ProjectMembersPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
+                    {t("project_members.th_email")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Assigned Role
+                    {t("project_members.th_assigned_role")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Invited On
+                    {t("project_members.th_invited_on")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Expires On
+                    {t("project_members.th_expires_on")}
                   </th>
                 </tr>
               </thead>

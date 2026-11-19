@@ -121,6 +121,9 @@ export default tseslint.config(
       "apps/web/app/routes/_app.projects._index.tsx",
       "apps/web/app/routes/_app.projects.new.tsx",
       "apps/web/app/routes/_app.projects.$projectId.tsx",
+      "apps/web/app/routes/_app.projects.$projectId._index.tsx",
+      "apps/web/app/routes/_app.projects.$projectId.members.tsx",
+      "apps/web/app/routes/_app.projects.$projectId.settings.tsx",
     ],
     plugins: {
       i18next: i18nextPlugin,
