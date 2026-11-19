@@ -43,7 +43,7 @@ export async function createSignedInMember(
   await adminPage.goto("/admin/users");
 
   /* cspell:disable */
-  const createButton = adminPage.getByRole("button", { name: /\+ Create User|\+ Thêm người dùng/i });
+  const createButton = adminPage.getByRole("button", { name: /^(\+ Create User|\+ Thêm người dùng)$/i });
   const modalHeading = adminPage.getByRole("heading", { level: 2, name: /Create New User|Tạo người dùng mới/i });
   await expect(async () => {
     await createButton.click();
@@ -58,7 +58,7 @@ export async function createSignedInMember(
   if (role !== "MEMBER") {
     await adminPage.locator("#create-systemRole").selectOption(role);
   }
-  await adminPage.getByRole("button", { name: /Create User|Tạo người dùng/i, exact: true }).click();
+  await adminPage.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
 
   await expect(
     adminPage.getByText(/User account created successfully!|Tài khoản người dùng đã được tạo thành công!/i),

@@ -21,7 +21,7 @@ test.describe("Admin User Management Journey", () => {
     await expect(page.getByRole("heading", { level: 1, name: /User Management|Quản lý người dùng/i })).toBeVisible();
 
     // 3. Open Create User Modal
-    const createButton = page.getByRole("button", { name: /\+ Create User|\+ Thêm người dùng/i });
+    const createButton = page.getByRole("button", { name: /^(\+ Create User|\+ Thêm người dùng)$/i });
     const modalHeading = page.getByRole("heading", { level: 2, name: /Create New User|Tạo người dùng mới/i });
     await expect(async () => {
       await createButton.click();
@@ -35,7 +35,7 @@ test.describe("Admin User Management Journey", () => {
     await page.getByLabel(/Full Name|Họ và tên/i).fill(testName);
     await page.getByLabel(/Email Address|Địa chỉ email/i).fill(testEmail);
     await page.getByLabel(/Department \(Optional\)|Phòng ban \(Tùy chọn\)/i).fill("Platform");
-    await page.getByRole("button", { name: /Create User|Tạo người dùng/i, exact: true }).click();
+    await page.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
 
     // 4. Verify Success & Invite Link
     await expect(
