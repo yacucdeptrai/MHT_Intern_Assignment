@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 import { createSignedInMember } from "./helpers";
 
 test.describe("User Profile Journey (FR-05, FR-06)", () => {
-  test("user views profile, updates contact details, changes password, and uploads avatar", async ({ browser }) => {
+  test("FR-05 c1, c2 & FR-06 c1, c2: user views profile, updates contact details, changes password, and uploads avatar", async ({
+    browser,
+  }) => {
     // 1. A dedicated member, so the password change never touches the shared seeded admin
     const user = await createSignedInMember(browser);
     const { page } = user;

@@ -69,7 +69,7 @@ async function createAuthenticatedRequest(
 }
 
 describe("adminUsersAction", () => {
-  it("creates user successfully and returns invite link", async () => {
+  it("FR-03 c1: creates user successfully and returns invite link", async () => {
     const { request, ctx } = await createAuthenticatedRequest("http://localhost/admin/users", "ADMIN", {
       intent: "create",
       fullName: "Alex Rivera",
@@ -87,7 +87,7 @@ describe("adminUsersAction", () => {
     expect(body.user.id).toBeDefined();
   });
 
-  it("returns 400 with preserved values when creating user with duplicate email", async () => {
+  it("FR-03 c2: returns 400 with preserved values when creating user with duplicate email", async () => {
     const { ctx } = await createAuthenticatedRequest("http://localhost/admin/users", "ADMIN");
     await userRepository.insert(ctx.db, {
       id: crypto.randomUUID(),
@@ -165,7 +165,7 @@ describe("adminUsersAction", () => {
     expect(deleteRes.status).toBe(200);
   });
 
-  it("returns 403 when a non-admin posts to user management action", async () => {
+  it("FR-03 c6: returns 403 when a non-admin posts to user management action", async () => {
     const { request, ctx } = await createAuthenticatedRequest("http://localhost/admin/users", "MEMBER", {
       intent: "create",
       fullName: "Forbidden Attempt",
@@ -177,7 +177,7 @@ describe("adminUsersAction", () => {
     expect(response.status).toBe(403);
   });
 
-  it("returns 400 when admin attempts self lockout", async () => {
+  it("FR-03 c5: returns 400 when admin attempts self lockout", async () => {
     const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost/admin/users", "ADMIN", {
       intent: "lock",
       userId: "will-be-replaced",
@@ -207,7 +207,7 @@ describe("adminUsersAction", () => {
   });
 
   describe("FR-04 System Role Assignment", () => {
-    it("admin changes user system role via intent setRole, producing USER_ROLE_CHANGED audit entry", async () => {
+    it("FR-04 c1: admin changes user system role via intent setRole, producing USER_ROLE_CHANGED audit entry", async () => {
       const { ctx } = await createAuthenticatedRequest("http://localhost/admin/users", "ADMIN");
       const target = await userRepository.insert(ctx.db, {
         id: crypto.randomUUID(),
@@ -239,7 +239,7 @@ describe("adminUsersAction", () => {
       expect(auditLog?.changes).toEqual({ systemRole: { from: "MEMBER", to: "PM" } });
     });
 
-    it("rejects demoting the last remaining admin with 400 'At least one administrator is required'", async () => {
+    it("FR-04 c2: rejects demoting the last remaining admin with 400 'At least one administrator is required'", async () => {
       const db = createDatabase(env.DB);
       const targetAdmin = await userRepository.insert(db, {
         id: crypto.randomUUID(),
@@ -270,7 +270,7 @@ describe("adminUsersAction", () => {
       }
     });
 
-    it("rejects admin attempting to demote themselves with 400 'You cannot change your own access'", async () => {
+    it("FR-03 c5: rejects admin attempting to demote themselves with 400 'You cannot change your own access'", async () => {
       const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost/admin/users", "ADMIN", {
         intent: "setRole",
         userId: "placeholder",
@@ -299,7 +299,7 @@ describe("adminUsersAction", () => {
       expect(body.message).toContain("You cannot change your own access");
     });
 
-    it("returns 403 when a non-admin attempts to change system role", async () => {
+    it("FR-04 c3: returns 403 when a non-admin attempts to change system role", async () => {
       const { request, ctx } = await createAuthenticatedRequest("http://localhost/admin/users", "MEMBER", {
         intent: "setRole",
         userId: "some-user-id",
@@ -310,7 +310,7 @@ describe("adminUsersAction", () => {
       expect(response.status).toBe(403);
     });
 
-    it("demonstrates role change applies immediately on user's next request", async () => {
+    it("FR-04 c1: demonstrates role change applies immediately on user's next request", async () => {
       // 1. Target user starts as MEMBER
       const {
         request: userReq,

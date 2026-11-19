@@ -126,7 +126,7 @@ async function createProfileTestContext(options?: {
 
 describe("profileService", () => {
   describe("getProfile (FR-05 c1)", () => {
-    it("returns user profile data, memberships, and password status", async () => {
+    it("FR-05 c1: returns user profile data, memberships, and password status", async () => {
       const { ctx, userId } = await createProfileTestContext();
       const result = await profileService.getProfile(ctx, userId);
 
@@ -190,7 +190,7 @@ describe("profileService", () => {
   });
 
   describe("changePassword (FR-06 c2, c3)", () => {
-    it("successfully changes password when current password matches (c2)", async () => {
+    it("FR-06 c2: successfully changes password when current password matches", async () => {
       const { ctx, userId } = await createProfileTestContext({ password: "OldValidPassword123!" });
 
       await profileService.changePassword(ctx, userId, {
@@ -216,7 +216,7 @@ describe("profileService", () => {
       expect(logs.some((l) => l.action === "USER_UPDATED")).toBe(true);
     });
 
-    it("rejects password change if current password is wrong (c2)", async () => {
+    it("FR-06 c2: rejects password change if current password is wrong", async () => {
       const { ctx, userId } = await createProfileTestContext({ password: "OldValidPassword123!" });
 
       await expect(
@@ -228,7 +228,7 @@ describe("profileService", () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it("allows SSO user without password to set password without currentPassword (c3)", async () => {
+    it("FR-06 c3: allows SSO user without password to set password without currentPassword", async () => {
       const { ctx, userId } = await createProfileTestContext({ hasPassword: false });
 
       await profileService.changePassword(ctx, userId, {
@@ -251,7 +251,7 @@ describe("profileService", () => {
   });
 
   describe("updateAvatar (FR-06 c1, A29)", () => {
-    it("uploads avatar to R2 and updates user avatarKey atomically", async () => {
+    it("FR-06 c1: uploads avatar to R2 and updates user avatarKey atomically", async () => {
       const { ctx, userId, storage } = await createProfileTestContext();
       const fakeImageBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]); // PNG magic bytes
 
@@ -272,7 +272,7 @@ describe("profileService", () => {
       expect(logs.some((l) => l.action === "USER_UPDATED")).toBe(true);
     });
 
-    it("rejects avatar exceeding 10 MB", async () => {
+    it("FR-06 c1: rejects avatar exceeding 10 MB", async () => {
       const { ctx, userId } = await createProfileTestContext();
       await expect(
         profileService.updateAvatar(ctx, userId, {
@@ -283,7 +283,7 @@ describe("profileService", () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it("rejects avatar with unsupported content type", async () => {
+    it("FR-06 c1: rejects avatar with unsupported content type", async () => {
       const { ctx, userId } = await createProfileTestContext();
       await expect(
         profileService.updateAvatar(ctx, userId, {

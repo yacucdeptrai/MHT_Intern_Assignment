@@ -113,7 +113,7 @@ describe("profileAction and profileLoader", () => {
       });
     });
 
-    it("loads profile for authenticated user", async () => {
+    it("FR-05 c1: loads profile for authenticated user", async () => {
       const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost:5173/profile");
 
       const result = await profileLoader(ctx, request);
@@ -183,7 +183,7 @@ describe("profileAction and profileLoader", () => {
   });
 
   describe("profileAction: changePassword (FR-06 c2, c3)", () => {
-    it("successfully changes password when current password matches (c2)", async () => {
+    it("FR-06 c2: successfully changes password when current password matches", async () => {
       const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost:5173/profile", {
         password: "ValidCurrentPassword123!",
         formDataObj: {
@@ -210,7 +210,7 @@ describe("profileAction and profileLoader", () => {
       expect(isNewValid).toBe(true);
     });
 
-    it("returns 400 when current password is wrong (c2)", async () => {
+    it("FR-06 c2: returns 400 when current password is wrong", async () => {
       const { request, ctx } = await createAuthenticatedRequest("http://localhost:5173/profile", {
         password: "ValidCurrentPassword123!",
         formDataObj: {
@@ -228,7 +228,7 @@ describe("profileAction and profileLoader", () => {
       expect(json.errors?.currentPassword).toBeDefined();
     });
 
-    it("allows SSO user without password to set new password without currentPassword (c3)", async () => {
+    it("FR-06 c3: allows SSO user without password to set new password without currentPassword", async () => {
       const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost:5173/profile", {
         hasPassword: false,
         formDataObj: {
@@ -261,7 +261,7 @@ describe("profileAction and profileLoader", () => {
       expect(json.errors?.confirmPassword).toBeDefined();
     });
 
-    it("returns 400 when new password is under 10 chars", async () => {
+    it("FR-06 c2: returns 400 when new password is under 10 chars", async () => {
       const { request, ctx } = await createAuthenticatedRequest("http://localhost:5173/profile", {
         hasPassword: false,
         formDataObj: {

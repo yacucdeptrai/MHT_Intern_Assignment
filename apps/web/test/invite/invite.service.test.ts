@@ -74,7 +74,7 @@ describe("invite.service", () => {
     expect(["PENDING", "RUNNING", "DONE"]).toContain(job?.status);
   });
 
-  it("validateToken checks token validity, expiration, and acceptance", async () => {
+  it("FR-37 c1, c3: validateToken checks token validity, expiration, and acceptance", async () => {
     const now = new Date();
     const ctx = await createTestContext(now);
 
@@ -104,7 +104,7 @@ describe("invite.service", () => {
     expect(expiredRes.status).toBe("invalid");
   });
 
-  it("acceptInvite sets password, creates active user, and marks invite accepted (A8)", async () => {
+  it("FR-37 c2: acceptInvite sets password, creates active user, and marks invite accepted (A8)", async () => {
     const now = new Date();
     const ctx = await createTestContext(now);
 
@@ -147,7 +147,7 @@ describe("invite.service", () => {
     );
   });
 
-  it("acceptInvite updates existing user record when user was pre-created", async () => {
+  it("FR-37 c2: acceptInvite updates existing user record when user was pre-created", async () => {
     const now = new Date();
     const ctx = await createTestContext(now);
     const preExistingId = crypto.randomUUID();

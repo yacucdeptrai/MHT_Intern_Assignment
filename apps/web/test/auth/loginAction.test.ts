@@ -62,7 +62,7 @@ describe("loginAction", () => {
     expect(body.success).toBe(false);
   });
 
-  it("returns 400 on wrong password", async () => {
+  it("FR-01 c2: returns 400 on wrong password", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("RealPassword123!");
@@ -97,7 +97,7 @@ describe("loginAction", () => {
     expect(body.email).toBe("user@example.com");
   });
 
-  it("returns 400 on locked user", async () => {
+  it("FR-01 c3: returns 400 on locked user", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("LockedPassword123!");
@@ -131,7 +131,7 @@ describe("loginAction", () => {
     expect(body.errors.form).toContain("This account is locked. Contact an administrator.");
   });
 
-  it("authenticates and redirects admin to /admin with session cookie", async () => {
+  it("FR-01 c1: authenticates and redirects admin to /admin with session cookie", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("AdminPassword123!");
@@ -197,7 +197,7 @@ describe("loginAction", () => {
     expect(response.headers.get("Location")).toBe("/projects/sample-123");
   });
 
-  it("ignores unsafe redirectTo parameter and sends member to member home", async () => {
+  it("FR-01 c4: ignores unsafe redirectTo parameter and sends member to member home", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("MemberPassword123!");

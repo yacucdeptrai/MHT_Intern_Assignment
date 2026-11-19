@@ -29,7 +29,7 @@ describe("getSafeRedirect", () => {
     expect(getSafeRedirect("/projects/123?tab=members")).toBe("/projects/123?tab=members");
   });
 
-  it("falls back to default path for open redirect attempts", () => {
+  it("FR-01 c4: falls back to default path for open redirect attempts", () => {
     expect(getSafeRedirect("https://evil.com")).toBe("/");
     expect(getSafeRedirect("//evil.com")).toBe("/");
     expect(getSafeRedirect("javascript:alert(1)")).toBe("/");
@@ -126,7 +126,7 @@ describe("requireUser guard", () => {
     expect(user.status).toBe("ACTIVE");
   });
 
-  it("clears session and redirects to login when user is locked", async () => {
+  it("FR-03 c3: clears session and redirects to login when user is locked", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const id = crypto.randomUUID();

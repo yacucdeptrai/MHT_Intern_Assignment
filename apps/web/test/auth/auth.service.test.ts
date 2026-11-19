@@ -25,7 +25,7 @@ function createMockContext(): RequestContext {
 }
 
 describe("authService.loginWithPassword", () => {
-  it("authenticates active user and supports case-insensitive email", async () => {
+  it("FR-01 c1: authenticates active user and supports case-insensitive email", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const id = crypto.randomUUID();
@@ -82,7 +82,7 @@ describe("authService.loginWithPassword", () => {
     expect(updated?.passwordHash).not.toBe(hash);
   });
 
-  it("rejects unknown email with generic message", async () => {
+  it("FR-01 c2: rejects unknown email with generic message", async () => {
     const ctx = createMockContext();
 
     await expect(
@@ -93,7 +93,7 @@ describe("authService.loginWithPassword", () => {
     ).rejects.toThrow(new ValidationError("Email or password is incorrect"));
   });
 
-  it("rejects wrong password with generic message", async () => {
+  it("FR-01 c2: rejects wrong password with generic message", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("CorrectPass123!");
@@ -118,7 +118,7 @@ describe("authService.loginWithPassword", () => {
     ).rejects.toThrow(new ValidationError("Email or password is incorrect"));
   });
 
-  it("rejects locked user with explicit locked message", async () => {
+  it("FR-01 c3: rejects locked user with explicit locked message", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("LockedPassword123!");
@@ -168,7 +168,7 @@ describe("authService.loginWithPassword", () => {
     ).rejects.toThrow(new ValidationError("Email or password is incorrect"));
   });
 
-  it("rejects deleted user with correct credentials using the locked message", async () => {
+  it("FR-01 c3: rejects deleted user with correct credentials using the locked message", async () => {
     const ctx = createMockContext();
     const now = new Date();
     const { hash, iterations } = await hashPassword("DeletedPassword123!");
