@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
 import { APP_NAME } from "@pm/domain";
 
 import { loginAction } from "../actions/loginAction";
+import { LanguageSwitcher } from "../components/i18n/LanguageSwitcher";
 import { loginLoader } from "../loaders/loginLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 
@@ -23,6 +25,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<{ success: boolean; errors?: Record<string, string[]>; email?: string }>();
   const navigation = useNavigation();
@@ -47,11 +50,12 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8 rounded-xl bg-white p-8 shadow-md border border-gray-200">
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
         <div>
-          <h1 className="mt-2 text-center text-2xl font-bold tracking-tight text-gray-900">
-            Project & Task Management
-          </h1>
-          <p className="mt-2 text-center text-sm text-gray-600">Sign in with your email and password</p>
+          <h1 className="mt-2 text-center text-2xl font-bold tracking-tight text-gray-900">{t("auth.title")}</h1>
+          <p className="mt-2 text-center text-sm text-gray-600">{t("auth.subtitle")}</p>
         </div>
 
         {formError ? (
@@ -67,7 +71,7 @@ export default function LoginPage() {
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
+                {t("auth.email")}
               </label>
               <div className="mt-1">
                 <input
@@ -79,7 +83,7 @@ export default function LoginPage() {
                   defaultValue={actionData?.email ?? ""}
                   key={actionData?.email ?? "initial-email"}
                   className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
-                  placeholder="name@company.com"
+                  placeholder={t("auth.email_placeholder")}
                 />
               </div>
               {emailError ? <p className="mt-1 text-sm text-red-600">{emailError}</p> : null}
@@ -87,7 +91,7 @@ export default function LoginPage() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
+                {t("auth.password")}
               </label>
               <div className="mt-1">
                 <input
@@ -110,7 +114,7 @@ export default function LoginPage() {
               disabled={isSubmitting}
               className="flex w-full justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? t("auth.signing_in") : t("auth.sign_in")}
             </button>
           </div>
         </Form>
@@ -122,7 +126,7 @@ export default function LoginPage() {
                 <div className="w-full border-t border-gray-300" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-2 text-gray-500">Or continue with</span>
+                <span className="bg-white px-2 text-gray-500">{t("auth.or_continue_with")}</span>
               </div>
             </div>
 
@@ -155,7 +159,7 @@ export default function LoginPage() {
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                       />
                     </svg>
-                    <span>Continue with Google</span>
+                    <span>{t("auth.continue_with_google")}</span>
                   </button>
                 </Form>
               ) : null}
@@ -176,7 +180,7 @@ export default function LoginPage() {
                       <path fill="#05a6f0" d="M1 12h10v10H1z" />
                       <path fill="#ffba08" d="M12 12h10v10H12z" />
                     </svg>
-                    <span>Continue with Microsoft</span>
+                    <span>{t("auth.continue_with_microsoft")}</span>
                   </button>
                 </Form>
               ) : null}

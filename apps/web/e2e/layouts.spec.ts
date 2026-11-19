@@ -1,15 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} must be set in apps/web/.dev.vars or the environment`);
-  }
-  return value;
-}
-
-const adminEmail = requireEnv("ADMIN_SEED_EMAIL");
-const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
+import { signInAsAdmin } from "./helpers";
 
 test.describe("Layout Separation and Route Guards", () => {
   test("unauthenticated access to / redirects to /login with redirectTo=/", async ({ page }) => {
@@ -25,10 +16,7 @@ test.describe("Layout Separation and Route Guards", () => {
   });
 
   test("admin logs in and sees AdminShell on /admin", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(adminEmail);
-    await page.getByLabel("Password").fill(adminPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signInAsAdmin(page);
 
     await page.waitForURL("**/admin");
     const adminShell = page.locator("[data-testid='admin-shell']");
@@ -38,11 +26,7 @@ test.describe("Layout Separation and Route Guards", () => {
   });
 
   test("admin navigating to / is automatically redirected to /admin", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(adminEmail);
-    await page.getByLabel("Password").fill(adminPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/admin");
+    await signInAsAdmin(page);
 
     // Attempt to navigate to /
     await page.goto("/");
@@ -51,11 +35,7 @@ test.describe("Layout Separation and Route Guards", () => {
   });
 
   test("admin navigates to user management through AdminShell link", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(adminEmail);
-    await page.getByLabel("Password").fill(adminPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/admin");
+    await signInAsAdmin(page);
 
     await page.getByRole("link", { name: "User Management" }).click();
     await page.waitForURL("**/admin/users");

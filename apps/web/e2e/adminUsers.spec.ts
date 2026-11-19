@@ -1,15 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} must be set in apps/web/.dev.vars or the environment`);
-  }
-  return value;
-}
-
-const adminEmail = requireEnv("ADMIN_SEED_EMAIL");
-const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
+import { signInAsAdmin } from "./helpers";
 
 test.describe("Admin User Management Journey", () => {
   test("unauthenticated user is redirected to login with redirectTo", async ({ page }) => {
@@ -22,11 +13,7 @@ test.describe("Admin User Management Journey", () => {
 
   test("admin logs in, navigates to user management, and creates a new user", async ({ page }) => {
     // 1. Login as Admin
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(adminEmail);
-    await page.getByLabel("Password").fill(adminPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/admin**");
+    await signInAsAdmin(page);
 
     // 2. Open User Management
     await page.goto("/admin/users");

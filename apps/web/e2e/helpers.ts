@@ -11,9 +11,11 @@ export function requireEnv(name: string): string {
 
 export async function signInAsAdmin(page: Page): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Email address").fill(requireEnv("ADMIN_SEED_EMAIL"));
-  await page.getByLabel("Password").fill(requireEnv("ADMIN_SEED_PASSWORD"));
-  await page.getByRole("button", { name: "Sign in" }).click();
+  /* cspell:disable */
+  await page.getByLabel(/Email address|Địa chỉ email/i).fill(requireEnv("ADMIN_SEED_EMAIL"));
+  await page.getByLabel(/Password|Mật khẩu/i).fill(requireEnv("ADMIN_SEED_PASSWORD"));
+  await page.getByRole("button", { name: /Sign in|Đăng nhập/i }).click();
+  /* cspell:enable */
   await page.waitForURL("**/admin**");
 }
 

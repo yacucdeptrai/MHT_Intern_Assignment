@@ -1,0 +1,21 @@
+{
+  "common": {
+    "language": "Ngôn ngữ",
+    "vietnamese": "Tiếng Việt",
+    "english": "Tiếng Anh",
+    "switch_to_vi": "Chuyển sang Tiếng Việt",
+    "switch_to_en": "Chuyển sang Tiếng Anh"
+  },
+  "auth": {
+    "title": "Hệ thống Quản lý Dự án & Công việc",
+    "subtitle": "Đăng nhập bằng email và mật khẩu của bạn",
+    "email": "Địa chỉ email",
+    "email_placeholder": "ten@congty.com",
+    "password": "Mật khẩu",
+    "sign_in": "Đăng nhập",
+    "signing_in": "Đang đăng nhập...",
+    "or_continue_with": "Hoặc tiếp tục với",
+    "continue_with_google": "Tiếp tục với Google",
+    "continue_with_microsoft": "Tiếp tục với Microsoft"
+  }
+}

@@ -46,9 +46,11 @@ test.describe("User Profile Journey (FR-05, FR-06)", () => {
       await page.getByRole("button", { name: "Sign out" }).click();
       await page.waitForURL("**/login**");
 
-      await page.getByLabel("Email address").fill(user.email);
-      await page.getByLabel("Password").fill(newPassword);
-      await page.getByRole("button", { name: "Sign in" }).click();
+      /* cspell:disable */
+      await page.getByLabel(/Email address|Địa chỉ email/i).fill(user.email);
+      await page.getByLabel(/Password|Mật khẩu/i).fill(newPassword);
+      await page.getByRole("button", { name: /Sign in|Đăng nhập/i }).click();
+      /* cspell:enable */
       await page.waitForURL("**/");
 
       // 6. Avatar Upload (FR-06 c1)
