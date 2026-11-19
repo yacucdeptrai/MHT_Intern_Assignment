@@ -45,6 +45,15 @@ export default function AdminUsersPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAdminRow | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [prevActionData, setPrevActionData] = useState(actionData);
+
+  if (actionData !== prevActionData) {
+    setPrevActionData(actionData);
+    if (actionData?.success) {
+      setIsCreateOpen(false);
+      setEditingUser(null);
+    }
+  }
 
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
   const createEmailError = actionData?.errors?.email?.[0];
@@ -220,6 +229,7 @@ export default function AdminUsersPage() {
                           <input type="hidden" name="intent" value={u.status === "ACTIVE" ? "lock" : "unlock"} />
                           <button
                             type="submit"
+                            data-testid={`btn-toggle-status-${u.id}`}
                             disabled={isSubmitting}
                             className={`rounded px-2 py-1 text-xs font-medium ${
                               u.status === "ACTIVE"
@@ -277,14 +287,7 @@ export default function AdminUsersPage() {
                 </button>
               </div>
 
-              <Form
-                method="post"
-                className="mt-4 space-y-4"
-                onSubmit={() => {
-                  // Keep modal open to show server response/invite link if success
-                  setIsCreateOpen(false);
-                }}
-              >
+              <Form method="post" className="mt-4 space-y-4">
                 <input type="hidden" name="intent" value="create" />
 
                 <div>
@@ -314,7 +317,11 @@ export default function AdminUsersPage() {
                     defaultValue={actionData?.values?.email ?? ""}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
-                  {createEmailError ? <p className="mt-1 text-xs text-red-600">{createEmailError}</p> : null}
+                  {createEmailError ? (
+                    <p data-testid="error-create-email" className="mt-1 text-xs text-red-600">
+                      {createEmailError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>

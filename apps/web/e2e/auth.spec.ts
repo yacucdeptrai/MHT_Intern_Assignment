@@ -12,7 +12,7 @@ function requireEnv(name: string): string {
 const adminEmail = requireEnv("ADMIN_SEED_EMAIL");
 const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
 
-test.describe("Authentication journey", () => {
+test.describe("Journey 1: Authentication (FR-01, FR-02)", () => {
   test("renders login page and form elements", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Hệ thống Quản lý Dự án & Công việc");
@@ -67,5 +67,22 @@ test.describe("Authentication journey", () => {
     expect(logoutResponse.status()).toBe(302);
     expect(logoutResponse.headers()["location"]).toBe("/login");
     expect(logoutResponse.headers()["set-cookie"]).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
+  });
+
+  test("open a deep link while signed out redirects to /login?redirectTo=... and returns there after login", async ({
+    page,
+  }) => {
+    await page.goto("/admin/audit-log");
+    await page.waitForURL(
+      (url) => url.pathname === "/login" && url.searchParams.get("redirectTo") === "/admin/audit-log",
+    );
+    expect(new URL(page.url()).searchParams.get("redirectTo")).toBe("/admin/audit-log");
+
+    await page.getByLabel(/Email address|Địa chỉ email/i).fill(adminEmail);
+    await page.getByLabel(/Password|Mật khẩu/i).fill(adminPassword);
+    await page.getByRole("button", { name: /Sign in|Đăng nhập/i }).click();
+
+    await page.waitForURL("**/admin/audit-log**");
+    expect(page.url()).toContain("/admin/audit-log");
   });
 });

@@ -6,7 +6,7 @@ import { EXPORT_COLUMNS } from "@pm/domain";
 
 import { createSignedInMember, setupProjectWithTask, signInAsAdmin } from "./helpers";
 
-test.describe("E2E Journey 8: Project Data Export (FR-32)", () => {
+test.describe("Journey 8: Project Data Export (FR-32)", () => {
   test("PM/Admin exports CSV and XLSX via browser UI; member receives 403 Forbidden", async ({ browser, page }) => {
     test.setTimeout(60000);
 
