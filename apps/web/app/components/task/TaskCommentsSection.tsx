@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Form } from "react-router";
 
 import type { CommentDto, CommentThread } from "@pm/domain";
@@ -28,6 +29,8 @@ interface CommentCardProps {
 }
 
 function CommentCard({ item, canComment, isSubmitting, onReplyClick }: CommentCardProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2" data-testid={`comment-item-${item.id}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -46,7 +49,7 @@ function CommentCard({ item, canComment, isSubmitting, onReplyClick }: CommentCa
               className="rounded px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
               data-testid={`reply-comment-btn-${item.id}`}
             >
-              Reply
+              {t("task_comments.btn_reply")}
             </button>
           ) : null}
 
@@ -60,7 +63,7 @@ function CommentCard({ item, canComment, isSubmitting, onReplyClick }: CommentCa
                 className="rounded px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                 data-testid={`delete-comment-btn-${item.id}`}
               >
-                Delete
+                {t("task_comments.btn_delete")}
               </button>
             </Form>
           ) : null}
@@ -69,7 +72,7 @@ function CommentCard({ item, canComment, isSubmitting, onReplyClick }: CommentCa
 
       {item.isDeleted ? (
         <p className="text-sm italic text-gray-400" data-testid={`comment-deleted-${item.id}`}>
-          Comment deleted
+          {t("task_comments.comment_deleted")}
         </p>
       ) : (
         <p className="whitespace-pre-wrap text-sm text-gray-800" data-testid={`comment-body-${item.id}`}>
@@ -81,6 +84,7 @@ function CommentCard({ item, canComment, isSubmitting, onReplyClick }: CommentCa
 }
 
 export function TaskCommentsSection({ comments, canComment, isSubmitting, actionData }: TaskCommentsSectionProps) {
+  const { t } = useTranslation();
   const [commentDraft, setCommentDraft] = useState("");
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -112,11 +116,11 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-5" data-testid="comments-section">
-      <h2 className="text-base font-bold text-gray-900">Comments ({totalCount})</h2>
+      <h2 className="text-base font-bold text-gray-900">{t("task_comments.heading", { count: totalCount })}</h2>
 
       {comments.length === 0 ? (
         <p className="text-sm italic text-gray-500" data-testid="comments-empty">
-          No comments yet.
+          {t("task_comments.no_comments")}
         </p>
       ) : (
         <div className="space-y-4" data-testid="comments-thread-list">
@@ -162,7 +166,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
                       htmlFor={`reply-input-${thread.root.id}`}
                       className="block text-xs font-medium text-gray-700"
                     >
-                      Reply
+                      {t("task_comments.label_reply")}
                     </label>
                     <textarea
                       id={`reply-input-${thread.root.id}`}
@@ -172,7 +176,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
                       onChange={(e) => {
                         setReplyDraft(e.target.value);
                       }}
-                      placeholder="Write a reply..."
+                      placeholder={t("task_comments.placeholder_reply")}
                       className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                       data-testid="input-reply-body"
                     />
@@ -190,7 +194,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
                         className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                         data-testid="cancel-reply-button"
                       >
-                        Cancel
+                        {t("task_comments.btn_cancel")}
                       </button>
                       <button
                         type="submit"
@@ -198,7 +202,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
                         className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                         data-testid="submit-reply-button"
                       >
-                        Post Reply
+                        {t("task_comments.btn_post_reply")}
                       </button>
                     </div>
                   </Form>
@@ -217,7 +221,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
               htmlFor="new-comment-body"
               className="block text-xs font-semibold uppercase tracking-wider text-gray-500"
             >
-              Add a Comment
+              {t("task_comments.label_add_comment")}
             </label>
             <textarea
               id="new-comment-body"
@@ -227,7 +231,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
               onChange={(e) => {
                 setCommentDraft(e.target.value);
               }}
-              placeholder="Share an update or ask a question..."
+              placeholder={t("task_comments.placeholder_new_comment")}
               className="mt-1.5 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="input-comment-body"
             />
@@ -244,7 +248,7 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               data-testid="submit-comment-button"
             >
-              Post Comment
+              {t("task_comments.btn_post_comment")}
             </button>
           </div>
         </Form>
