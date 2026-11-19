@@ -1,5 +1,6 @@
 {
   "name": "pm-task-management",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.21.0",
