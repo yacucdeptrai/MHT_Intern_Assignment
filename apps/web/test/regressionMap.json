@@ -1,0 +1,127 @@
+{
+  "01": {
+    "lesson": "Typo in file name (notificatonRepository)",
+    "preventedBy": "pnpm spell (cspell covers file names via the **/* glob)",
+    "provenBy": "CI spell step",
+    "testFile": "apps/web/test/fileSpelling.test.ts",
+    "testName": "verifies repository files do not contain known typos (Lesson #1)"
+  },
+  "02": {
+    "lesson": "Typo in file name (projectMemeber.service)",
+    "preventedBy": "pnpm spell",
+    "provenBy": "CI spell step",
+    "testFile": "apps/web/test/fileSpelling.test.ts",
+    "testName": "verifies service files do not contain known typos (Lesson #2)"
+  },
+  "03": {
+    "lesson": "Repository used the global client instead of the injected db",
+    "preventedBy": "Data access §2; ESLint no-restricted-imports",
+    "provenBy": "Lint, plus the atomicity tests (§3.3)",
+    "lintRule": "no-restricted-imports",
+    "testFile": "packages/db/test/batch.test.ts",
+    "testName": "proofs 1 and 2: with a stale version, nothing is written and the error is recognizable"
+  },
+  "04": {
+    "lesson": "throw (new AppError(...), 403) comma operator",
+    "preventedBy": "ESLint no-sequences and @typescript-eslint/only-throw-error",
+    "provenBy": "Lint; errors.test.ts asserts that thrown errors are AppError instances with status",
+    "lintRule": "no-sequences",
+    "testFile": "packages/domain/test/errors.test.ts",
+    "testName": "creates AppError with custom status and message"
+  },
+  "05": {
+    "lesson": "No input validation in actions",
+    "preventedBy": "Zod safeParse in every action (Routes §1)",
+    "provenBy": "Action contract tests (§4)",
+    "testFile": "apps/web/test/user/adminUsersAction.test.ts",
+    "testName": "returns 400 with preserved values when creating user with duplicate email"
+  },
+  "06": {
+    "lesson": "any props in UserForm",
+    "preventedBy": "@typescript-eslint/no-explicit-any as an error",
+    "provenBy": "Lint, pnpm typecheck",
+    "lintRule": "@typescript-eslint/no-explicit-any"
+  },
+  "07": {
+    "lesson": "Widespread any",
+    "preventedBy": "Same, plus the no-unsafe-* rules",
+    "provenBy": "Lint",
+    "lintRule": "@typescript-eslint/no-explicit-any"
+  },
+  "08": {
+    "lesson": "requireAdmin redirected to /",
+    "preventedBy": "requireUser redirects to /login?redirectTo= (RBAC §5.2)",
+    "provenBy": "E2E journey 1",
+    "testFile": "apps/web/e2e/auth.spec.ts",
+    "testName": "open a deep link while signed out redirects to /login?redirectTo=... and returns there after login"
+  },
+  "09": {
+    "lesson": "Magic number for token expiry",
+    "preventedBy": "TOKEN_INVITE_EXPIRY_MS in packages/domain/src/constants.ts; ESLint no-magic-numbers",
+    "provenBy": "Lint; the invite expiry test",
+    "testFile": "packages/domain/test/constants.test.ts",
+    "testName": "expires invites after exactly 7 days"
+  },
+  "10": {
+    "lesson": "\"Users does not exits\"",
+    "preventedBy": "English review + cspell",
+    "provenBy": "CI spell step; review checklist",
+    "testFile": "apps/web/test/user/profile.service.test.ts",
+    "testName": "throws NotFoundError if user does not exist"
+  },
+  "11": {
+    "lesson": "Meaningless error string (\"clib\")",
+    "preventedBy": "Error messages are defined in the SRS acceptance criteria and asserted in tests",
+    "provenBy": "Action contract tests",
+    "testFile": "apps/web/test/project/projectAccess.test.ts",
+    "testName": "throws NotFoundError (never 403) for non-members on active project"
+  },
+  "12": {
+    "lesson": "Repository results cast to any",
+    "preventedBy": "Typed repository returns (Data access §2)",
+    "provenBy": "Lint, typecheck",
+    "lintRule": "@typescript-eslint/no-explicit-any"
+  },
+  "13": {
+    "lesson": "Hardcoded \"PROJECT\" as const entity type",
+    "preventedBy": "AuditEntityType enum shared by the domain and the schema CHECK (Database §1.2)",
+    "provenBy": "Repository test: an invalid value violates the CHECK",
+    "testFile": "packages/db/test/userManagementSchema.test.ts",
+    "testName": "enforces audit log entityType check constraint (Lesson #13)"
+  },
+  "14": {
+    "lesson": "Form reset in useEffect regardless of the result",
+    "preventedBy": "Reset only when actionData?.success === true (Architecture §4.4)",
+    "provenBy": "E2E journey 2",
+    "testFile": "apps/web/e2e/admin-users.spec.ts",
+    "testName": "admin creates a user; tries a duplicate email; locks a user who is signed in elsewhere"
+  },
+  "15": {
+    "lesson": "Hardcoded table scroll height",
+    "preventedBy": "Tables use the viewport-relative scroll.y helper tableScrollY() from components/table/",
+    "provenBy": "Manual review at 1280×720 and 1920×1080 in E2E screenshots",
+    "testFile": "apps/web/test/tableScrollY.test.ts",
+    "testName": "calculates viewport-relative scroll height without hardcoding (Lesson #15)"
+  },
+  "16": {
+    "lesson": "Logs without context",
+    "preventedBy": "Structured logger with requestId, userId, target ID (Architecture §4.5)",
+    "provenBy": "logger.test.ts; review checklist",
+    "testFile": "apps/web/test/logger.test.ts",
+    "testName": "logs structured JSON with requestId, userId, and targetId context (Lesson #16)"
+  },
+  "17": {
+    "lesson": "findMany + count without supporting indexes",
+    "preventedBy": "Index table (Database §4); paginated read batches (Data access §6)",
+    "provenBy": "Repository tests run EXPLAIN QUERY PLAN for list queries and assert USING INDEX",
+    "testFile": "packages/db/test/taskQueryPlan.test.ts",
+    "testName": "EXPLAIN QUERY PLAN shows index use for idx_tasks_project_status"
+  },
+  "18": {
+    "lesson": "Complex metadata lookup inside a transaction",
+    "preventedBy": "Pre-reads happen before the batch; dedicated repository methods (Data access §8)",
+    "provenBy": "Code review; the service tests' batch contents",
+    "testFile": "apps/web/test/invite/invite.service.test.ts",
+    "testName": "createInvite inserts invite and outbox job in atomic batch A7"
+  }
+}
