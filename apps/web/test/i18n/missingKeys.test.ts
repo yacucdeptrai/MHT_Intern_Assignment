@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { VALIDATION_MESSAGES } from "@pm/domain";
 import en from "../../app/i18n/en.json";
 import vi from "../../app/i18n/vi.json";
 
@@ -26,6 +27,7 @@ function findUsedKeysInCode(): Set<string> {
   });
 
   const tCallRegex = /\bt\(\s*["']([a-zA-Z0-9_.]+)["']/g;
+  const keyPropRegex = /\bkey:\s*["']([a-zA-Z0-9_.]+)["']/g;
 
   for (const content of Object.values(appModules)) {
     let match: RegExpExecArray | null;
@@ -34,7 +36,31 @@ function findUsedKeysInCode(): Set<string> {
         used.add(match[1]);
       }
     }
+    while ((match = keyPropRegex.exec(content)) !== null) {
+      if (match[1]) {
+        used.add(match[1]);
+      }
+    }
   }
+
+  // Include dynamic validation message keys generated from domain schemas
+  for (const key of Object.keys(VALIDATION_MESSAGES)) {
+    used.add(key);
+  }
+
+  // Include top-level action error keys
+  const actionErrorKeys = [
+    "errors.validation_failed",
+    "errors.unauthorized",
+    "errors.forbidden",
+    "errors.not_found",
+    "errors.conflict",
+    "errors.internal",
+  ];
+  for (const k of actionErrorKeys) {
+    used.add(k);
+  }
+
   return used;
 }
 
