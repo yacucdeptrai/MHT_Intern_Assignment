@@ -32,7 +32,9 @@ test.describe("Sub-tasks Journey (FR-17)", () => {
     // Parent task detail page
     await expect(page.getByTestId("task-title")).toHaveText("Parent Feature Task");
     await expect(page.getByTestId("add-subtask-button")).toBeVisible();
-    await expect(page.getByTestId("subtasks-section")).toContainText("No sub-tasks");
+    /* cspell:disable */
+    await expect(page.getByTestId("subtasks-section")).toContainText(/No sub-tasks|Chưa có công việc phụ/i);
+    /* cspell:enable */
 
     // Add first sub-task
     await page.getByTestId("add-subtask-button").click();
@@ -44,7 +46,9 @@ test.describe("Sub-tasks Journey (FR-17)", () => {
     // Verify first sub-task appears and progress shows 0 / 1 done
     await expect(page.getByTestId("subtask-row")).toBeVisible();
     await expect(page.getByTestId("subtask-link")).toHaveText("First Subtask");
-    await expect(page.getByTestId("subtask-progress")).toHaveText("0 / 1 done");
+    /* cspell:disable */
+    await expect(page.getByTestId("subtask-progress")).toHaveText(/0 \/ 1 (done|hoàn thành)/i);
+    /* cspell:enable */
 
     // Add second sub-task
     await page.getByTestId("add-subtask-button").click();
@@ -53,7 +57,9 @@ test.describe("Sub-tasks Journey (FR-17)", () => {
     await page.getByTestId("btn-create-subtask").click();
 
     // Progress updates to 0 / 2 done
-    await expect(page.getByTestId("subtask-progress")).toHaveText("0 / 2 done");
+    /* cspell:disable */
+    await expect(page.getByTestId("subtask-progress")).toHaveText(/0 \/ 2 (done|hoàn thành)/i);
+    /* cspell:enable */
 
     // Navigate into first sub-task
     await page.getByRole("link", { name: "First Subtask" }).click();

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "react-router";
 
@@ -41,6 +42,7 @@ interface ActionData {
 }
 
 export default function TaskDetailPage() {
+  const { t } = useTranslation();
   const { task, subTasks, comments, attachments, history, sprints, members, statuses, permissions } =
     useLoaderData<TaskDetailLoaderData>();
   const actionData = useActionData<ActionData>();
@@ -83,13 +85,13 @@ export default function TaskDetailPage() {
   return (
     <div className="space-y-6" data-testid="task-detail-page">
       {/* Breadcrumb navigation */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500" aria-label="Breadcrumb">
+      <nav className="flex items-center gap-2 text-sm text-gray-500" aria-label={t("task_detail.aria_breadcrumb")}>
         <Link to="/projects" className="hover:text-gray-700">
-          Projects
+          {t("task_detail.breadcrumb_projects")}
         </Link>
         <span>/</span>
         <Link to={`/projects/${task.projectId}`} className="hover:text-gray-700">
-          {task.projectCode} Tasks
+          {t("task_detail.breadcrumb_tasks", { code: task.projectCode })}
         </Link>
         <span>/</span>
         <span className="font-semibold text-gray-900" data-testid="task-breadcrumb-number">
@@ -104,10 +106,23 @@ export default function TaskDetailPage() {
           data-testid="conflict-banner"
         >
           <div className="flex items-center gap-3">
-            <span className="text-xl">⚠️</span>
+            <svg
+              className="h-6 w-6 text-amber-600 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
             <div>
-              <p className="font-semibold">Version Conflict</p>
-              <p className="text-sm">This task was changed by someone else. Reload to see the latest version.</p>
+              <p className="font-semibold">{t("task_detail.conflict_title")}</p>
+              <p className="text-sm">{t("task_detail.conflict_message")}</p>
             </div>
           </div>
           <button
@@ -118,7 +133,7 @@ export default function TaskDetailPage() {
             className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-700"
             data-testid="reload-version-button"
           >
-            Reload
+            {t("task_detail.conflict_reload")}
           </button>
         </div>
       ) : null}
@@ -162,7 +177,7 @@ export default function TaskDetailPage() {
                 className="inline-flex items-center rounded-md bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white"
                 data-testid="overdue-badge"
               >
-                Overdue
+                {t("task_detail.badge_overdue")}
               </span>
             ) : null}
             {task.isDueSoon && !task.isOverdue ? (
@@ -170,7 +185,7 @@ export default function TaskDetailPage() {
                 className="inline-flex items-center rounded-md bg-amber-500 px-2.5 py-0.5 text-xs font-semibold text-white"
                 data-testid="due-soon-badge"
               >
-                Due Soon
+                {t("task_detail.badge_due_soon")}
               </span>
             ) : null}
             {task.isTodayPriority ? (
@@ -178,7 +193,7 @@ export default function TaskDetailPage() {
                 className="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-0.5 text-xs font-semibold text-white"
                 data-testid="today-priority-badge"
               >
-                Today Priority
+                {t("task_detail.badge_today_priority")}
               </span>
             ) : null}
           </div>
@@ -187,7 +202,7 @@ export default function TaskDetailPage() {
           </h1>
           {task.parentTaskId ? (
             <p className="text-sm text-gray-500">
-              Sub-task of{" "}
+              {t("task_detail.subtask_of")}{" "}
               <Link
                 to={`/projects/${task.projectId}/tasks/${task.parentTaskId}`}
                 className="font-medium text-blue-600 hover:underline"
@@ -210,7 +225,7 @@ export default function TaskDetailPage() {
                   className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
                   data-testid="approve-task-button"
                 >
-                  Approve Task
+                  {t("task_detail.btn_approve")}
                 </button>
               </Form>
               <button
@@ -221,7 +236,7 @@ export default function TaskDetailPage() {
                 className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 shadow-sm hover:bg-amber-100"
                 data-testid="reject-task-button"
               >
-                Reject Task
+                {t("task_detail.btn_reject")}
               </button>
             </>
           ) : null}
@@ -235,7 +250,7 @@ export default function TaskDetailPage() {
               className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-800 shadow-sm hover:bg-indigo-100"
               data-testid="reopen-task-button"
             >
-              Reopen Task
+              {t("task_detail.btn_reopen")}
             </button>
           ) : null}
 
@@ -244,7 +259,7 @@ export default function TaskDetailPage() {
               className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600"
               data-testid="frozen-done-indicator"
             >
-              Completed (Reopen to edit)
+              {t("task_detail.frozen_done")}
             </span>
           ) : permissions.canEdit && !isEditing ? (
             <button
@@ -255,7 +270,7 @@ export default function TaskDetailPage() {
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
               data-testid="edit-task-button"
             >
-              Edit Task
+              {t("task_detail.btn_edit")}
             </button>
           ) : null}
 
@@ -263,7 +278,7 @@ export default function TaskDetailPage() {
             <Form
               method="post"
               onSubmit={(e) => {
-                if (!confirm("Are you sure you want to archive this task?")) {
+                if (!confirm(t("task_detail.confirm_archive"))) {
                   e.preventDefault();
                 }
               }}
@@ -276,7 +291,7 @@ export default function TaskDetailPage() {
                 className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 shadow-sm hover:bg-red-50 disabled:opacity-50"
                 data-testid="archive-task-button"
               >
-                Archive Task
+                {t("task_detail.btn_archive")}
               </button>
             </Form>
           ) : null}
@@ -290,14 +305,14 @@ export default function TaskDetailPage() {
           data-testid="form-reason-transition"
         >
           <h2 className="text-base font-bold text-gray-900">
-            {reasonFormMode === "reject" ? "Reject Task" : "Reopen Task"}
+            {reasonFormMode === "reject" ? t("task_detail.heading_reject") : t("task_detail.heading_reopen")}
           </h2>
           <Form method="post" className="space-y-3">
             <input type="hidden" name="intent" value={reasonFormMode} />
             <input type="hidden" name="version" value={task.version} />
             <div>
               <label htmlFor="task-reason-input" className="block text-sm font-medium text-gray-700">
-                Reason <span className="text-red-500">*</span>
+                {t("task_detail.label_reason")} <span className="text-red-500">*</span>
               </label>
               <textarea
                 id="task-reason-input"
@@ -307,8 +322,8 @@ export default function TaskDetailPage() {
                 defaultValue={actionData?.values?.reason ?? ""}
                 placeholder={
                   reasonFormMode === "reject"
-                    ? "Explain what needs to be reworked..."
-                    : "Explain why this completed task is being reopened..."
+                    ? t("task_detail.placeholder_reason_reject")
+                    : t("task_detail.placeholder_reason_reopen")
                 }
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                 data-testid="input-task-reason"
@@ -328,7 +343,7 @@ export default function TaskDetailPage() {
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 data-testid="cancel-reason-button"
               >
-                Cancel
+                {t("task_detail.btn_cancel")}
               </button>
               <button
                 type="submit"
@@ -336,7 +351,9 @@ export default function TaskDetailPage() {
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
                 data-testid="submit-reason-button"
               >
-                {reasonFormMode === "reject" ? "Confirm Reject" : "Confirm Reopen"}
+                {reasonFormMode === "reject"
+                  ? t("task_detail.btn_confirm_reject")
+                  : t("task_detail.btn_confirm_reopen")}
               </button>
             </div>
           </Form>
@@ -349,14 +366,14 @@ export default function TaskDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           {isEditing ? (
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="edit-task-form">
-              <h2 className="mb-4 text-lg font-bold text-gray-900">Edit Task</h2>
+              <h2 className="mb-4 text-lg font-bold text-gray-900">{t("task_detail.heading_edit")}</h2>
               <Form method="post" className="space-y-4">
                 <input type="hidden" name="intent" value="update" />
                 <input type="hidden" name="version" value={task.version} data-testid="input-task-version" />
 
                 <div>
                   <label htmlFor="task-title-input" className="block text-sm font-medium text-gray-700">
-                    Title <span className="text-red-500">*</span>
+                    {t("task_detail.label_title")} <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="task-title-input"
@@ -377,7 +394,7 @@ export default function TaskDetailPage() {
 
                 <div>
                   <label htmlFor="task-desc-input" className="block text-sm font-medium text-gray-700">
-                    Description
+                    {t("task_detail.label_description")}
                   </label>
                   <textarea
                     id="task-desc-input"
@@ -398,7 +415,7 @@ export default function TaskDetailPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="task-priority-select" className="block text-sm font-medium text-gray-700">
-                      Priority
+                      {t("task_detail.label_priority")}
                     </label>
                     <select
                       id="task-priority-select"
@@ -418,7 +435,7 @@ export default function TaskDetailPage() {
                   {!task.parentTaskId ? (
                     <div>
                       <label htmlFor="task-sprint-select" className="block text-sm font-medium text-gray-700">
-                        Sprint
+                        {t("task_detail.label_sprint")}
                       </label>
                       <select
                         id="task-sprint-select"
@@ -427,7 +444,7 @@ export default function TaskDetailPage() {
                         className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                         data-testid="edit-sprint-select"
                       >
-                        <option value="">Backlog (No Sprint)</option>
+                        <option value="">{t("task_detail.sprint_backlog")}</option>
                         {sprints.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name}
@@ -446,7 +463,7 @@ export default function TaskDetailPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="task-start-date" className="block text-sm font-medium text-gray-700">
-                      Start Date
+                      {t("task_detail.label_start_date")}
                     </label>
                     <input
                       id="task-start-date"
@@ -465,7 +482,7 @@ export default function TaskDetailPage() {
 
                   <div>
                     <label htmlFor="task-due-date" className="block text-sm font-medium text-gray-700">
-                      Due Date
+                      {t("task_detail.label_due_date")}
                     </label>
                     <input
                       id="task-due-date"
@@ -492,7 +509,7 @@ export default function TaskDetailPage() {
                     className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
                     data-testid="cancel-edit-button"
                   >
-                    Cancel
+                    {t("task_detail.btn_cancel")}
                   </button>
                   <button
                     type="submit"
@@ -500,14 +517,16 @@ export default function TaskDetailPage() {
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
                     data-testid="save-task-button"
                   >
-                    {isSubmitting ? "Saving..." : "Save Changes"}
+                    {isSubmitting ? t("task_detail.btn_saving") : t("task_detail.btn_save_changes")}
                   </button>
                 </div>
               </Form>
             </div>
           ) : (
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">Description</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">
+                {t("task_detail.heading_description")}
+              </h2>
               <div
                 className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed min-h-[4rem]"
                 data-testid="task-description"
@@ -515,7 +534,7 @@ export default function TaskDetailPage() {
                 {task.description ? (
                   task.description
                 ) : (
-                  <span className="italic text-gray-400">No description provided.</span>
+                  <span className="italic text-gray-400">{t("task_detail.no_description")}</span>
                 )}
               </div>
             </div>
@@ -533,7 +552,9 @@ export default function TaskDetailPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-base font-bold text-gray-900">Sub-tasks ({subTasks.length})</h2>
+                    <h2 className="text-base font-bold text-gray-900">
+                      {t("task_detail.heading_subtasks", { count: subTasks.length })}
+                    </h2>
                     {totalSubtasksCount > 0 ? (
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
@@ -546,7 +567,7 @@ export default function TaskDetailPage() {
                           className="rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700"
                           data-testid="subtask-progress"
                         >
-                          {doneSubtasksCount} / {totalSubtasksCount} done
+                          {t("task_detail.subtasks_done", { done: doneSubtasksCount, total: totalSubtasksCount })}
                         </span>
                       </div>
                     ) : null}
@@ -560,7 +581,7 @@ export default function TaskDetailPage() {
                       className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
                       data-testid="add-subtask-button"
                     >
-                      + Add Sub-task
+                      {t("task_detail.btn_add_subtask")}
                     </button>
                   ) : null}
                 </div>
@@ -572,14 +593,16 @@ export default function TaskDetailPage() {
                     data-testid="form-add-subtask"
                   >
                     <input type="hidden" name="intent" value="addSubTask" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">Add Sub-task</h3>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                      {t("task_detail.heading_add_subtask")}
+                    </h3>
                     <div>
                       <input
                         type="text"
                         name="title"
                         required
                         maxLength={200}
-                        placeholder="Sub-task title"
+                        placeholder={t("task_detail.placeholder_subtask_title")}
                         className="block w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                         data-testid="input-subtask-title"
                       />
@@ -592,7 +615,7 @@ export default function TaskDetailPage() {
                         name="description"
                         rows={2}
                         maxLength={10000}
-                        placeholder="Description (optional)"
+                        placeholder={t("task_detail.placeholder_subtask_description")}
                         className="block w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                         data-testid="input-subtask-description"
                       />
@@ -600,7 +623,7 @@ export default function TaskDetailPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label htmlFor="subtask-priority-select" className="block text-xs font-medium text-gray-700">
-                          Priority
+                          {t("task_detail.label_priority")}
                         </label>
                         <select
                           id="subtask-priority-select"
@@ -618,7 +641,7 @@ export default function TaskDetailPage() {
                       </div>
                       <div>
                         <label htmlFor="subtask-start-date-input" className="block text-xs font-medium text-gray-700">
-                          Start Date
+                          {t("task_detail.label_start_date")}
                         </label>
                         <input
                           id="subtask-start-date-input"
@@ -630,7 +653,7 @@ export default function TaskDetailPage() {
                       </div>
                       <div>
                         <label htmlFor="subtask-due-date-input" className="block text-xs font-medium text-gray-700">
-                          Due Date
+                          {t("task_detail.label_due_date")}
                         </label>
                         <input
                           id="subtask-due-date-input"
@@ -650,7 +673,7 @@ export default function TaskDetailPage() {
                         className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                         data-testid="btn-cancel-subtask"
                       >
-                        Cancel
+                        {t("task_detail.btn_cancel")}
                       </button>
                       <button
                         type="submit"
@@ -658,14 +681,14 @@ export default function TaskDetailPage() {
                         className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                         data-testid="btn-create-subtask"
                       >
-                        Create Sub-task
+                        {t("task_detail.btn_create_subtask")}
                       </button>
                     </div>
                   </Form>
                 ) : null}
 
                 {subTasks.length === 0 ? (
-                  <p className="text-sm text-gray-500 italic">No sub-tasks</p>
+                  <p className="text-sm text-gray-500 italic">{t("task_detail.no_subtasks")}</p>
                 ) : (
                   <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                     {subTasks.map((st) => (
@@ -720,9 +743,11 @@ export default function TaskDetailPage() {
             className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4"
             data-testid="task-history-section"
           >
-            <h2 className="text-base font-bold text-gray-900">History ({history.length})</h2>
+            <h2 className="text-base font-bold text-gray-900">
+              {t("task_detail.heading_history", { count: history.length })}
+            </h2>
             {history.length === 0 ? (
-              <p className="text-sm italic text-gray-500">No history recorded yet.</p>
+              <p className="text-sm italic text-gray-500">{t("task_detail.no_history")}</p>
             ) : (
               <ol className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                 {history.map((entry) => {
@@ -744,7 +769,7 @@ export default function TaskDetailPage() {
                           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
                           data-testid="task-history-reason"
                         >
-                          <span className="font-semibold">Reason:</span> {reason}
+                          <span className="font-semibold">{t("task_detail.history_reason")}</span> {reason}
                         </div>
                       ) : null}
 
@@ -773,10 +798,12 @@ export default function TaskDetailPage() {
             className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-5"
             data-testid="task-sidebar"
           >
-            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">Details</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">
+              {t("task_detail.heading_details")}
+            </h2>
 
             <div>
-              <p className="text-xs font-medium text-gray-500">Status</p>
+              <p className="text-xs font-medium text-gray-500">{t("task_detail.label_status")}</p>
               <p className="mt-1 text-sm font-semibold text-gray-900" data-testid="sidebar-status">
                 {task.statusName}
               </p>
@@ -785,7 +812,7 @@ export default function TaskDetailPage() {
                   <input type="hidden" name="intent" value="changeStatus" />
                   <input type="hidden" name="version" value={task.version} data-testid="status-form-version" />
                   <label htmlFor="task-status-select" className="sr-only">
-                    Change Status
+                    {t("task_detail.aria_change_status")}
                   </label>
                   <select
                     id="task-status-select"
@@ -809,29 +836,33 @@ export default function TaskDetailPage() {
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
                     data-testid="btn-change-status"
                   >
-                    Move
+                    {t("task_detail.btn_move_status")}
                   </button>
                 </Form>
               ) : null}
             </div>
 
             <div>
-              <p className="text-xs font-medium text-gray-500">Priority</p>
+              <p className="text-xs font-medium text-gray-500">{t("task_detail.label_priority")}</p>
               <p className="mt-1 text-sm font-semibold text-gray-900" data-testid="sidebar-priority">
                 {task.priority}
               </p>
             </div>
 
             <div>
-              <p className="text-xs font-medium text-gray-500">Sprint</p>
+              <p className="text-xs font-medium text-gray-500">{t("task_detail.label_sprint")}</p>
               <p className="mt-1 text-sm text-gray-900" data-testid="sidebar-sprint">
-                {task.sprintName ? task.sprintName : <span className="text-gray-400">Backlog</span>}
+                {task.sprintName ? (
+                  task.sprintName
+                ) : (
+                  <span className="text-gray-400">{t("task_detail.sidebar_backlog")}</span>
+                )}
               </p>
             </div>
 
             <div>
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-500">Assignees</p>
+                <p className="text-xs font-medium text-gray-500">{t("task_detail.label_assignees")}</p>
                 {permissions.canAssign && (
                   <button
                     type="button"
@@ -841,7 +872,7 @@ export default function TaskDetailPage() {
                     className="text-xs font-medium text-blue-600 hover:text-blue-800"
                     data-testid="btn-toggle-assign"
                   >
-                    {isAssigning ? "Cancel" : "Change"}
+                    {isAssigning ? t("task_detail.btn_cancel_assignees") : t("task_detail.btn_change_assignees")}
                   </button>
                 )}
               </div>
@@ -874,14 +905,14 @@ export default function TaskDetailPage() {
                       className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                       data-testid="btn-save-assign"
                     >
-                      Save
+                      {t("task_detail.btn_save_assignees")}
                     </button>
                   </div>
                 </Form>
               ) : (
                 <div className="mt-1 flex flex-wrap gap-2" data-testid="sidebar-assignees">
                   {task.assignees.length === 0 ? (
-                    <span className="text-sm text-gray-400">Unassigned</span>
+                    <span className="text-sm text-gray-400">{t("task_detail.unassigned")}</span>
                   ) : (
                     task.assignees.map((a) => (
                       <span
@@ -899,13 +930,13 @@ export default function TaskDetailPage() {
 
             <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
               <div>
-                <p className="text-xs font-medium text-gray-500">Start Date</p>
+                <p className="text-xs font-medium text-gray-500">{t("task_detail.label_start_date")}</p>
                 <p className="mt-1 text-sm text-gray-900" data-testid="sidebar-start-date">
                   {task.startDate ? task.startDate : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500">Due Date</p>
+                <p className="text-xs font-medium text-gray-500">{t("task_detail.label_due_date")}</p>
                 <p className="mt-1 text-sm text-gray-900" data-testid="sidebar-due-date">
                   {task.dueDate ? task.dueDate : "—"}
                 </p>
@@ -914,10 +945,10 @@ export default function TaskDetailPage() {
 
             <div className="border-t border-gray-100 pt-4 space-y-2 text-xs text-gray-500">
               <p>
-                Created by <span className="font-medium text-gray-700">{task.creatorName}</span>
+                {t("task_detail.created_by")} <span className="font-medium text-gray-700">{task.creatorName}</span>
               </p>
               <p>
-                Version{" "}
+                {t("task_detail.version")}{" "}
                 <span className="font-mono font-medium text-gray-700" data-testid="display-task-version">
                   {task.version}
                 </span>

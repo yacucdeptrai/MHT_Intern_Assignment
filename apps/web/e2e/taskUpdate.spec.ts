@@ -97,9 +97,13 @@ test.describe("Task Update Journey (FR-13)", () => {
 
     // Conflict banner must appear
     await expect(page.getByTestId("conflict-banner")).toBeVisible();
+    /* cspell:disable */
     await expect(
-      page.getByText("This task was changed by someone else. Reload to see the latest version."),
+      page.getByText(
+        /This task was changed by someone else\. Reload to see the latest version\.|Công việc này đã bị thay đổi bởi người khác\. Tải lại để xem phiên bản mới nhất\./i,
+      ),
     ).toBeVisible();
+    /* cspell:enable */
     await expect(page.getByTestId("reload-version-button")).toBeVisible();
   });
 

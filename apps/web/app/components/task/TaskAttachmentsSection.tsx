@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Form, useFetcher, useRevalidator } from "react-router";
 
 import type { AttachmentDto } from "@pm/domain";
@@ -33,6 +34,7 @@ export function TaskAttachmentsSection({
   canAttach,
   isSubmitting = false,
 }: TaskAttachmentsSectionProps) {
+  const { t } = useTranslation();
   const fetcher = useFetcher<UploadResponse>();
   const revalidator = useRevalidator();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +59,8 @@ export function TaskAttachmentsSection({
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-3">
         <h2 className="text-lg font-semibold text-gray-900">
-          Attachments <span className="text-sm font-normal text-gray-500">({attachments.length})</span>
+          {t("task_attachments.heading")}{" "}
+          <span className="text-sm font-normal text-gray-500">({attachments.length})</span>
         </h2>
       </div>
 
@@ -87,7 +90,7 @@ export function TaskAttachmentsSection({
             className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
             data-testid="upload-attachment-btn"
           >
-            {isUploading ? "Uploading..." : "Upload File"}
+            {isUploading ? t("task_attachments.uploading") : t("task_attachments.upload_file")}
           </button>
         </fetcher.Form>
       ) : null}
@@ -100,7 +103,7 @@ export function TaskAttachmentsSection({
 
       {attachments.length === 0 ? (
         <p className="text-sm text-gray-500" data-testid="no-attachments-msg">
-          No attachments uploaded yet.
+          {t("task_attachments.no_attachments")}
         </p>
       ) : (
         <ul className="divide-y divide-gray-100" data-testid="attachments-list">
@@ -135,8 +138,11 @@ export function TaskAttachmentsSection({
                     {att.fileName}
                   </a>
                   <p className="text-xs text-gray-500">
-                    {formatFileSize(att.sizeBytes)} • Uploaded by {att.uploaderName} •{" "}
-                    {formatAuditTimestamp(att.createdAt)}
+                    {t("task_attachments.uploaded_by", {
+                      size: formatFileSize(att.sizeBytes),
+                      uploader: att.uploaderName,
+                      date: formatAuditTimestamp(att.createdAt),
+                    })}
                   </p>
                 </div>
               </div>
@@ -151,7 +157,7 @@ export function TaskAttachmentsSection({
                     className="rounded px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
                     data-testid={`attachment-delete-${att.id}`}
                   >
-                    Delete
+                    {t("task_attachments.btn_delete")}
                   </button>
                 </Form>
               ) : null}

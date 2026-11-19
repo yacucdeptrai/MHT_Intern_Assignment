@@ -116,6 +116,7 @@ export default tseslint.config(
     files: [
       "apps/web/app/components/i18n/**/*.{ts,tsx}",
       "apps/web/app/components/layouts/**/*.{ts,tsx}",
+      "apps/web/app/components/task/**/*.{ts,tsx}",
       "apps/web/app/routes/login.tsx",
       "apps/web/app/routes/invite.$token.tsx",
       "apps/web/app/routes/_app.projects._index.tsx",
@@ -124,6 +125,7 @@ export default tseslint.config(
       "apps/web/app/routes/_app.projects.$projectId._index.tsx",
       "apps/web/app/routes/_app.projects.$projectId.members.tsx",
       "apps/web/app/routes/_app.projects.$projectId.settings.tsx",
+      "apps/web/app/routes/_app.projects.$projectId.tasks.$taskId.tsx",
     ],
     plugins: {
       i18next: i18nextPlugin,
