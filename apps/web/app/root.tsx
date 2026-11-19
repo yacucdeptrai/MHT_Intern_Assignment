@@ -57,14 +57,19 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  const data = useRouteLoaderData<typeof loader>("root");
+  const lang = data?.lang ?? DEFAULT_LANGUAGE;
+  const i18nInstance = useMemo(() => getScopedI18n(lang), [lang]);
+  const t = i18nInstance.t.bind(i18nInstance);
+
   const isNotFound = isRouteErrorResponse(error) && error.status === 404;
   const isForbidden = isRouteErrorResponse(error) && error.status === 403;
-  const message = isNotFound ? "Not found" : isForbidden ? "Forbidden" : "Something went wrong";
+  const message = isNotFound ? t("errors.not_found") : isForbidden ? t("errors.forbidden") : t("errors.internal");
   const details = isNotFound
-    ? "The requested page could not be found."
+    ? t("errors.not_found_details")
     : isForbidden
-      ? "You do not have permission to access this page."
-      : "An unexpected error occurred.";
+      ? t("errors.forbidden_details")
+      : t("errors.unexpected_details");
 
   return (
     <main className="mx-auto max-w-3xl p-8">
