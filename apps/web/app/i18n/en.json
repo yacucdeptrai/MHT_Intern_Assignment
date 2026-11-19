@@ -459,8 +459,9 @@
   },
   "notifications": {
     "title": "Notifications",
-    "subtitle_unread": "You have {{count}} unread notification",
-    "subtitle_unread_plural": "You have {{count}} unread notifications",
+    "subtitle_prefix": "You have",
+    "subtitle_unread": "unread notification",
+    "subtitle_unread_plural": "unread notifications",
     "btn_mark_all_read": "Mark all as read",
     "empty": "No notifications found.",
     "reason_label": "Reason:",

@@ -91,9 +91,11 @@ export default function NotificationsRoute() {
             {t("notifications.title")}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {unreadCount === 1
-              ? t("notifications.subtitle_unread", { count: unreadCount })
-              : t("notifications.subtitle_unread_plural", { count: unreadCount })}
+            {t("notifications.subtitle_prefix")}{" "}
+            <span className="font-semibold text-blue-600" data-testid="unread-count">
+              {unreadCount}
+            </span>{" "}
+            {unreadCount === 1 ? t("notifications.subtitle_unread") : t("notifications.subtitle_unread_plural")}
           </p>
         </div>
 

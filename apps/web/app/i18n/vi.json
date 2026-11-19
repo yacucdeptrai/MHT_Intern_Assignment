@@ -459,8 +459,9 @@
   },
   "notifications": {
     "title": "Thông báo",
-    "subtitle_unread": "Bạn có {{count}} thông báo chưa đọc",
-    "subtitle_unread_plural": "Bạn có {{count}} thông báo chưa đọc",
+    "subtitle_prefix": "Bạn có",
+    "subtitle_unread": "thông báo chưa đọc",
+    "subtitle_unread_plural": "thông báo chưa đọc",
     "btn_mark_all_read": "Đánh dấu tất cả đã đọc",
     "empty": "Không tìm thấy thông báo nào.",
     "reason_label": "Lý do:",
