@@ -5,6 +5,7 @@ export * from "./errors";
 export * from "./files";
 export * from "./slack";
 export * from "./schemas/auth";
+export * from "./schemas/messages";
 export * from "./schemas/user";
 export * from "./schemas/invite";
 export * from "./schemas/dateOrder";
