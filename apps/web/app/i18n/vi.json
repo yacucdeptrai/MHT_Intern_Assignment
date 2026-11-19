@@ -17,5 +17,34 @@
     "or_continue_with": "Hoặc tiếp tục với",
     "continue_with_google": "Tiếp tục với Google",
     "continue_with_microsoft": "Tiếp tục với Microsoft"
+  },
+  "invite": {
+    "invalid_title": "Lời mời này không hợp lệ hoặc đã hết hạn",
+    "invalid_description": "Liên kết bạn truy cập đã hết hạn, đã được sử dụng hoặc không tồn tại. Vui lòng liên hệ quản trị viên tổ chức để nhận lời mời mới.",
+    "title": "Chấp nhận Lời mời",
+    "set_password_for": "Đặt mật khẩu cho",
+    "to_join": "để tham gia",
+    "new_password": "Mật khẩu Mới",
+    "new_password_placeholder": "Tối thiểu 10 ký tự",
+    "confirm_password": "Xác nhận Mật khẩu",
+    "confirm_password_placeholder": "Nhập lại mật khẩu",
+    "submit": "Đặt Mật khẩu và Đăng nhập",
+    "submitting": "Đang đặt mật khẩu..."
+  },
+  "nav": {
+    "admin_portal": "Cổng Quản trị & PM",
+    "workspace": "Không gian làm việc",
+    "management": "Quản lý",
+    "personal": "Cá nhân",
+    "dashboard": "Bảng điều khiển",
+    "projects": "Dự án",
+    "my_projects": "Dự án của tôi",
+    "user_management": "Quản lý Người dùng",
+    "statuses": "Trạng thái",
+    "audit_log": "Nhật ký Kiểm toán",
+    "my_tasks": "Công việc của tôi",
+    "calendar": "Lịch biểu",
+    "notifications": "Thông báo",
+    "sign_out": "Đăng xuất"
   }
 }

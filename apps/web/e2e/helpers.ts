@@ -10,6 +10,8 @@ export function requireEnv(name: string): string {
 }
 
 export async function signInAsAdmin(page: Page): Promise<void> {
+  const url = new URL(page.url() === "about:blank" ? "http://localhost:4173" : page.url());
+  await page.context().addCookies([{ name: "lang", value: "en", domain: url.hostname, path: "/" }]);
   await page.goto("/login");
   /* cspell:disable */
   await page.getByLabel(/Email address|Địa chỉ email/i).fill(requireEnv("ADMIN_SEED_EMAIL"));
@@ -62,6 +64,7 @@ export async function createSignedInMember(
   await adminContext.close();
 
   const context = await browser.newContext();
+  await context.addCookies([{ name: "lang", value: "en", domain: "localhost", path: "/" }]);
   const page = await context.newPage();
   const password = `InitialPw!${uniqueId}`;
   await page.goto(new URL(inviteUrl).pathname);
