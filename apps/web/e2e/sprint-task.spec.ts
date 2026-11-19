@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { createSignedInMember, signInAsAdmin } from "./helpers";
 
-test.describe("Realtime Notification Journey (FR-26, Journey 4)", () => {
-  test("FR-26 c1: member receives a realtime notification without reloading when assigned to a task", async ({
+test.describe("Journey 4: Sprint Task Creation and Realtime Notification (FR-26)", () => {
+  test("lead creates a sprint and a task in it, and assigns the member; member receives a realtime notification without reloading", async ({
     browser,
   }) => {
     // 1. Create a signed-in member
@@ -67,6 +67,14 @@ test.describe("Realtime Notification Journey (FR-26, Journey 4)", () => {
     // Open task details and assign member
     await leadPage.getByRole("link", { name: taskTitle }).click();
     await leadPage.waitForURL("**/tasks/*");
+
+    // Link task to the sprint
+    await leadPage.getByTestId("edit-task-button").click();
+    await expect(leadPage.getByTestId("edit-task-form")).toBeVisible();
+    await leadPage.getByTestId("edit-sprint-select").selectOption({ label: `Sprint RT ${code}` });
+    await leadPage.getByTestId("save-task-button").click();
+    await expect(leadPage.getByTestId("sidebar-sprint")).toHaveText(`Sprint RT ${code}`);
+
     await leadPage.getByTestId("btn-toggle-assign").click();
     await leadPage.getByLabel(member.fullName).check();
     await leadPage.getByTestId("btn-save-assign").click();
