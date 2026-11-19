@@ -475,7 +475,7 @@ describe("SLACK_POST_TASK outbox handler (FR-27)", () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("channel_not_found"), expect.anything());
   });
 
-  it("error handling: Slack HTTP >= 500 throws so job retries", async () => {
+  it("FR-27 c3: a Slack HTTP >= 500 failure throws so the job retries with backoff (sweep tests cover DEAD)", async () => {
     const now = new Date("2026-11-18T10:00:00Z");
     const { user, project, statusId } = await ensureUserAndProject("C_MAIN_CHAN");
 

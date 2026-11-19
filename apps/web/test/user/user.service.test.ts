@@ -50,7 +50,7 @@ async function createMockContext(
 
 describe("userService", () => {
   describe("FR-03 criterion 1 & A9: Create user with invite and audit log", () => {
-    it("creates active user, invite link, and audits USER_CREATED in atomic batch", async () => {
+    it("FR-03 c1: creates active user, invite link, and audits USER_CREATED in atomic batch", async () => {
       const ctx = await createMockContext("ADMIN");
 
       const result = await userService.createUser(ctx, {
@@ -87,7 +87,7 @@ describe("userService", () => {
   });
 
   describe("FR-03 criterion 2: Duplicate email validation", () => {
-    it("returns 400 field error when email is already in use (create)", async () => {
+    it("FR-03 c2: returns 400 field error when email is already in use (create)", async () => {
       const ctx = await createMockContext("ADMIN");
       await userRepository.insert(ctx.db, {
         id: crypto.randomUUID(),
@@ -108,7 +108,7 @@ describe("userService", () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it("returns 400 field error when email is already in use (update)", async () => {
+    it("FR-03 c2: returns 400 field error when email is already in use (update)", async () => {
       const ctx = await createMockContext("ADMIN");
       const userA = await userRepository.insert(ctx.db, {
         id: crypto.randomUUID(),
@@ -140,7 +140,7 @@ describe("userService", () => {
   });
 
   describe("FR-03 criterion 3 & A10: Lock user and audit USER_LOCKED", () => {
-    it("locks user and audits USER_LOCKED with version guard", async () => {
+    it("FR-03 c3: locks user and audits USER_LOCKED with version guard", async () => {
       const ctx = await createMockContext("ADMIN");
       const target = await userRepository.insert(ctx.db, {
         id: crypto.randomUUID(),
@@ -189,21 +189,21 @@ describe("userService", () => {
   });
 
   describe("FR-03 criterion 5: No self-lockout rules", () => {
-    it("rejects admin attempting to lock self", async () => {
+    it("FR-03 c5: rejects admin attempting to lock self", async () => {
       const adminId = crypto.randomUUID();
       const ctx = await createMockContext("ADMIN", adminId);
 
       await expect(userService.lockUser(ctx, adminId)).rejects.toThrow("You cannot change your own access");
     });
 
-    it("rejects admin attempting to delete self", async () => {
+    it("FR-03 c5: rejects admin attempting to delete self", async () => {
       const adminId = crypto.randomUUID();
       const ctx = await createMockContext("ADMIN", adminId);
 
       await expect(userService.deleteUser(ctx, adminId)).rejects.toThrow("You cannot change your own access");
     });
 
-    it("rejects admin attempting to demote self", async () => {
+    it("FR-03 c5: rejects admin attempting to demote self", async () => {
       const adminId = crypto.randomUUID();
       const ctx = await createMockContext("ADMIN", adminId);
 
@@ -214,7 +214,7 @@ describe("userService", () => {
   });
 
   describe("FR-03 criterion 6: Non-admin permission checks", () => {
-    it("rejects PM, TEAM_LEAD, and MEMBER with 403 ForbiddenError", async () => {
+    it("FR-03 c6: rejects PM, TEAM_LEAD, and MEMBER with 403 ForbiddenError", async () => {
       const pmCtx = await createMockContext("PM");
       await expect(
         userService.createUser(pmCtx, {
@@ -233,7 +233,7 @@ describe("userService", () => {
   });
 
   describe("Last Admin demotion protection (FR-04 criterion 2)", () => {
-    it("rejects demoting the only remaining admin", async () => {
+    it("FR-04 c2: rejects demoting the only remaining admin", async () => {
       const ctx = await createMockContext("ADMIN");
       const targetAdmin = await userRepository.insert(ctx.db, {
         id: crypto.randomUUID(),
@@ -366,7 +366,7 @@ describe("userService", () => {
       await expect(userService.updateUser(ctx, { userId: "unknown-id" })).rejects.toThrow();
     });
 
-    it("updates role and demotes an admin when another admin exists", async () => {
+    it("FR-04 c1: updates role and demotes an admin when another admin exists", async () => {
       const ctx = await createMockContext("ADMIN");
       // Add a second admin so there are 2 admins in DB
       const secondAdmin = await userRepository.insert(ctx.db, {

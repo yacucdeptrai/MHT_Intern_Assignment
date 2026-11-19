@@ -57,7 +57,7 @@ function makeArgs(request: Request, ctx: RequestContext, params: Record<string, 
 }
 
 describe("invite.$token route", () => {
-  it("loader returns valid status and email for valid token", async () => {
+  it("FR-37 c1: loader returns valid status and email for valid token", async () => {
     const ctx = await createMockContext();
     const created = await inviteService.createInvite(ctx, { email: "routeloader@example.com" });
 
@@ -69,7 +69,7 @@ describe("invite.$token route", () => {
     expect(data.email).toBe("routeloader@example.com");
   });
 
-  it("loader returns invalid status for non-existent token", async () => {
+  it("FR-37 c3: loader returns invalid status for non-existent token", async () => {
     const ctx = await createMockContext();
     const request = new Request("http://localhost/invite/bad-token");
     const args = makeArgs(request, ctx, { token: "bad-token" });
@@ -117,7 +117,7 @@ describe("invite.$token route", () => {
     expect(body2.errors.confirmPassword).toBeDefined();
   });
 
-  it("action accepts invite, creates session cookie, and redirects", async () => {
+  it("FR-37 c2: action accepts invite, creates session cookie, and redirects", async () => {
     const ctx = await createMockContext();
     const created = await inviteService.createInvite(ctx, { email: "actionsuccess@example.com" });
 
@@ -138,7 +138,7 @@ describe("invite.$token route", () => {
     expect(res.headers.get("Set-Cookie")).toContain("__session=");
   });
 
-  it("action returns error response if token is invalid or expired", async () => {
+  it("FR-37 c3: action returns error response if token is invalid or expired", async () => {
     const ctx = await createMockContext();
     const form = new FormData();
     form.append("password", "StrongPassword123!");
