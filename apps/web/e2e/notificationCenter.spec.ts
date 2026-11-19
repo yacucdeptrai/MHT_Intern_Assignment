@@ -65,7 +65,9 @@ test.describe("Notification Center Journey (FR-25)", () => {
     await expect(adminPage.getByTestId("members-table")).toBeVisible();
     adminPage.once("dialog", (dialog) => dialog.accept());
     const memberRow = adminPage.locator("tr", { hasText: member.email });
-    await memberRow.getByRole("button", { name: "Remove" }).click();
+    /* cspell:disable */
+    await memberRow.getByRole("button", { name: /Remove|Gỡ bỏ/i }).click();
+    /* cspell:enable */
     await expect(adminPage.getByTestId("success-banner")).toBeVisible();
     await expect(adminPage.getByTestId("members-table")).not.toContainText(member.email);
     await adminContext.close();
@@ -77,6 +79,8 @@ test.describe("Notification Center Journey (FR-25)", () => {
     await taskLinkRevoked.click();
 
     // Non-member access to project task returns 404 ("Not found")
-    await expect(member.page.getByRole("heading", { name: "Not found" })).toBeVisible();
+    /* cspell:disable */
+    await expect(member.page.getByRole("heading", { name: /Not found|Không tìm thấy/i })).toBeVisible();
+    /* cspell:enable */
   });
 });

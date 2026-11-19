@@ -24,11 +24,13 @@ test.describe("Realtime Notification Journey (FR-26, Journey 4)", () => {
     await leadPage.goto("/projects/new");
     const code = `RT${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const taskTitle = `Realtime Ticket ${code}`;
-    await leadPage.getByLabel("Project Code").fill(code);
-    await leadPage.getByLabel("Project Name").fill(`Realtime Project ${code}`);
-    await leadPage.getByLabel("Start Date").fill("2026-11-01");
-    await leadPage.getByLabel("End Date").fill("2026-12-31");
-    await leadPage.getByRole("button", { name: "Create Project" }).click();
+    /* cspell:disable */
+    await leadPage.getByLabel(/Project Code|Mã dự án/i).fill(code);
+    await leadPage.getByLabel(/Project Name|Tên dự án/i).fill(`Realtime Project ${code}`);
+    await leadPage.getByLabel(/Start Date|Ngày bắt đầu/i).fill("2026-11-01");
+    await leadPage.getByLabel(/End Date|Ngày kết thúc/i).fill("2026-12-31");
+    await leadPage.getByRole("button", { name: /Create Project|Tạo dự án/i }).click();
+    /* cspell:enable */
 
     await leadPage.waitForURL("**/projects");
     await leadPage.getByRole("link", { name: `Realtime Project ${code}` }).click();

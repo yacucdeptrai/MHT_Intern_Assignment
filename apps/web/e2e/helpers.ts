@@ -98,11 +98,13 @@ export async function setupProjectWithTask(
   await adminPage.goto("/projects/new");
   const projectCode = `WF${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
   const projectName = `Workflow Project ${projectCode}`;
-  await adminPage.getByLabel("Project Code").fill(projectCode);
-  await adminPage.getByLabel("Project Name").fill(projectName);
-  await adminPage.getByLabel("Start Date").fill("2026-11-01");
-  await adminPage.getByLabel("End Date").fill("2026-12-31");
-  await adminPage.getByRole("button", { name: "Create Project" }).click();
+  /* cspell:disable */
+  await adminPage.getByLabel(/Project Code|Mã dự án/i).fill(projectCode);
+  await adminPage.getByLabel(/Project Name|Tên dự án/i).fill(projectName);
+  await adminPage.getByLabel(/Start Date|Ngày bắt đầu/i).fill("2026-11-01");
+  await adminPage.getByLabel(/End Date|Ngày kết thúc/i).fill("2026-12-31");
+  await adminPage.getByRole("button", { name: /Create Project|Tạo dự án/i }).click();
+  /* cspell:enable */
 
   await adminPage.waitForURL("**/projects");
   await adminPage.getByRole("link", { name: projectName }).click();
@@ -178,11 +180,13 @@ export async function addMemberToNewProject(browser: Browser, member: TestUser):
   const code = `NT${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   const projectName = `Notify Project ${code}`;
   await adminPage.goto("/projects/new");
-  await adminPage.getByLabel("Project Code").fill(code);
-  await adminPage.getByLabel("Project Name").fill(projectName);
-  await adminPage.getByLabel("Start Date").fill("2026-11-01");
-  await adminPage.getByLabel("End Date").fill("2026-12-31");
-  await adminPage.getByRole("button", { name: "Create Project" }).click();
+  /* cspell:disable */
+  await adminPage.getByLabel(/Project Code|Mã dự án/i).fill(code);
+  await adminPage.getByLabel(/Project Name|Tên dự án/i).fill(projectName);
+  await adminPage.getByLabel(/Start Date|Ngày bắt đầu/i).fill("2026-11-01");
+  await adminPage.getByLabel(/End Date|Ngày kết thúc/i).fill("2026-12-31");
+  await adminPage.getByRole("button", { name: /Create Project|Tạo dự án/i }).click();
+  /* cspell:enable */
   await adminPage.waitForURL("**/projects");
   await adminPage.getByRole("link", { name: projectName }).click();
   await adminPage.waitForURL("**/projects/*");

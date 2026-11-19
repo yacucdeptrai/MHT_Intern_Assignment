@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Form, Link, useLoaderData, useSubmit } from "react-router";
 
@@ -38,12 +39,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   };
 }
 
-function formatDateHeading(view: "day" | "week" | "month", dateStr: string, range: { from: string; to: string }) {
+function formatDateHeading(
+  view: "day" | "week" | "month",
+  dateStr: string,
+  range: { from: string; to: string },
+  lng: string,
+) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const utcDate = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+  const locale = lng === "vi" ? "vi-VN" : "en-US";
 
   if (view === "day") {
-    return utcDate.toLocaleDateString("en-US", {
+    return utcDate.toLocaleDateString(locale, {
       weekday: "long",
       year: "numeric",
       month: "long",
@@ -57,8 +64,8 @@ function formatDateHeading(view: "day" | "week" | "month", dateStr: string, rang
     const [ty, tm, td] = range.to.split("-").map(Number);
     const fromDate = new Date(Date.UTC(fy ?? 1970, (fm ?? 1) - 1, fd ?? 1));
     const toDate = new Date(Date.UTC(ty ?? 1970, (tm ?? 1) - 1, td ?? 1));
-    const fromStr = fromDate.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-    const toStr = toDate.toLocaleDateString("en-US", {
+    const fromStr = fromDate.toLocaleDateString(locale, { month: "short", day: "numeric", timeZone: "UTC" });
+    const toStr = toDate.toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -67,7 +74,7 @@ function formatDateHeading(view: "day" | "week" | "month", dateStr: string, rang
     return `${fromStr} – ${toStr}`;
   }
 
-  return utcDate.toLocaleDateString("en-US", {
+  return utcDate.toLocaleDateString(locale, {
     year: "numeric",
     month: "long",
     timeZone: "UTC",
@@ -92,21 +99,20 @@ function getDaysBetween(fromStr: string, toStr: string): string[] {
 }
 
 export default function CalendarPage() {
+  const { t, i18n } = useTranslation();
   const { view, date, range, events, projects, selectedProjectId, navDates, todayStr } = useLoaderData<typeof loader>();
   const submit = useSubmit();
 
   const projectParam = selectedProjectId ? `&projectId=${selectedProjectId}` : "";
-  const heading = formatDateHeading(view, date, range);
+  const heading = formatDateHeading(view, date, range, i18n.language);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6" data-testid="calendar-page">
       {/* Page Header & Breadcrumb */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Calendar</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Track schedules, task spans, and upcoming deadlines across all your projects.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t("calendar.title")}</h1>
+          <p className="mt-1 text-sm text-gray-500">{t("calendar.subtitle")}</p>
         </div>
 
         {/* View Switcher (FR-35 c3) */}
@@ -120,7 +126,7 @@ export default function CalendarPage() {
               view === "day" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            Day
+            {t("calendar.view_day")}
           </Link>
           <Link
             to={`/calendar?view=week&date=${date}${projectParam}`}
@@ -128,7 +134,7 @@ export default function CalendarPage() {
               view === "week" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            Week
+            {t("calendar.view_week")}
           </Link>
           <Link
             to={`/calendar?view=month&date=${date}${projectParam}`}
@@ -136,7 +142,7 @@ export default function CalendarPage() {
               view === "month" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            Month
+            {t("calendar.view_month")}
           </Link>
         </div>
       </div>
@@ -148,8 +154,8 @@ export default function CalendarPage() {
           <Link
             to={`/calendar?view=${view}&date=${navDates.prev}${projectParam}`}
             className="p-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-            title="Previous"
-            aria-label="Previous"
+            title={t("calendar.btn_previous")}
+            aria-label={t("calendar.btn_previous")}
           >
             ←
           </Link>
@@ -157,13 +163,13 @@ export default function CalendarPage() {
             to={`/calendar?view=${view}&date=${todayStr}${projectParam}`}
             className="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            Today
+            {t("calendar.btn_today")}
           </Link>
           <Link
             to={`/calendar?view=${view}&date=${navDates.next}${projectParam}`}
             className="p-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-            title="Next"
-            aria-label="Next"
+            title={t("calendar.btn_next")}
+            aria-label={t("calendar.btn_next")}
           >
             →
           </Link>
@@ -175,7 +181,7 @@ export default function CalendarPage() {
         {/* Project Filter (FR-35 c2) */}
         <div className="flex items-center gap-3" data-testid="calendar-project-filter">
           <label htmlFor="calendar-project-select" className="text-xs font-medium text-gray-500 shrink-0">
-            Project:
+            {t("calendar.label_project")}
           </label>
           <Form method="get" className="shrink-0">
             <input type="hidden" name="view" value={view} />
@@ -189,7 +195,7 @@ export default function CalendarPage() {
               }}
               className="block rounded-lg border border-gray-300 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-gray-900 shadow-2xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">All Projects</option>
+              <option value="">{t("calendar.all_projects")}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.code} - {p.name}
@@ -209,6 +215,7 @@ export default function CalendarPage() {
 }
 
 function DayView({ date, events }: { date: string; events: CalendarEvent[] }) {
+  const { t } = useTranslation();
   const dayEvents = events.filter((e) =>
     e.isSpan && e.startDate ? e.startDate <= date && e.dueDate >= date : e.dueDate === date,
   );
@@ -219,12 +226,14 @@ function DayView({ date, events }: { date: string; events: CalendarEvent[] }) {
       data-testid="calendar-day-view"
     >
       <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-900">Scheduled Items ({dayEvents.length})</h3>
+        <h3 className="text-sm font-semibold text-gray-900">
+          {t("calendar.day_scheduled_items", { count: dayEvents.length })}
+        </h3>
         <span className="text-xs text-gray-500">{date}</span>
       </div>
 
       {dayEvents.length === 0 ? (
-        <p className="text-sm text-gray-500 italic py-8 text-center">No tasks scheduled for this day.</p>
+        <p className="text-sm text-gray-500 italic py-8 text-center">{t("calendar.day_empty")}</p>
       ) : (
         <div className="divide-y divide-gray-100 space-y-3">
           {dayEvents.map((event) => (
@@ -241,10 +250,12 @@ function DayView({ date, events }: { date: string; events: CalendarEvent[] }) {
                   <span className="text-xs text-gray-500">{event.projectName}</span>
                   {event.isSpan ? (
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800">
-                      Span: {event.startDate} → {event.dueDate}
+                      {t("calendar.span_format", { start: event.startDate, end: event.dueDate })}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center text-xs text-gray-500">Due {event.dueDate}</span>
+                    <span className="inline-flex items-center text-xs text-gray-500">
+                      {t("calendar.due_format", { date: event.dueDate })}
+                    </span>
                   )}
                 </div>
               </div>
@@ -278,7 +289,9 @@ function WeekView({
   events: CalendarEvent[];
   todayStr: string;
 }) {
+  const { t, i18n } = useTranslation();
   const days = getDaysBetween(range.from, range.to);
+  const locale = i18n.language === "vi" ? "vi-VN" : "en-US";
 
   return (
     <div
@@ -289,7 +302,7 @@ function WeekView({
         {days.map((dayStr) => {
           const [y, m, d] = dayStr.split("-").map(Number);
           const dt = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
-          const dayName = dt.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+          const dayName = dt.toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" });
           const isToday = dayStr === todayStr;
 
           return (
@@ -330,7 +343,9 @@ function WeekView({
                     {e.projectCode}-{e.number}
                   </div>
                   <div className="truncate">{e.title}</div>
-                  {e.isSpan && <div className="text-[10px] text-purple-700 font-medium">Span</div>}
+                  {e.isSpan && (
+                    <div className="text-[10px] text-purple-700 font-medium">{t("calendar.span_badge")}</div>
+                  )}
                 </Link>
               ))}
             </div>
@@ -350,6 +365,7 @@ function MonthView({
   events: CalendarEvent[];
   todayStr: string;
 }) {
+  const { t, i18n } = useTranslation();
   const days = getDaysBetween(range.from, range.to);
 
   // Determine starting weekday offset for the first day of the month (Monday = 0, Sunday = 6)
@@ -358,7 +374,10 @@ function MonthView({
   const firstDayOfWeek = firstDate.getUTCDay(); // 0 is Sun, 1 is Mon...
   const leadingBlankCount = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
 
-  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weekdays =
+    i18n.language === "vi"
+      ? ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   return (
     <div
@@ -417,7 +436,9 @@ function MonthView({
                   </Link>
                 ))}
                 {matching.length > 3 && (
-                  <span className="text-[10px] text-gray-500 italic block pl-1">+{matching.length - 3} more</span>
+                  <span className="text-[10px] text-gray-500 italic block pl-1">
+                    {t("calendar.more_tasks", { count: matching.length - 3 })}
+                  </span>
                 )}
               </div>
             </div>

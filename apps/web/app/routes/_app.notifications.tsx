@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, useLoaderData } from "react-router";
 
@@ -60,25 +61,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
   return Response.json({ success: false, message: `Unknown intent: ${intentStr}` }, { status: 400 });
 }
 
-function formatNotificationMessage(type: NotificationType, payload: NotificationPayload): string {
-  switch (type) {
-    case "TASK_ASSIGNED":
-      return `${payload.actorName} assigned you to this task`;
-    case "TASK_COMMENTED":
-      return `${payload.actorName} commented on this task`;
-    case "TASK_APPROVED":
-      return `${payload.actorName} approved this task`;
-    case "TASK_REJECTED":
-      return `${payload.actorName} rejected this task`;
-    case "TASK_REOPENED":
-      return `${payload.actorName} reopened this task`;
-    case "PROJECT_MEMBER_ADDED":
-      return `${payload.actorName} added you to this project`;
-  }
-}
-
 export default function NotificationsRoute() {
+  const { t } = useTranslation();
   const { notifications, unreadCount } = useLoaderData<typeof loader>();
+
+  function formatNotificationMessage(type: NotificationType, payload: NotificationPayload): string {
+    switch (type) {
+      case "TASK_ASSIGNED":
+        return t("notifications.type_task_assigned", { actorName: payload.actorName });
+      case "TASK_COMMENTED":
+        return t("notifications.type_task_commented", { actorName: payload.actorName });
+      case "TASK_APPROVED":
+        return t("notifications.type_task_approved", { actorName: payload.actorName });
+      case "TASK_REJECTED":
+        return t("notifications.type_task_rejected", { actorName: payload.actorName });
+      case "TASK_REOPENED":
+        return t("notifications.type_task_reopened", { actorName: payload.actorName });
+      case "PROJECT_MEMBER_ADDED":
+        return t("notifications.type_project_member_added", { actorName: payload.actorName });
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto py-4">
@@ -86,14 +88,14 @@ export default function NotificationsRoute() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900" data-testid="notification-center-title">
-            Notifications
+            {t("notifications.title")}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            You have{" "}
+            {t("notifications.subtitle_prefix")}{" "}
             <span className="font-semibold text-blue-600" data-testid="unread-count">
               {unreadCount}
             </span>{" "}
-            unread notification{unreadCount === 1 ? "" : "s"}
+            {unreadCount === 1 ? t("notifications.subtitle_unread") : t("notifications.subtitle_unread_plural")}
           </p>
         </div>
 
@@ -105,7 +107,7 @@ export default function NotificationsRoute() {
               className="rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
               data-testid="mark-all-read-btn"
             >
-              Mark all as read
+              {t("notifications.btn_mark_all_read")}
             </button>
           </Form>
         ) : null}
@@ -117,7 +119,7 @@ export default function NotificationsRoute() {
           className="text-center py-12 rounded-xl border border-gray-200 bg-white"
           data-testid="no-notifications-msg"
         >
-          <p className="text-gray-500 text-sm">No notifications found.</p>
+          <p className="text-gray-500 text-sm">{t("notifications.empty")}</p>
         </div>
       ) : (
         <ul
@@ -157,7 +159,7 @@ export default function NotificationsRoute() {
                         className="text-xs text-red-600 bg-red-50 p-2 rounded mt-1 border border-red-100"
                         data-testid={`notification-reason-${n.id}`}
                       >
-                        <span className="font-semibold">Reason:</span> {n.payload.reason}
+                        <span className="font-semibold">{t("notifications.reason_label")}</span> {n.payload.reason}
                       </p>
                     ) : null}
 
@@ -173,7 +175,7 @@ export default function NotificationsRoute() {
                         className="text-xs font-medium text-gray-500 hover:text-blue-600 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
                         data-testid={`mark-read-btn-${n.id}`}
                       >
-                        Mark as read
+                        {t("notifications.btn_mark_read")}
                       </button>
                     </Form>
                   ) : null}

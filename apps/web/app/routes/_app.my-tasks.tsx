@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Form, Link, useLoaderData, useSearchParams } from "react-router";
 
@@ -17,6 +18,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export default function MyTasksPage() {
+  const { t } = useTranslation();
   const { tasks, filters, projects, statuses } = useLoaderData<MyTasksLoaderData>();
   const [searchParams] = useSearchParams();
 
@@ -29,10 +31,8 @@ export default function MyTasksPage() {
   return (
     <div className="space-y-6" data-testid="my-tasks-container">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Tasks assigned to you across your accessible projects ({tasks.total} total).
-        </p>
+        <h1 className="text-2xl font-bold text-gray-900">{t("my_tasks.title")}</h1>
+        <p className="mt-1 text-sm text-gray-500">{t("my_tasks.subtitle", { total: tasks.total })}</p>
       </div>
 
       {/* Filter Bar */}
@@ -40,7 +40,7 @@ export default function MyTasksPage() {
         <Form method="get" className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end">
           <div>
             <label htmlFor="filter-project" className="block text-xs font-medium text-gray-700">
-              Project
+              {t("my_tasks.filter_project")}
             </label>
             <select
               id="filter-project"
@@ -49,7 +49,7 @@ export default function MyTasksPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-project-select"
             >
-              <option value="">All Projects</option>
+              <option value="">{t("my_tasks.filter_all_projects")}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.code} - {p.name}
@@ -60,7 +60,7 @@ export default function MyTasksPage() {
 
           <div>
             <label htmlFor="filter-status" className="block text-xs font-medium text-gray-700">
-              Status
+              {t("my_tasks.filter_status")}
             </label>
             <select
               id="filter-status"
@@ -69,7 +69,7 @@ export default function MyTasksPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-status-select"
             >
-              <option value="">All Statuses</option>
+              <option value="">{t("my_tasks.filter_all_statuses")}</option>
               {statuses.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -80,7 +80,7 @@ export default function MyTasksPage() {
 
           <div>
             <label htmlFor="filter-priority" className="block text-xs font-medium text-gray-700">
-              Priority
+              {t("my_tasks.filter_priority")}
             </label>
             <select
               id="filter-priority"
@@ -89,7 +89,7 @@ export default function MyTasksPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-priority-select"
             >
-              <option value="">All Priorities</option>
+              <option value="">{t("my_tasks.filter_all_priorities")}</option>
               {TASK_PRIORITIES.map((p: TaskPriority) => (
                 <option key={p} value={p}>
                   {p}
@@ -100,7 +100,7 @@ export default function MyTasksPage() {
 
           <div>
             <label htmlFor="filter-due-range" className="block text-xs font-medium text-gray-700">
-              Due Date
+              {t("my_tasks.filter_due_date")}
             </label>
             <select
               id="filter-due-range"
@@ -109,10 +109,10 @@ export default function MyTasksPage() {
               className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               data-testid="filter-due-range-select"
             >
-              <option value="all">All Dates</option>
-              <option value="overdue">Overdue</option>
-              <option value="today">Due Today</option>
-              <option value="week">Due This Week</option>
+              <option value="all">{t("my_tasks.filter_all_dates")}</option>
+              <option value="overdue">{t("my_tasks.filter_overdue")}</option>
+              <option value="today">{t("my_tasks.filter_due_today")}</option>
+              <option value="week">{t("my_tasks.filter_due_week")}</option>
             </select>
           </div>
 
@@ -122,14 +122,14 @@ export default function MyTasksPage() {
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm"
               data-testid="apply-filters-button"
             >
-              Apply
+              {t("my_tasks.btn_apply")}
             </button>
             <Link
               to="/my-tasks"
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-center"
               data-testid="reset-filters-link"
             >
-              Reset
+              {t("my_tasks.btn_reset")}
             </Link>
           </div>
         </Form>
@@ -139,18 +139,18 @@ export default function MyTasksPage() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         {tasks.items.length === 0 ? (
           <div className="p-12 text-center" data-testid="empty-my-tasks">
-            <h3 className="text-base font-semibold text-gray-900">No tasks found</h3>
-            <p className="mt-1 text-sm text-gray-500">You have no tasks matching the selected filters.</p>
+            <h3 className="text-base font-semibold text-gray-900">{t("my_tasks.empty_title")}</h3>
+            <p className="mt-1 text-sm text-gray-500">{t("my_tasks.empty_desc")}</p>
           </div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200 text-left text-sm" data-testid="my-tasks-table">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
               <tr>
-                <th className="px-6 py-3">Task</th>
-                <th className="px-6 py-3">Project</th>
-                <th className="px-6 py-3">Priority</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Due Date</th>
+                <th className="px-6 py-3">{t("my_tasks.th_task")}</th>
+                <th className="px-6 py-3">{t("my_tasks.th_project")}</th>
+                <th className="px-6 py-3">{t("my_tasks.th_priority")}</th>
+                <th className="px-6 py-3">{t("my_tasks.th_status")}</th>
+                <th className="px-6 py-3">{t("my_tasks.th_due_date")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
@@ -197,11 +197,11 @@ export default function MyTasksPage() {
                       <span className="text-sm text-gray-500">{task.dueDate ?? "—"}</span>
                       {task.isOverdue ? (
                         <span className="inline-flex rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                          OVERDUE
+                          {t("my_tasks.badge_overdue")}
                         </span>
                       ) : task.isDueSoon ? (
                         <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                          DUE SOON
+                          {t("my_tasks.badge_due_soon")}
                         </span>
                       ) : null}
                     </div>
@@ -219,8 +219,11 @@ export default function MyTasksPage() {
             data-testid="pagination-bar"
           >
             <div className="text-sm text-gray-500">
-              Showing {(tasks.page - 1) * tasks.pageSize + 1} to {Math.min(tasks.page * tasks.pageSize, tasks.total)} of{" "}
-              {tasks.total} tasks
+              {t("my_tasks.pagination_showing", {
+                from: (tasks.page - 1) * tasks.pageSize + 1,
+                to: Math.min(tasks.page * tasks.pageSize, tasks.total),
+                total: tasks.total,
+              })}
             </div>
             <div className="flex items-center gap-2">
               {tasks.page > 1 ? (
@@ -229,15 +232,15 @@ export default function MyTasksPage() {
                   className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   data-testid="prev-page-button"
                 >
-                  Previous
+                  {t("my_tasks.pagination_prev")}
                 </Link>
               ) : (
                 <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
-                  Previous
+                  {t("my_tasks.pagination_prev")}
                 </span>
               )}
               <span className="text-sm font-medium text-gray-700" data-testid="page-indicator">
-                Page {tasks.page} of {tasks.totalPages}
+                {t("my_tasks.pagination_page_info", { page: tasks.page, total: tasks.totalPages })}
               </span>
               {tasks.page < tasks.totalPages ? (
                 <Link
@@ -245,11 +248,11 @@ export default function MyTasksPage() {
                   className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   data-testid="next-page-button"
                 >
-                  Next
+                  {t("my_tasks.pagination_next")}
                 </Link>
               ) : (
                 <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
-                  Next
+                  {t("my_tasks.pagination_next")}
                 </span>
               )}
             </div>
