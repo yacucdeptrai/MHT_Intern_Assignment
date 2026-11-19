@@ -1,15 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} must be set in apps/web/.dev.vars or the environment`);
-  }
-  return value;
-}
-
-const adminEmail = requireEnv("ADMIN_SEED_EMAIL");
-const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
+import { signInAsAdmin } from "./helpers";
 
 test.describe("Invite & Password Setup Journey (FR-37)", () => {
   test("full flow: admin invites user -> user sets password -> user signs in -> invite link is invalidated", async ({
@@ -17,11 +8,7 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     page,
   }) => {
     // 1. Admin logs in and visits /admin/users
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(adminEmail);
-    await page.getByLabel("Password").fill(adminPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/admin**");
+    await signInAsAdmin(page);
 
     await page.goto("/admin/users");
     await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toBeVisible();
