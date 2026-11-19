@@ -237,7 +237,7 @@ export class OAuthStrategy extends Strategy<SessionUser, OAuthProfile> {
     const savedData = (await cookieHelper.parse(cookieHeader)) as OAuthStateData | null;
 
     if (!savedData?.state || !state || savedData.state !== state) {
-      throw new ValidationError("Authentication failed. Please try again.");
+      throw new ValidationError("Authentication failed. Please try again.", { key: "errors.auth_failed" });
     }
 
     const profile = await this.client.exchangeCode(this.provider, code, redirectUri);

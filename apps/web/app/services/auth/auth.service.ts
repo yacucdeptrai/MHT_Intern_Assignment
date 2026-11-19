@@ -16,7 +16,7 @@ export const authService = {
     const user = await userRepository.findByEmail(ctx.db, normalizedEmail, { includeDeleted: true });
 
     if (!user?.passwordHash || user.passwordIterations === null) {
-      throw new ValidationError("Email or password is incorrect");
+      throw new ValidationError("Email or password is incorrect", { key: "errors.auth_invalid_credentials" });
     }
 
     const isValid = await verifyPassword(credentials.password, {
@@ -25,12 +25,14 @@ export const authService = {
     });
 
     if (!isValid) {
-      throw new ValidationError("Email or password is incorrect");
+      throw new ValidationError("Email or password is incorrect", { key: "errors.auth_invalid_credentials" });
     }
 
     // The account state is revealed only after the password is verified (FR-01 criterion 3).
     if (user.status === "LOCKED" || user.deletedAt !== null) {
-      throw new ValidationError("This account is locked. Contact an administrator.");
+      throw new ValidationError("This account is locked. Contact an administrator.", {
+        key: "errors.auth_account_locked",
+      });
     }
 
     if (needsRehash({ hash: user.passwordHash, iterations: user.passwordIterations })) {
@@ -53,11 +55,15 @@ export const authService = {
     const user = await userRepository.findByEmail(ctx.db, normalizedEmail, { includeDeleted: true });
 
     if (!user || user.deletedAt !== null) {
-      throw new ValidationError("No account exists for this email. Ask an administrator for an invite.");
+      throw new ValidationError("No account exists for this email. Ask an administrator for an invite.", {
+        key: "errors.auth_no_account",
+      });
     }
 
     if (user.status === "LOCKED") {
-      throw new ValidationError("This account is locked. Contact an administrator.");
+      throw new ValidationError("This account is locked. Contact an administrator.", {
+        key: "errors.auth_account_locked",
+      });
     }
 
     const existingAccount = await oauthAccountRepository.findByProviderAccount(

@@ -21,14 +21,16 @@ export const reportService = {
     filters: MemberReportFilters,
   ): Promise<MemberReportRow[]> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     const actor = toActor(ctx.user, access);
 
     if (!canViewMemberReport(actor)) {
-      throw new ForbiddenError("Insufficient permissions to view member report");
+      throw new ForbiddenError("Insufficient permissions to view member report", {
+        key: "errors.report_member_forbidden",
+      });
     }
 
     const now = ctx.clock.now();
@@ -56,14 +58,16 @@ export const reportService = {
 
   async getProjectReport(ctx: RequestContext, projectId: string): Promise<ProjectReportDto> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     const actor = toActor(ctx.user, access);
 
     if (!canViewProjectReport(actor)) {
-      throw new ForbiddenError("Insufficient permissions to view project report");
+      throw new ForbiddenError("Insufficient permissions to view project report", {
+        key: "errors.report_project_forbidden",
+      });
     }
 
     const now = ctx.clock.now();

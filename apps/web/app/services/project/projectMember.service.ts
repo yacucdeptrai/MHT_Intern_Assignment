@@ -43,7 +43,7 @@ import { notificationService } from "../notification.service";
 export async function assertNotLastPm(db: AppDatabase, projectId: string): Promise<void> {
   const pmCount = await projectMemberRepository.countByProjectAndRole(db, projectId, "PM");
   if (pmCount <= 1) {
-    throw new ValidationError("A project needs at least one PM");
+    throw new ValidationError("A project needs at least one PM", { key: "errors.project_needs_pm" });
   }
 }
 
@@ -82,7 +82,9 @@ export const projectMemberService = {
     const actor = toActor(ctx.user, access);
 
     if (!canManageMembers(actor)) {
-      throw new ForbiddenError("You do not have permission to manage members of this project");
+      throw new ForbiddenError("You do not have permission to manage members of this project", {
+        key: "errors.member_manage_forbidden",
+      });
     }
 
     const parsed = UserSearchSchema.safeParse(rawInput);
@@ -99,12 +101,14 @@ export const projectMemberService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageMembers(actor)) {
-      throw new ForbiddenError("You do not have permission to manage members of this project");
+      throw new ForbiddenError("You do not have permission to manage members of this project", {
+        key: "errors.member_manage_forbidden",
+      });
     }
 
     const parsed = MemberAddSchema.safeParse(rawInput);
@@ -115,7 +119,7 @@ export const projectMemberService = {
         if (!fieldErrors[path]) fieldErrors[path] = [];
         fieldErrors[path].push(issue.message);
       }
-      throw new ValidationError("Invalid member data", fieldErrors);
+      throw new ValidationError("Invalid member data", { key: "errors.member_invalid_data", fieldErrors: fieldErrors });
     }
 
     const { userId, projectRole } = parsed.data;
@@ -123,14 +127,20 @@ export const projectMemberService = {
     const targetUser = await userRepository.findById(ctx.db, userId);
     if (!targetUser || targetUser.status !== "ACTIVE") {
       throw new ValidationError("User not found or inactive", {
-        userId: ["User not found or inactive"],
+        key: "errors.user_inactive_or_not_found",
+        fieldErrors: {
+          userId: ["User not found or inactive"],
+        },
       });
     }
 
     const existingMember = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, userId);
     if (existingMember) {
       throw new ValidationError("Already a member", {
-        userId: ["Already a member"],
+        key: "errors.already_a_member",
+        fieldErrors: {
+          userId: ["Already a member"],
+        },
       });
     }
 
@@ -177,7 +187,10 @@ export const projectMemberService = {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("UNIQUE") || msg.includes("PRIMARY") || msg.includes("uq_")) {
         throw new ValidationError("Already a member", {
-          userId: ["Already a member"],
+          key: "errors.already_a_member",
+          fieldErrors: {
+            userId: ["Already a member"],
+          },
         });
       }
       throw err;
@@ -202,12 +215,14 @@ export const projectMemberService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageMembers(actor)) {
-      throw new ForbiddenError("You do not have permission to manage members of this project");
+      throw new ForbiddenError("You do not have permission to manage members of this project", {
+        key: "errors.member_manage_forbidden",
+      });
     }
 
     const parsed = MemberIdSchema.safeParse(rawInput);
@@ -218,14 +233,14 @@ export const projectMemberService = {
         if (!fieldErrors[path]) fieldErrors[path] = [];
         fieldErrors[path].push(issue.message);
       }
-      throw new ValidationError("Invalid member ID", fieldErrors);
+      throw new ValidationError("Invalid member ID", { key: "errors.member_invalid_id", fieldErrors: fieldErrors });
     }
 
     const { userId } = parsed.data;
 
     const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, userId);
     if (!member) {
-      throw new NotFoundError("Member not found in project");
+      throw new NotFoundError("Member not found in project", { key: "errors.member_not_found_in_project" });
     }
 
     if (member.projectRole === "PM") {
@@ -257,7 +272,7 @@ export const projectMemberService = {
       ]);
     } catch (err) {
       if (isVersionConflict(err)) {
-        throw new ConflictError("Member was modified concurrently");
+        throw new ConflictError("Member was modified concurrently", { key: "errors.member_conflict" });
       }
       throw err;
     }
@@ -283,12 +298,14 @@ export const projectMemberService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageMembers(actor)) {
-      throw new ForbiddenError("You do not have permission to manage members of this project");
+      throw new ForbiddenError("You do not have permission to manage members of this project", {
+        key: "errors.member_manage_forbidden",
+      });
     }
 
     const parsed = MemberInviteSchema.safeParse(rawInput);
@@ -299,7 +316,7 @@ export const projectMemberService = {
         if (!fieldErrors[path]) fieldErrors[path] = [];
         fieldErrors[path].push(issue.message);
       }
-      throw new ValidationError("Invalid invite data", fieldErrors);
+      throw new ValidationError("Invalid invite data", { key: "errors.invite_invalid_data", fieldErrors: fieldErrors });
     }
 
     const { email, projectRole } = parsed.data;
@@ -309,7 +326,10 @@ export const projectMemberService = {
       const existingMember = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, existingUser.id);
       if (existingMember) {
         throw new ValidationError("User is already a member of this project", {
-          email: ["User is already a member of this project"],
+          key: "errors.user_already_member",
+          fieldErrors: {
+            email: ["User is already a member of this project"],
+          },
         });
       }
     }
@@ -339,12 +359,14 @@ export const projectMemberService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageMembers(actor)) {
-      throw new ForbiddenError("You do not have permission to manage members of this project");
+      throw new ForbiddenError("You do not have permission to manage members of this project", {
+        key: "errors.member_manage_forbidden",
+      });
     }
 
     const parsed = MemberRoleSchema.safeParse(rawInput);
@@ -355,14 +377,14 @@ export const projectMemberService = {
         if (!fieldErrors[path]) fieldErrors[path] = [];
         fieldErrors[path].push(issue.message);
       }
-      throw new ValidationError("Invalid role data", fieldErrors);
+      throw new ValidationError("Invalid role data", { key: "errors.role_invalid_data", fieldErrors: fieldErrors });
     }
 
     const { userId, projectRole } = parsed.data;
 
     const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, userId);
     if (!member) {
-      throw new NotFoundError("Member not found in project");
+      throw new NotFoundError("Member not found in project", { key: "errors.member_not_found_in_project" });
     }
 
     if (member.projectRole === "PM" && projectRole !== "PM") {
@@ -392,7 +414,7 @@ export const projectMemberService = {
       ]);
     } catch (err) {
       if (isVersionConflict(err)) {
-        throw new ConflictError("Member was modified concurrently");
+        throw new ConflictError("Member was modified concurrently", { key: "errors.member_conflict" });
       }
       throw err;
     }

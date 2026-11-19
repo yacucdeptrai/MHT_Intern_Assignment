@@ -118,7 +118,7 @@ export const inviteService = {
     const now = ctx.clock.now();
 
     if (!invite || invite.acceptedAt !== null || invite.expiresAt <= now) {
-      throw new ValidationError("This invite is invalid or has expired");
+      throw new ValidationError("This invite is invalid or has expired", { key: "errors.invite_invalid_or_expired" });
     }
 
     const { hash, iterations } = await hashPassword(password);

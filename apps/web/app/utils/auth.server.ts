@@ -103,7 +103,7 @@ export async function loadProjectAccess(ctx: RequestContext, projectId: string):
 
   const project = await projectRepository.findByIdIncludingArchived(ctx.db, projectId);
   if (!project) {
-    throw new NotFoundError("Project not found");
+    throw new NotFoundError("Project not found", { key: "errors.project_not_found" });
   }
 
   const isArchived = project.deletedAt !== null;
@@ -119,12 +119,12 @@ export async function loadProjectAccess(ctx: RequestContext, projectId: string):
   }
 
   if (isArchived) {
-    throw new NotFoundError("Project not found");
+    throw new NotFoundError("Project not found", { key: "errors.project_not_found" });
   }
 
   const member = await projectMemberRepository.findByProjectAndUser(ctx.db, projectId, ctx.user.id);
   if (!member) {
-    throw new NotFoundError("Project not found");
+    throw new NotFoundError("Project not found", { key: "errors.project_not_found" });
   }
 
   return {

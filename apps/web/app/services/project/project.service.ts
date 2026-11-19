@@ -37,7 +37,9 @@ export const projectService = {
 
     const actor = toActor(ctx.user, null);
     if (!canManageProject(actor, "create")) {
-      throw new ForbiddenError("You do not have permission to create a project");
+      throw new ForbiddenError("You do not have permission to create a project", {
+        key: "errors.project_create_forbidden",
+      });
     }
 
     const parsed = ProjectCreateSchema.safeParse(input);
@@ -50,7 +52,10 @@ export const projectService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid project data", fieldErrors);
+      throw new ValidationError("Invalid project data", {
+        key: "errors.project_invalid_data",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data = parsed.data;
@@ -58,7 +63,10 @@ export const projectService = {
     const existing = await projectRepository.findByCode(ctx.db, data.code);
     if (existing) {
       throw new ValidationError("Project code is already in use", {
-        code: ["Project code is already in use"],
+        key: "errors.project_code_in_use",
+        fieldErrors: {
+          code: ["Project code is already in use"],
+        },
       });
     }
 
@@ -138,12 +146,14 @@ export const projectService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(ctx.user, access);
     if (!canManageProject(actor, "update")) {
-      throw new ForbiddenError("You do not have permission to update this project");
+      throw new ForbiddenError("You do not have permission to update this project", {
+        key: "errors.project_update_forbidden",
+      });
     }
 
     const parsed = ProjectUpdateSchema.safeParse(input);
@@ -156,7 +166,10 @@ export const projectService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid project data", fieldErrors);
+      throw new ValidationError("Invalid project data", {
+        key: "errors.project_invalid_data",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const data = parsed.data;
@@ -167,7 +180,10 @@ export const projectService = {
     const effectiveEndDate = data.endDate ?? existing.endDate;
     if (effectiveEndDate < effectiveStartDate) {
       throw new ValidationError("End date must be on or after start date", {
-        endDate: ["End date must be on or after start date"],
+        key: "errors.end_date_order",
+        fieldErrors: {
+          endDate: ["End date must be on or after start date"],
+        },
       });
     }
 
@@ -227,7 +243,7 @@ export const projectService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Project was modified concurrently");
+        throw new ConflictError("Project was modified concurrently", { key: "errors.project_conflict" });
       }
       throw error;
     }
@@ -252,12 +268,14 @@ export const projectService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(ctx.user, access);
     if (!canManageProject(actor, "archive")) {
-      throw new ForbiddenError("You do not have permission to archive this project");
+      throw new ForbiddenError("You do not have permission to archive this project", {
+        key: "errors.project_archive_forbidden",
+      });
     }
 
     const now = ctx.clock.now();
@@ -283,7 +301,7 @@ export const projectService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("Project was modified concurrently");
+        throw new ConflictError("Project was modified concurrently", { key: "errors.project_conflict" });
       }
       throw error;
     }
@@ -325,7 +343,7 @@ export const projectService = {
     const actor = toActor(ctx.user, access);
 
     if (!canViewProject(actor)) {
-      throw new NotFoundError("Project not found");
+      throw new NotFoundError("Project not found", { key: "errors.project_not_found" });
     }
 
     const permissions = getProjectPermissions(actor);
@@ -356,7 +374,9 @@ export const projectService = {
     const actor = toActor(ctx.user, access);
 
     if (actor.systemRole !== "ADMIN" && actor.projectRole !== "PM") {
-      throw new ForbiddenError("You do not have permission to view project settings");
+      throw new ForbiddenError("You do not have permission to view project settings", {
+        key: "errors.project_settings_forbidden",
+      });
     }
 
     const permissions = getProjectPermissions(actor);

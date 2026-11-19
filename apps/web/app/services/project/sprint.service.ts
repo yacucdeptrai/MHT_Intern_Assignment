@@ -74,17 +74,22 @@ export const sprintService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageSprint(actor)) {
-      throw new ForbiddenError("Only project leads and admins can manage sprints");
+      throw new ForbiddenError("Only project leads and admins can manage sprints", {
+        key: "errors.sprint_manage_forbidden",
+      });
     }
 
     const parsed = SprintCreateSchema.safeParse(rawInput);
     if (!parsed.success) {
-      throw new ValidationError("Invalid sprint input", extractFieldErrors(parsed.error.issues));
+      throw new ValidationError("Invalid sprint input", {
+        key: "errors.sprint_invalid_input",
+        fieldErrors: extractFieldErrors(parsed.error.issues),
+      });
     }
     const data = parsed.data;
 
@@ -139,23 +144,28 @@ export const sprintService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageSprint(actor)) {
-      throw new ForbiddenError("Only project leads and admins can manage sprints");
+      throw new ForbiddenError("Only project leads and admins can manage sprints", {
+        key: "errors.sprint_manage_forbidden",
+      });
     }
 
     const parsed = SprintUpdateSchema.safeParse(rawInput);
     if (!parsed.success) {
-      throw new ValidationError("Invalid sprint update input", extractFieldErrors(parsed.error.issues));
+      throw new ValidationError("Invalid sprint update input", {
+        key: "errors.sprint_invalid_update",
+        fieldErrors: extractFieldErrors(parsed.error.issues),
+      });
     }
     const data = parsed.data;
 
     const existing = await sprintRepository.findById(ctx.db, data.sprintId);
     if (!existing || existing.projectId !== projectId) {
-      throw new NotFoundError("Sprint not found");
+      throw new NotFoundError("Sprint not found", { key: "errors.sprint_not_found" });
     }
 
     const now = ctx.clock.now();
@@ -195,7 +205,9 @@ export const sprintService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This sprint was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This sprint was changed by someone else. Reload to see the latest version.", {
+          key: "errors.sprint_conflict",
+        });
       }
       throw error;
     }
@@ -221,23 +233,28 @@ export const sprintService = {
 
     const access = await loadProjectAccess(ctx, projectId);
     if (access.isArchived) {
-      throw new ForbiddenError("This project is archived");
+      throw new ForbiddenError("This project is archived", { key: "errors.project_is_archived" });
     }
 
     const actor = toActor(currentUser, access);
     if (!canManageSprint(actor)) {
-      throw new ForbiddenError("Only project leads and admins can manage sprints");
+      throw new ForbiddenError("Only project leads and admins can manage sprints", {
+        key: "errors.sprint_manage_forbidden",
+      });
     }
 
     const parsed = SprintArchiveSchema.safeParse(rawInput);
     if (!parsed.success) {
-      throw new ValidationError("Invalid sprint archive input", extractFieldErrors(parsed.error.issues));
+      throw new ValidationError("Invalid sprint archive input", {
+        key: "errors.sprint_invalid_archive",
+        fieldErrors: extractFieldErrors(parsed.error.issues),
+      });
     }
     const data = parsed.data;
 
     const existing = await sprintRepository.findById(ctx.db, data.sprintId);
     if (!existing || existing.projectId !== projectId) {
-      throw new NotFoundError("Sprint not found");
+      throw new NotFoundError("Sprint not found", { key: "errors.sprint_not_found" });
     }
 
     const now = ctx.clock.now();
@@ -266,7 +283,9 @@ export const sprintService = {
       ]);
     } catch (error) {
       if (isVersionConflict(error)) {
-        throw new ConflictError("This sprint was changed by someone else. Reload to see the latest version.");
+        throw new ConflictError("This sprint was changed by someone else. Reload to see the latest version.", {
+          key: "errors.sprint_conflict",
+        });
       }
       throw error;
     }

@@ -88,14 +88,14 @@ export function buildExportRows(
 export const exportService = {
   async exportTasks(ctx: RequestContext, projectId: string, format: ExportFormat): Promise<ExportResult> {
     if (!ctx.user) {
-      throw new UnauthorizedError("Authentication required");
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
     }
 
     const access = await loadProjectAccess(ctx, projectId);
     const actor = toActor(ctx.user, access);
 
     if (!canExportProject(actor)) {
-      throw new ForbiddenError("Insufficient permissions to export project tasks");
+      throw new ForbiddenError("Insufficient permissions to export project tasks", { key: "errors.export_forbidden" });
     }
 
     const [tasks, assigneeRows] = await Promise.all([

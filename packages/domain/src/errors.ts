@@ -10,21 +10,30 @@ export interface ValidationErrorOptions extends ErrorOptions {
 
 export class AppError extends Error {
   readonly status: number;
-  readonly key?: string | undefined;
-  readonly params?: Record<string, string | number> | undefined;
+  declare readonly key: string | undefined;
+  declare readonly params: Record<string, string | number> | undefined;
 
   constructor(message: string, statusOrOptions: number | ErrorOptions = 500, maybeOptions?: ErrorOptions) {
     super(message);
     this.name = "AppError";
-    if (typeof statusOrOptions === "number") {
-      this.status = statusOrOptions;
-      this.key = maybeOptions?.key;
-      this.params = maybeOptions?.params;
-    } else {
-      this.status = 500;
-      this.key = statusOrOptions.key;
-      this.params = statusOrOptions.params;
-    }
+
+    const status = typeof statusOrOptions === "number" ? statusOrOptions : 500;
+    const key = typeof statusOrOptions === "number" ? maybeOptions?.key : statusOrOptions.key;
+    const params = typeof statusOrOptions === "number" ? maybeOptions?.params : statusOrOptions.params;
+
+    this.status = status;
+    Object.defineProperty(this, "key", {
+      value: key,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+    Object.defineProperty(this, "params", {
+      value: params,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
   }
 }
 

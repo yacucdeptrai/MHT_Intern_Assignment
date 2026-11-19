@@ -15,7 +15,7 @@ import type { RequestContext } from "../utils/requestContext.server";
 
 function getActorContext(ctx: RequestContext): ActorContext {
   if (!ctx.user) {
-    throw new UnauthorizedError("Authentication required");
+    throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
   }
   return {
     userId: ctx.user.id,
@@ -29,7 +29,9 @@ export const auditLogService = {
   async listSystemAuditLogs(ctx: RequestContext, rawFilters: unknown): Promise<AdminAuditLogLoaderData> {
     const actor = getActorContext(ctx);
     if (!canViewAuditLog(actor)) {
-      throw new ForbiddenError("You do not have permission to view the system audit log");
+      throw new ForbiddenError("You do not have permission to view the system audit log", {
+        key: "errors.audit_view_forbidden",
+      });
     }
 
     const parsed = AuditFiltersSchema.safeParse(rawFilters ?? {});
@@ -42,7 +44,10 @@ export const auditLogService = {
           fieldErrors[field].push(issue.message);
         }
       }
-      throw new ValidationError("Invalid audit log filters", fieldErrors);
+      throw new ValidationError("Invalid audit log filters", {
+        key: "errors.audit_invalid_filters",
+        fieldErrors: fieldErrors,
+      });
     }
 
     const filters = parsed.data;

@@ -13,7 +13,9 @@ export async function projectCreateAction(ctx: RequestContext, request: Request)
     const user = await requireUser(ctx, request);
     const actor = toActor(user, null);
     if (!canManageProject(actor, "create")) {
-      throw new ForbiddenError("You do not have permission to create a project");
+      throw new ForbiddenError("You do not have permission to create a project", {
+        key: "errors.project_create_forbidden",
+      });
     }
 
     const formData = await request.formData();
