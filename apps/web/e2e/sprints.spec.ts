@@ -11,11 +11,13 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     // 1. Create a new project
     await page.goto("/projects/new");
     const code = `SPR${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    await page.getByLabel("Project Code").fill(code);
-    await page.getByLabel("Project Name").fill(`Sprints E2E Project ${code}`);
-    await page.getByLabel("Start Date").fill("2026-11-01");
-    await page.getByLabel("End Date").fill("2026-12-31");
-    await page.getByRole("button", { name: "Create Project" }).click();
+    /* cspell:disable */
+    await page.getByLabel(/Project Code|Mã dự án/i).fill(code);
+    await page.getByLabel(/Project Name|Tên dự án/i).fill(`Sprints E2E Project ${code}`);
+    await page.getByLabel(/Start Date|Ngày bắt đầu/i).fill("2026-11-01");
+    await page.getByLabel(/End Date|Ngày kết thúc/i).fill("2026-12-31");
+    await page.getByRole("button", { name: /Create Project|Tạo dự án/i }).click();
+    /* cspell:enable */
 
     await page.waitForURL("**/projects");
     await page.getByRole("link", { name: `Sprints E2E Project ${code}` }).click();
@@ -43,10 +45,12 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     // 4. Verify sprint appears in table with "No tasks" completion rate
     await expect(page.getByTestId("sprints-table")).toBeVisible();
     await expect(page.getByTestId("sprint-name")).toHaveText("Sprint 1 E2E");
-    await expect(page.getByTestId("sprint-completion")).toHaveText("No tasks");
+    /* cspell:disable */
+    await expect(page.getByTestId("sprint-completion")).toHaveText(/No tasks|Chưa có công việc/i);
 
     // 5. Edit sprint
-    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByRole("button", { name: /Edit|Chỉnh sửa/i }).click();
+    /* cspell:enable */
     await expect(page.getByTestId("edit-sprint-form")).toBeVisible();
     await page.getByTestId("edit-sprint-name-input").fill("Sprint 1 Renamed");
     await page.getByTestId("edit-sprint-submit-btn").click();
@@ -77,10 +81,12 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     await page.goto(`/projects/${projectId}/sprints`);
     await page.waitForURL("**/sprints");
     await expect(page.getByTestId("sprint-completion")).toContainText("0%");
-    await expect(page.getByTestId("sprint-completion")).toContainText("0/1 done");
+    /* cspell:disable */
+    await expect(page.getByTestId("sprint-completion")).toContainText(/0\/1 (done|hoàn thành)/i);
 
     // 8. Archive the sprint
-    await page.getByRole("button", { name: "Archive" }).click();
+    await page.getByRole("button", { name: /Archive|Lưu trữ/i }).click();
+    /* cspell:enable */
 
     // Verify sprint is removed from sprints table (empty state appears)
     await expect(page.getByTestId("empty-sprints")).toBeVisible();

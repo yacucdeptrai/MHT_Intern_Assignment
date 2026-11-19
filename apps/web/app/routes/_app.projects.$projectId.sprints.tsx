@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
@@ -31,6 +32,7 @@ interface ActionData {
 }
 
 export default function ProjectSprintsPage() {
+  const { t } = useTranslation();
   const { sprints, permissions } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -58,8 +60,8 @@ export default function ProjectSprintsPage() {
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Sprints</h1>
-          <p className="text-xs text-gray-500 mt-1">Manage project iteration cycles and track completion rates</p>
+          <h1 className="text-xl font-bold text-gray-900">{t("project_sprints.title")}</h1>
+          <p className="text-xs text-gray-500 mt-1">{t("project_sprints.subtitle")}</p>
         </div>
         {permissions.canManageSprint ? (
           <button
@@ -71,7 +73,7 @@ export default function ProjectSprintsPage() {
             className="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             data-testid="create-sprint-btn"
           >
-            Create Sprint
+            {t("project_sprints.btn_create")}
           </button>
         ) : null}
       </div>
@@ -85,7 +87,7 @@ export default function ProjectSprintsPage() {
       {/* Create Sprint Modal / Form */}
       {isCreating && permissions.canManageSprint ? (
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="create-sprint-container">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Create New Sprint</h2>
+          <h2 className="text-base font-semibold text-gray-900 mb-4">{t("project_sprints.create_title")}</h2>
           <Form
             method="post"
             className="space-y-4"
@@ -98,7 +100,7 @@ export default function ProjectSprintsPage() {
 
             <div>
               <label htmlFor="sprint-name" className="block text-xs font-medium text-gray-700 mb-1">
-                Sprint Name
+                {t("project_sprints.label_name")}
               </label>
               <input
                 id="sprint-name"
@@ -106,7 +108,7 @@ export default function ProjectSprintsPage() {
                 name="name"
                 required
                 maxLength={100}
-                placeholder="Sprint 1"
+                placeholder={t("project_sprints.placeholder_name")}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 data-testid="sprint-name-input"
               />
@@ -118,7 +120,7 @@ export default function ProjectSprintsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sprint-startDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  Start Date
+                  {t("project_sprints.label_start_date")}
                 </label>
                 <input
                   id="sprint-startDate"
@@ -135,7 +137,7 @@ export default function ProjectSprintsPage() {
 
               <div>
                 <label htmlFor="sprint-endDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  End Date
+                  {t("project_sprints.label_end_date")}
                 </label>
                 <input
                   id="sprint-endDate"
@@ -159,7 +161,7 @@ export default function ProjectSprintsPage() {
                 }}
                 className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                Cancel
+                {t("project_sprints.btn_cancel")}
               </button>
               <button
                 type="submit"
@@ -167,7 +169,7 @@ export default function ProjectSprintsPage() {
                 className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
                 data-testid="create-sprint-submit-btn"
               >
-                {isSubmitting ? "Creating..." : "Save Sprint"}
+                {isSubmitting ? t("project_sprints.btn_creating") : t("project_sprints.btn_save_sprint")}
               </button>
             </div>
           </Form>
@@ -177,7 +179,9 @@ export default function ProjectSprintsPage() {
       {/* Edit Sprint Form */}
       {editingSprint && permissions.canManageSprint ? (
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="edit-sprint-container">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Edit Sprint: {editingSprint.name}</h2>
+          <h2 className="text-base font-semibold text-gray-900 mb-4">
+            {t("project_sprints.edit_title", { name: editingSprint.name })}
+          </h2>
           <Form
             method="post"
             className="space-y-4"
@@ -191,7 +195,7 @@ export default function ProjectSprintsPage() {
 
             <div>
               <label htmlFor="edit-name" className="block text-xs font-medium text-gray-700 mb-1">
-                Sprint Name
+                {t("project_sprints.label_name")}
               </label>
               <input
                 id="edit-name"
@@ -208,7 +212,7 @@ export default function ProjectSprintsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="edit-startDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  Start Date
+                  {t("project_sprints.label_start_date")}
                 </label>
                 <input
                   id="edit-startDate"
@@ -223,7 +227,7 @@ export default function ProjectSprintsPage() {
 
               <div>
                 <label htmlFor="edit-endDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  End Date
+                  {t("project_sprints.label_end_date")}
                 </label>
                 <input
                   id="edit-endDate"
@@ -245,7 +249,7 @@ export default function ProjectSprintsPage() {
                 }}
                 className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                Cancel
+                {t("project_sprints.btn_cancel")}
               </button>
               <button
                 type="submit"
@@ -253,7 +257,7 @@ export default function ProjectSprintsPage() {
                 className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
                 data-testid="edit-sprint-submit-btn"
               >
-                {isSubmitting ? "Saving..." : "Save Changes"}
+                {isSubmitting ? t("project_sprints.btn_saving") : t("project_sprints.btn_save_changes")}
               </button>
             </div>
           </Form>
@@ -266,7 +270,7 @@ export default function ProjectSprintsPage() {
           className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center"
           data-testid="empty-sprints"
         >
-          <p className="text-sm text-gray-500">No sprints created yet.</p>
+          <p className="text-sm text-gray-500">{t("project_sprints.empty_title")}</p>
           {permissions.canManageSprint ? (
             <button
               type="button"
@@ -275,7 +279,7 @@ export default function ProjectSprintsPage() {
               }}
               className="mt-3 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
             >
-              Create your first sprint
+              {t("project_sprints.empty_create_first")}
             </button>
           ) : null}
         </div>
@@ -288,20 +292,20 @@ export default function ProjectSprintsPage() {
             <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500">
               <tr>
                 <th scope="col" className="px-6 py-3">
-                  Sprint Name
+                  {t("project_sprints.th_name")}
                 </th>
                 <th scope="col" className="px-6 py-3">
-                  Status
+                  {t("project_sprints.th_status")}
                 </th>
                 <th scope="col" className="px-6 py-3">
-                  Duration
+                  {t("project_sprints.th_duration")}
                 </th>
                 <th scope="col" className="px-6 py-3">
-                  Completion Rate
+                  {t("project_sprints.th_completion")}
                 </th>
                 {permissions.canManageSprint ? (
                   <th scope="col" className="px-6 py-3 text-right">
-                    Actions
+                    {t("project_sprints.th_actions")}
                   </th>
                 ) : null}
               </tr>
@@ -323,16 +327,16 @@ export default function ProjectSprintsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-gray-500" data-testid="sprint-dates">
-                    {sprint.startDate} to {sprint.endDate}
+                    {t("project_sprints.duration_format", { start: sprint.startDate, end: sprint.endDate })}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap" data-testid="sprint-completion">
                     {sprint.completionRate === null ? (
-                      <span className="text-gray-400">No tasks</span>
+                      <span className="text-gray-400">{t("project_sprints.no_tasks")}</span>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900">{sprint.completionRate}%</span>
                         <span className="text-xs text-gray-500">
-                          ({sprint.completedCount}/{sprint.taskCount} done)
+                          {t("project_sprints.done_ratio", { done: sprint.completedCount, total: sprint.taskCount })}
                         </span>
                       </div>
                     )}
@@ -349,7 +353,7 @@ export default function ProjectSprintsPage() {
                           className="font-medium text-blue-600 hover:text-blue-500"
                           data-testid={`edit-sprint-btn-${sprint.id}`}
                         >
-                          Edit
+                          {t("project_sprints.btn_edit")}
                         </button>
                         <Form method="post" className="inline" data-testid={`archive-sprint-form-${sprint.id}`}>
                           <input type="hidden" name="intent" value="archive" />
@@ -360,7 +364,7 @@ export default function ProjectSprintsPage() {
                             className="font-medium text-red-600 hover:text-red-500 disabled:opacity-50"
                             data-testid={`archive-sprint-btn-${sprint.id}`}
                           >
-                            Archive
+                            {t("project_sprints.btn_archive")}
                           </button>
                         </Form>
                       </div>
