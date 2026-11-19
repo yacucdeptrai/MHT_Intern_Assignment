@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, useActionData, useNavigation } from "react-router";
 
@@ -31,6 +32,7 @@ interface ActionData {
 export default function ProjectCreatePage() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const isSubmitting = navigation.state === "submitting";
 
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
@@ -50,17 +52,15 @@ export default function ProjectCreatePage() {
         {/* Navigation & Header */}
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Link to="/projects" className="hover:text-gray-900 transition-colors">
-            Projects
+            {t("project_new.breadcrumb_projects")}
           </Link>
           <span>/</span>
-          <span className="text-gray-900 font-medium">New</span>
+          <span className="text-gray-900 font-medium">{t("project_new.breadcrumb_new")}</span>
         </div>
 
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Create New Project</h1>
-          <p className="text-sm text-gray-600">
-            Set up a new project workspace, define timeline, and allocate initial budget.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("project_new.title")}</h1>
+          <p className="text-sm text-gray-600">{t("project_new.description")}</p>
         </div>
 
         {/* Global Error Banner */}
@@ -77,7 +77,7 @@ export default function ProjectCreatePage() {
               {/* Project Code */}
               <div>
                 <label htmlFor="code" className="block text-sm font-medium text-gray-700">
-                  Project Code <span className="text-red-500">*</span>
+                  {t("project_new.code_label")} <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
                   <input
@@ -87,7 +87,7 @@ export default function ProjectCreatePage() {
                     required
                     maxLength={10}
                     defaultValue={values.code ?? ""}
-                    placeholder="e.g. PRJ-101"
+                    placeholder={t("project_new.code_placeholder")}
                     data-testid="input-code"
                     className={`block w-full uppercase font-mono rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                       codeError
@@ -96,7 +96,7 @@ export default function ProjectCreatePage() {
                     }`}
                   />
                 </div>
-                <p className="mt-1 text-xs text-gray-500">2–10 uppercase letters, numbers, or hyphens.</p>
+                <p className="mt-1 text-xs text-gray-500">{t("project_new.code_hint")}</p>
                 {codeError ? (
                   <p className="mt-1 text-xs text-red-600" data-testid="error-code">
                     {codeError}
@@ -107,7 +107,7 @@ export default function ProjectCreatePage() {
               {/* Project Name */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Project Name <span className="text-red-500">*</span>
+                  {t("project_new.name_label")} <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
                   <input
@@ -117,7 +117,7 @@ export default function ProjectCreatePage() {
                     required
                     maxLength={150}
                     defaultValue={values.name ?? ""}
-                    placeholder="e.g. Mobile App Redesign"
+                    placeholder={t("project_new.name_placeholder")}
                     data-testid="input-name"
                     className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                       nameError
@@ -137,7 +137,7 @@ export default function ProjectCreatePage() {
             {/* Description */}
             <div>
               <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Description
+                {t("project_new.description_label")}
               </label>
               <div className="mt-1">
                 <textarea
@@ -146,7 +146,7 @@ export default function ProjectCreatePage() {
                   rows={3}
                   maxLength={10000}
                   defaultValue={values.description ?? ""}
-                  placeholder="Outline high-level goals and project scope..."
+                  placeholder={t("project_new.description_placeholder")}
                   data-testid="input-description"
                   className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                     descriptionError
@@ -166,7 +166,7 @@ export default function ProjectCreatePage() {
               {/* Budget */}
               <div>
                 <label htmlFor="budget" className="block text-sm font-medium text-gray-700">
-                  Budget (VND)
+                  {t("project_new.budget_label")}
                 </label>
                 <div className="mt-1">
                   <input
@@ -175,7 +175,7 @@ export default function ProjectCreatePage() {
                     name="budget"
                     min={0}
                     defaultValue={values.budget ?? ""}
-                    placeholder="e.g. 50000000"
+                    placeholder={t("project_new.budget_placeholder")}
                     data-testid="input-budget"
                     className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                       budgetError
@@ -194,7 +194,7 @@ export default function ProjectCreatePage() {
               {/* Slack Channel ID */}
               <div>
                 <label htmlFor="slackChannelId" className="block text-sm font-medium text-gray-700">
-                  Slack Channel ID
+                  {t("project_new.slack_channel_label")}
                 </label>
                 <div className="mt-1">
                   <input
@@ -203,7 +203,7 @@ export default function ProjectCreatePage() {
                     name="slackChannelId"
                     maxLength={50}
                     defaultValue={values.slackChannelId ?? ""}
-                    placeholder="e.g. C0123456789"
+                    placeholder={t("project_new.slack_channel_placeholder")}
                     data-testid="input-slack"
                     className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
                       slackChannelError
@@ -224,7 +224,7 @@ export default function ProjectCreatePage() {
               {/* Start Date */}
               <div>
                 <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                  Start Date <span className="text-red-500">*</span>
+                  {t("project_new.start_date_label")} <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
                   <input
@@ -251,7 +251,7 @@ export default function ProjectCreatePage() {
               {/* End Date */}
               <div>
                 <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
-                  End Date <span className="text-red-500">*</span>
+                  {t("project_new.end_date_label")} <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
                   <input
@@ -282,7 +282,7 @@ export default function ProjectCreatePage() {
                 to="/projects"
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {t("project_new.cancel")}
               </Link>
               <button
                 type="submit"
@@ -290,7 +290,7 @@ export default function ProjectCreatePage() {
                 data-testid="submit-project-button"
                 className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {isSubmitting ? "Creating..." : "Create Project"}
+                {isSubmitting ? t("project_new.submitting") : t("project_new.submit")}
               </button>
             </div>
           </Form>

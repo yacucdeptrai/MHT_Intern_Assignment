@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -17,6 +18,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
 export default function ProjectsIndexPage() {
   const { projects, canCreate, filter, isAdmin } = useLoaderData<typeof loader>();
+  const { t } = useTranslation();
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-10">
@@ -24,8 +26,8 @@ export default function ProjectsIndexPage() {
         {/* Page Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-            <p className="text-sm text-gray-600">View and manage organization projects and workspaces.</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t("projects.title")}</h1>
+            <p className="text-sm text-gray-600">{t("projects.description")}</p>
           </div>
           {canCreate ? (
             <Link
@@ -33,7 +35,7 @@ export default function ProjectsIndexPage() {
               data-testid="new-project-button"
               className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors"
             >
-              + New Project
+              {t("projects.new_project")}
             </Link>
           ) : null}
         </div>
@@ -50,7 +52,7 @@ export default function ProjectsIndexPage() {
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
-              Active
+              {t("projects.active")}
             </Link>
             <Link
               to="/projects?filter=archived"
@@ -61,7 +63,7 @@ export default function ProjectsIndexPage() {
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
-              Archived
+              {t("projects.archived")}
             </Link>
           </div>
         ) : null}
@@ -70,13 +72,13 @@ export default function ProjectsIndexPage() {
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           {projects.length === 0 ? (
             <div className="p-12 text-center" data-testid="empty-projects">
-              <p className="text-base font-semibold text-gray-900">No projects found</p>
+              <p className="text-base font-semibold text-gray-900">{t("projects.empty_title")}</p>
               <p className="mt-1 text-sm text-gray-500">
                 {filter === "archived"
-                  ? "There are no archived projects."
+                  ? t("projects.empty_archived")
                   : canCreate
-                    ? "Get started by creating your first project."
-                    : "You are not currently assigned to any project."}
+                    ? t("projects.empty_can_create")
+                    : t("projects.empty_not_assigned")}
               </p>
               {canCreate && filter !== "archived" ? (
                 <div className="mt-6">
@@ -84,7 +86,7 @@ export default function ProjectsIndexPage() {
                     to="/projects/new"
                     className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
                   >
-                    Create Project
+                    {t("projects.create_button")}
                   </Link>
                 </div>
               ) : null}
@@ -95,22 +97,22 @@ export default function ProjectsIndexPage() {
                 <thead className="bg-gray-50 text-gray-600 font-medium">
                   <tr>
                     <th scope="col" className="px-6 py-3.5">
-                      Code
+                      {t("projects.th_code")}
                     </th>
                     <th scope="col" className="px-6 py-3.5">
-                      Name
+                      {t("projects.th_name")}
                     </th>
                     <th scope="col" className="px-6 py-3.5">
-                      Status
+                      {t("projects.th_status")}
                     </th>
                     <th scope="col" className="px-6 py-3.5">
-                      Timeline
+                      {t("projects.th_timeline")}
                     </th>
                     <th scope="col" className="px-6 py-3.5">
-                      Budget
+                      {t("projects.th_budget")}
                     </th>
                     <th scope="col" className="px-6 py-3.5">
-                      Role
+                      {t("projects.th_role")}
                     </th>
                   </tr>
                 </thead>
@@ -146,7 +148,7 @@ export default function ProjectsIndexPage() {
                                   : "bg-gray-100 text-gray-800"
                           }`}
                         >
-                          {project.deletedAt ? "ARCHIVED" : project.status}
+                          {project.deletedAt ? t("projects.status_archived") : project.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-xs text-gray-600 whitespace-nowrap">

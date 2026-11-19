@@ -118,6 +118,9 @@ export default tseslint.config(
       "apps/web/app/components/layouts/**/*.{ts,tsx}",
       "apps/web/app/routes/login.tsx",
       "apps/web/app/routes/invite.$token.tsx",
+      "apps/web/app/routes/_app.projects._index.tsx",
+      "apps/web/app/routes/_app.projects.new.tsx",
+      "apps/web/app/routes/_app.projects.$projectId.tsx",
     ],
     plugins: {
       i18next: i18nextPlugin,
