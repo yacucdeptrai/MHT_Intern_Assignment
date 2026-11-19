@@ -159,4 +159,28 @@ describe("projects, invites, and audit_logs schemas", () => {
     });
     await expect(invalidInvite).rejects.toThrow();
   });
+
+  it("enforces audit log entityType check constraint (Lesson #13)", async () => {
+    const db = createDatabase(env.DB);
+    const now = new Date();
+    const adminId = crypto.randomUUID();
+
+    await db.insert(users).values({
+      id: adminId,
+      email: `audit-checker-${adminId}@example.com`,
+      fullName: "Audit Checker",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const invalidAudit = db.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actorId: adminId,
+      action: "USER_CREATED",
+      entityType: "INVALID_ENTITY" as unknown as typeof auditLogs.$inferInsert.entityType,
+      entityId: adminId,
+      createdAt: now,
+    });
+    await expect(invalidAudit).rejects.toThrow();
+  });
 });
