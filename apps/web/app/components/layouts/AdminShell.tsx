@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Form, NavLink } from "react-router";
 
 import type { SessionUser } from "@pm/domain";
 import { APP_NAME } from "@pm/domain";
+
+import { LanguageSwitcher } from "../i18n/LanguageSwitcher";
 
 export interface AdminShellProps {
   user: SessionUser;
@@ -10,6 +13,7 @@ export interface AdminShellProps {
 }
 
 export function AdminShell({ user, children }: AdminShellProps) {
+  const { t } = useTranslation();
   const isAdmin = user.systemRole === "ADMIN";
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -25,48 +29,55 @@ export function AdminShell({ user, children }: AdminShellProps) {
           <div className="border-b border-blue-800 pb-4">
             <span className="block text-lg font-bold tracking-tight text-white">{APP_NAME}</span>
             <span className="inline-block mt-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-blue-800 text-blue-200 rounded">
-              Admin & PM Portal
+              {t("nav.admin_portal")}
             </span>
           </div>
 
           <nav className="space-y-1">
-            <p className="px-3 text-xs font-semibold uppercase tracking-wider text-blue-300 mb-2">Management</p>
+            <p className="px-3 text-xs font-semibold uppercase tracking-wider text-blue-300 mb-2">
+              {t("nav.management")}
+            </p>
             <NavLink to="/admin" end className={navLinkClass}>
-              Dashboard
+              {t("nav.dashboard")}
             </NavLink>
             <NavLink to="/projects" className={navLinkClass}>
-              Projects
+              {t("nav.projects")}
             </NavLink>
 
             {isAdmin ? (
               <>
                 <NavLink to="/admin/users" className={navLinkClass}>
-                  User Management
+                  {t("nav.user_management")}
                 </NavLink>
                 <NavLink to="/admin/statuses" className={navLinkClass}>
-                  Statuses
+                  {t("nav.statuses")}
                 </NavLink>
                 <NavLink to="/admin/audit-log" className={navLinkClass}>
-                  Audit Log
+                  {t("nav.audit_log")}
                 </NavLink>
               </>
             ) : null}
 
-            <p className="px-3 text-xs font-semibold uppercase tracking-wider text-blue-300 mt-6 mb-2">Personal</p>
+            <p className="px-3 text-xs font-semibold uppercase tracking-wider text-blue-300 mt-6 mb-2">
+              {t("nav.personal")}
+            </p>
             <NavLink to="/my-tasks" className={navLinkClass}>
-              My Tasks
+              {t("nav.my_tasks")}
             </NavLink>
             <NavLink to="/calendar" className={navLinkClass}>
-              Calendar
+              {t("nav.calendar")}
             </NavLink>
             <NavLink to="/notifications" className={navLinkClass}>
-              Notifications
+              {t("nav.notifications")}
             </NavLink>
           </nav>
         </div>
 
         {/* User Footer */}
         <div className="p-4 border-t border-blue-800 bg-blue-950/40 space-y-3">
+          <div className="flex justify-between items-center">
+            <LanguageSwitcher />
+          </div>
           <div className="flex items-center gap-3">
             {user.avatarKey ? (
               <img
@@ -98,7 +109,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
               type="submit"
               className="w-full text-center px-3 py-1.5 rounded text-xs font-medium bg-blue-800 text-blue-100 hover:bg-blue-700 hover:text-white transition-colors"
             >
-              Sign out
+              {t("nav.sign_out")}
             </button>
           </Form>
         </div>

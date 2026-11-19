@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 
 import { AcceptInviteSchema, APP_NAME } from "@pm/domain";
 
+import { LanguageSwitcher } from "../components/i18n/LanguageSwitcher";
 import { inviteService } from "../services/invite.service";
 import { handleActionError } from "../utils/errors.server";
 import { requestContextKey } from "../utils/requestContext.server";
@@ -74,6 +76,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 }
 
 export default function InvitePage() {
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<{ success: boolean; errors?: Record<string, string[]>; message?: string }>();
   const navigation = useNavigation();
@@ -91,14 +94,14 @@ export default function InvitePage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
         <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm border border-gray-200 text-center space-y-4">
+          <div className="flex justify-end">
+            <LanguageSwitcher />
+          </div>
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
             <span className="text-xl text-red-600 font-bold">!</span>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">This invite is invalid or has expired</h1>
-          <p className="text-sm text-gray-600">
-            The link you followed has expired, already been used, or does not exist. Please contact your organization
-            administrator for a new invite.
-          </p>
+          <h1 className="text-xl font-bold text-gray-900">{t("invite.invalid_title")}</h1>
+          <p className="text-sm text-gray-600">{t("invite.invalid_description")}</p>
         </div>
       </div>
     );
@@ -111,12 +114,15 @@ export default function InvitePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-sm border border-gray-200">
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
         <div className="text-center space-y-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{APP_NAME}</span>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Accept Invitation</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t("invite.title")}</h1>
           <p className="text-sm text-gray-600">
-            Set a password for <span className="font-semibold text-gray-900">{loaderData.email}</span>
-            {loaderData.projectName ? ` to join ${loaderData.projectName}` : ""}.
+            {t("invite.set_password_for")} <span className="font-semibold text-gray-900">{loaderData.email}</span>
+            {loaderData.projectName ? ` ${t("invite.to_join")} ${loaderData.projectName}` : ""}.
           </p>
         </div>
 
@@ -129,7 +135,7 @@ export default function InvitePage() {
         <Form method="post" className="space-y-4">
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              New Password
+              {t("invite.new_password")}
             </label>
             <input
               ref={passwordRef}
@@ -139,14 +145,14 @@ export default function InvitePage() {
               required
               autoComplete="new-password"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="At least 10 characters"
+              placeholder={t("invite.new_password_placeholder")}
             />
             {passwordError ? <p className="mt-1 text-xs text-red-600">{passwordError}</p> : null}
           </div>
 
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-              Confirm Password
+              {t("invite.confirm_password")}
             </label>
             <input
               id="confirmPassword"
@@ -155,7 +161,7 @@ export default function InvitePage() {
               required
               autoComplete="new-password"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Re-enter password"
+              placeholder={t("invite.confirm_password_placeholder")}
             />
             {confirmPasswordError ? <p className="mt-1 text-xs text-red-600">{confirmPasswordError}</p> : null}
           </div>
@@ -165,7 +171,7 @@ export default function InvitePage() {
             disabled={isSubmitting}
             className="w-full rounded-md bg-blue-600 py-2.5 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
           >
-            {isSubmitting ? "Setting password..." : "Set Password and Sign In"}
+            {isSubmitting ? t("invite.submitting") : t("invite.submit")}
           </button>
         </Form>
       </div>

@@ -38,35 +38,55 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
 
     // 4. In a separate unauthenticated browser context, open the invite URL
     const userContext = await browser.newContext();
+    await userContext.addCookies([
+      {
+        name: "lang",
+        value: "en",
+        domain: "localhost",
+        path: "/",
+      },
+    ]);
     const userPage = await userContext.newPage();
     const invitePath = new URL(inviteUrl).pathname;
 
+    /* cspell:disable */
     await userPage.goto(invitePath);
-    await expect(userPage.getByRole("heading", { level: 1, name: "Accept Invitation" })).toBeVisible();
+    await expect(
+      userPage.getByRole("heading", { level: 1, name: /Accept Invitation|Chấp nhận lời mời/i }),
+    ).toBeVisible();
     await expect(userPage.getByText(testEmail)).toBeVisible();
 
     // 5. Test validation: password mismatch
-    await userPage.getByLabel("New Password").fill("Password123!");
-    await userPage.getByLabel("Confirm Password").fill("Mismatch123!");
-    await userPage.getByRole("button", { name: "Set Password and Sign In" }).click();
+    await userPage.getByLabel(/New Password|Mật khẩu mới/i).fill("Password123!");
+    await userPage.getByLabel(/Confirm Password|Xác nhận mật khẩu/i).fill("Mismatch123!");
+    await userPage.getByRole("button", { name: /Set Password and Sign In|Đặt mật khẩu và Đăng nhập/i }).click();
     await expect(userPage.getByText("Passwords do not match")).toBeVisible();
 
     // 6. Test success: submit matching valid password (>=10 chars)
     const validPassword = "SecurePassword123!";
-    await userPage.getByLabel("New Password").fill(validPassword);
-    await userPage.getByLabel("Confirm Password").fill(validPassword);
-    await userPage.getByRole("button", { name: "Set Password and Sign In" }).click();
+    await userPage.getByLabel(/New Password|Mật khẩu mới/i).fill(validPassword);
+    await userPage.getByLabel(/Confirm Password|Xác nhận mật khẩu/i).fill(validPassword);
+    await userPage.getByRole("button", { name: /Set Password and Sign In|Đặt mật khẩu và Đăng nhập/i }).click();
 
     // 7. User lands on member dashboard and sees their name/email
     await userPage.waitForURL("**/");
-    await expect(userPage.getByRole("heading", { level: 1, name: "Project & Task Management" })).toBeVisible();
-    await expect(userPage.getByText(`Welcome back, ${testName}`)).toBeVisible();
+    await expect(
+      userPage.getByRole("heading", {
+        level: 1,
+        name: /Project & Task Management|Hệ thống Quản lý Dự án & Công việc/i,
+      }),
+    ).toBeVisible();
+    await expect(userPage.getByText(new RegExp(`(Welcome back|Chào mừng trở lại), ${testName}`))).toBeVisible();
 
     // 8. Re-opening the invite link shows invalid / expired error
     await userPage.goto(invitePath);
     await expect(
-      userPage.getByRole("heading", { level: 1, name: "This invite is invalid or has expired" }),
+      userPage.getByRole("heading", {
+        level: 1,
+        name: /This invite is invalid or has expired|Lời mời không hợp lệ hoặc đã hết hạn/i,
+      }),
     ).toBeVisible();
+    /* cspell:enable */
 
     await userContext.close();
   });

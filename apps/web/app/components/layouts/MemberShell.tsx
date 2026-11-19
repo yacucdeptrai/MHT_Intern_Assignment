@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Form, NavLink } from "react-router";
 
 import type { SessionUser } from "@pm/domain";
 import { APP_NAME } from "@pm/domain";
+
+import { LanguageSwitcher } from "../i18n/LanguageSwitcher";
 
 export interface MemberShellProps {
   user: SessionUser;
@@ -10,6 +13,8 @@ export interface MemberShellProps {
 }
 
 export function MemberShell({ user, children }: MemberShellProps) {
+  const { t } = useTranslation();
+
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
       isActive ? "bg-slate-800 text-white font-semibold" : "text-slate-300 hover:bg-slate-700 hover:text-white"
@@ -23,31 +28,34 @@ export function MemberShell({ user, children }: MemberShellProps) {
           <div className="border-b border-slate-800 pb-4">
             <span className="block text-lg font-bold tracking-tight text-white">{APP_NAME}</span>
             <span className="inline-block mt-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-slate-800 text-slate-300 rounded">
-              Workspace
+              {t("nav.workspace")}
             </span>
           </div>
 
           <nav className="space-y-1">
             <NavLink to="/" end className={navLinkClass}>
-              Dashboard
+              {t("nav.dashboard")}
             </NavLink>
             <NavLink to="/my-tasks" className={navLinkClass}>
-              My Tasks
+              {t("nav.my_tasks")}
             </NavLink>
             <NavLink to="/projects" className={navLinkClass}>
-              My Projects
+              {t("nav.my_projects")}
             </NavLink>
             <NavLink to="/calendar" className={navLinkClass}>
-              Calendar
+              {t("nav.calendar")}
             </NavLink>
             <NavLink to="/notifications" className={navLinkClass}>
-              Notifications
+              {t("nav.notifications")}
             </NavLink>
           </nav>
         </div>
 
         {/* User Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 space-y-3">
+          <div className="flex justify-between items-center">
+            <LanguageSwitcher />
+          </div>
           <div className="flex items-center gap-3">
             {user.avatarKey ? (
               <img
@@ -79,7 +87,7 @@ export function MemberShell({ user, children }: MemberShellProps) {
               type="submit"
               className="w-full text-center px-3 py-1.5 rounded text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
             >
-              Sign out
+              {t("nav.sign_out")}
             </button>
           </Form>
         </div>
