@@ -8,7 +8,7 @@
 # fr-pattern  an extended regex for the milestone's FR IDs (for example 'FR-3[0-5]').
 #             Lists every test naming them and, when docs/01-srs.md exists, counts tests per
 #             criterion and prints NOT TESTED for any criterion without a named test.
-# todo-prefix lists TODO markers such as TODO(M8-...), which must be empty at milestone end.
+# todo-prefix lists the TODO markers left for that milestone prefix (for example M8-); there must be none at milestone end.
 set -euo pipefail
 
 first=${1:?usage: milestone-report.sh <first-pr> <last-pr> [fr-pattern] [todo-prefix]}
