@@ -13,6 +13,8 @@ export interface PageHeaderProps {
   meta?: ReactNode;
   /** Tabs rendered flush under the header */
   tabs?: ReactNode;
+  /** 18px top padding (project pages) instead of 20px */
+  dense?: boolean;
   className?: string;
   "data-testid"?: string;
   titleTestId?: string;
@@ -26,6 +28,7 @@ export function PageHeader({
   actions,
   meta,
   tabs,
+  dense = false,
   className,
   "data-testid": testId,
   titleTestId,
@@ -33,7 +36,7 @@ export function PageHeader({
   return (
     <header
       data-testid={testId}
-      className={cx("flex flex-col px-7 pt-5", tabs ? "" : "border-b border-line", className)}
+      className={cx("flex flex-col px-7", dense ? "pt-[18px]" : "pt-5", tabs ? "" : "border-b border-line", className)}
     >
       <div className={cx("flex items-start gap-4", tabs ? "pb-3.5" : "pb-[18px]")}>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">

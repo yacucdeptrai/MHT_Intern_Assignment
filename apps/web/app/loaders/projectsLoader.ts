@@ -15,9 +15,21 @@ export async function projectsLoader(ctx: RequestContext, request: Request) {
   const archivedOnly = isAdmin && filter === "archived";
 
   const projects = await projectService.listProjects(ctx, { archivedOnly });
+  const progress = await projectService.getTaskProgress(
+    ctx,
+    projects.map((project) => project.id),
+  );
+  // Tab counts for the admin Active / Archived tabs.
+  const otherCount = isAdmin ? (await projectService.listProjects(ctx, { archivedOnly: !archivedOnly })).length : 0;
+  const counts = {
+    active: archivedOnly ? otherCount : projects.length,
+    archived: archivedOnly ? projects.length : otherCount,
+  };
 
   return {
     projects,
+    progress,
+    counts,
     canCreate,
     filter,
     isAdmin,

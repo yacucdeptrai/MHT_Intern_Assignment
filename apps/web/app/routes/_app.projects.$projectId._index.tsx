@@ -1,19 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   Form,
   Link,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
+  useParams,
   useRouteLoaderData,
   useSearchParams,
+  useSubmit,
 } from "react-router";
 
-import { APP_NAME, TASK_PRIORITIES, type TaskPriority } from "@pm/domain";
+import { APP_NAME, getTodayDateString, TASK_PRIORITIES, type TaskListItem } from "@pm/domain";
 
 import { projectTasksAction } from "../actions/projectTasksAction";
+import { ListView } from "../components/tasks/TaskList";
+import { BoardView, TimelineView } from "../components/tasks/TaskViews";
+import { Banner } from "../components/ui/Banner";
+import { Button, buttonClass } from "../components/ui/Button";
+import { Checkbox } from "../components/ui/Checkbox";
+import { Dialog } from "../components/ui/Dialog";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Field, Input, Textarea } from "../components/ui/Input";
+import { Icon } from "../components/ui/Icon";
+import { Select } from "../components/ui/Select";
+import { Toast } from "../components/ui/Toast";
+import { ViewSwitcher } from "../components/ui/ViewSwitcher";
+import { translatePriority } from "../i18n/labels";
 import type { ProjectHeaderLoaderData } from "../loaders/projectHeaderLoader";
 import { projectTasksLoader, type ProjectTasksLoaderData } from "../loaders/projectTasksLoader";
 import { requestContextKey } from "../utils/requestContext.server";
@@ -41,474 +57,416 @@ interface ActionData {
   values?: Record<string, string>;
 }
 
+type TaskView = "list" | "board" | "timeline";
+
+function parseView(value: string | null): TaskView {
+  return value === "board" || value === "timeline" ? value : "list";
+}
+
 export default function ProjectIndexPage() {
   const { t } = useTranslation();
+  const { projectId = "" } = useParams();
+  const {
+    tasks: taskPage,
+    members,
+    statuses,
+    sprints,
+    filters,
+    canCreate,
+    canAssign,
+  } = useLoaderData<ProjectTasksLoaderData>();
   const headerData = useRouteLoaderData<ProjectHeaderLoaderData>("routes/_app.projects.$projectId");
-  const { tasks, members, statuses, sprints, filters, canCreate, canAssign } = useLoaderData<ProjectTasksLoaderData>();
+  // Project task rows do not repeat the project code; add it so keys read MOB-142.
+  const projectCode = headerData?.project.code;
+  const tasks = {
+    ...taskPage,
+    items: taskPage.items.map((task) => (task.projectCode || !projectCode ? task : { ...task, projectCode })),
+  };
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const submit = useSubmit();
+  const moveFetcher = useFetcher<ActionData>();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [prevActionData, setPrevActionData] = useState(actionData);
+  const view = parseView(searchParams.get("view"));
+  const hasViewParam = view !== "list";
+  const isCreateRequested = searchParams.has("new");
+  const hasOtherFilters = Boolean(filters.statusId || filters.assigneeId || filters.priority);
+  const [isFilterOpen, setIsFilterOpen] = useState(hasOtherFilters);
 
-  if (actionData !== prevActionData) {
-    setPrevActionData(actionData);
-    if (actionData?.success) {
-      setIsModalOpen(false);
+  // A failed create keeps the dialog open with the typed values; a successful one closes it.
+  const isCreateError = Boolean(actionData && !actionData.success && actionData.values);
+  const isDialogOpen = canCreate && (isCreateRequested || isCreateError);
+  useEffect(() => {
+    if (actionData?.success && searchParams.has("new")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
     }
-  }
+  }, [actionData, searchParams, setSearchParams]);
 
   const isSubmitting = navigation.state === "submitting";
-  const isOpen = isModalOpen;
-  const projectCode = headerData?.project.code ?? "TASK";
+  const hrefFor = (task: TaskListItem) => `/projects/${projectId}/tasks/${task.id}`;
 
-  function makePageUrl(newPage: number): string {
+  const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(searchParams);
-    next.set("page", String(newPage));
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+    next.delete("page");
+    setSearchParams(next, { replace: true });
+  };
+
+  // New tasks start in the default status, so group "+" buttons just open the form.
+  const openCreate = () => {
+    setParam("new", "1");
+  };
+  const closeCreate = () => {
+    setParam("new", null);
+  };
+
+  const makePageUrl = (page: number) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", String(page));
     return `?${next.toString()}`;
-  }
+  };
+
+  const moveTask = (task: TaskListItem, statusId: string) => {
+    if (task.version == null) {
+      return;
+    }
+    void moveFetcher.submit(
+      { intent: "changeStatus", statusId, version: String(task.version) },
+      { method: "post", action: `/projects/${projectId}/tasks/${task.id}` },
+    );
+  };
+  const moveError = moveFetcher.data && !moveFetcher.data.success ? moveFetcher.data.message : null;
+
+  const emptyState = (
+    <EmptyState
+      icon="square-check"
+      title={t("project_tasks.empty_title")}
+      description={t("project_tasks.empty_desc")}
+      data-testid="empty-tasks"
+      action={
+        canCreate ? (
+          <Button
+            variant="primary"
+            size="sm"
+            icon="plus"
+            onClick={() => {
+              openCreate();
+            }}
+          >
+            {t("project_tasks.btn_new_task")}
+          </Button>
+        ) : null
+      }
+    />
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Action bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">{t("project_tasks.title")}</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            {tasks.total === 1
-              ? t("project_tasks.count_one", { count: tasks.total })
-              : t("project_tasks.count_other", { count: tasks.total })}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {canCreate ? (
-            <button
-              type="button"
-              onClick={() => {
-                setIsModalOpen(true);
-              }}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-              data-testid="create-task-button"
-            >
-              {t("project_tasks.btn_new_task")}
-            </button>
-          ) : null}
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="project-tasks">
+      <div
+        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line py-2 pl-7 pr-5"
+        data-testid="project-tasks-view-bar"
+      >
+        <ViewSwitcher<TaskView>
+          label={t("project_tasks.view_label")}
+          value={view}
+          onChange={(next) => {
+            setParam("view", next === "list" ? null : next);
+          }}
+          views={[
+            { id: "list", label: t("project_tasks.view_list"), icon: "layout-list", "data-testid": "view-list" },
+            { id: "board", label: t("project_tasks.view_board"), icon: "kanban", "data-testid": "view-board" },
+            {
+              id: "timeline",
+              label: t("project_tasks.view_timeline"),
+              icon: "chart-gantt",
+              "data-testid": "view-timeline",
+            },
+          ]}
+        />
+        <Select
+          size="sm"
+          aria-label={t("project_tasks.filter_sprint")}
+          value={filters.sprintId ?? ""}
+          onChange={(event) => {
+            setParam("sprintId", event.target.value || null);
+          }}
+          placeholder={t("project_tasks.all_sprints")}
+          options={[
+            ...sprints.map((sprint) => ({ value: sprint.id, label: sprint.name })),
+            { value: "backlog", label: t("project_tasks.backlog") },
+          ]}
+          className="w-[170px]"
+          data-testid="filter-sprint-select"
+        />
+        <span className="flex-1" />
+        <span className="mr-1 text-[12px] leading-none text-fg-muted" data-testid="project-tasks-count">
+          {tasks.total === 1
+            ? t("project_tasks.count_one", { count: tasks.total })
+            : t("project_tasks.count_other", { count: tasks.total })}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="list-filter"
+          aria-expanded={isFilterOpen}
+          onClick={() => {
+            setIsFilterOpen((open) => !open);
+          }}
+          data-testid="toggle-filters-button"
+        >
+          {t("project_tasks.btn_filter")}
+        </Button>
       </div>
 
-      {actionData?.message && !actionData.success ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" data-testid="action-error">
-          {actionData.message}
-        </div>
-      ) : null}
-
-      {/* Filter Bar */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="project-tasks-filters">
-        <Form method="get" className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end">
-          <div>
-            <label htmlFor="filter-status" className="block text-xs font-medium text-gray-700">
-              {t("project_tasks.filter_status")}
-            </label>
-            <select
-              id="filter-status"
-              name="statusId"
-              defaultValue={filters.statusId ?? ""}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              data-testid="filter-status-select"
-            >
-              <option value="">{t("project_tasks.all_statuses")}</option>
-              {statuses.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="filter-assignee" className="block text-xs font-medium text-gray-700">
-              {t("project_tasks.filter_assignee")}
-            </label>
-            <select
-              id="filter-assignee"
-              name="assigneeId"
-              defaultValue={filters.assigneeId ?? ""}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              data-testid="filter-assignee-select"
-            >
-              <option value="">{t("project_tasks.all_assignees")}</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.fullName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="filter-priority" className="block text-xs font-medium text-gray-700">
-              {t("project_tasks.filter_priority")}
-            </label>
-            <select
-              id="filter-priority"
-              name="priority"
-              defaultValue={filters.priority ?? ""}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              data-testid="filter-priority-select"
-            >
-              <option value="">{t("project_tasks.all_priorities")}</option>
-              {TASK_PRIORITIES.map((p: TaskPriority) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="filter-sprint" className="block text-xs font-medium text-gray-700">
-              {t("project_tasks.filter_sprint")}
-            </label>
-            <select
-              id="filter-sprint"
-              name="sprintId"
-              defaultValue={filters.sprintId ?? ""}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              data-testid="filter-sprint-select"
-            >
-              <option value="">{t("project_tasks.all_sprints")}</option>
-              {sprints.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm"
-              data-testid="apply-filters-button"
-            >
-              {t("project_tasks.btn_apply")}
-            </button>
+      {isFilterOpen ? (
+        <Form
+          method="get"
+          data-testid="project-tasks-filters"
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-subtle py-2 pl-7 pr-5"
+          onChange={(event) => {
+            void submit(event.currentTarget, { replace: true });
+          }}
+        >
+          {hasViewParam ? <input type="hidden" name="view" value={view} /> : null}
+          {filters.sprintId ? <input type="hidden" name="sprintId" value={filters.sprintId} /> : null}
+          <Select
+            size="sm"
+            name="statusId"
+            aria-label={t("project_tasks.filter_status")}
+            defaultValue={filters.statusId ?? ""}
+            placeholder={t("project_tasks.all_statuses")}
+            options={statuses.map((status) => ({ value: status.id, label: status.name }))}
+            className="w-[160px]"
+            data-testid="filter-status-select"
+          />
+          <Select
+            size="sm"
+            name="assigneeId"
+            aria-label={t("project_tasks.filter_assignee")}
+            defaultValue={filters.assigneeId ?? ""}
+            placeholder={t("project_tasks.all_assignees")}
+            options={members.map((member) => ({ value: member.id, label: member.fullName }))}
+            className="w-[180px]"
+            data-testid="filter-assignee-select"
+          />
+          <Select
+            size="sm"
+            name="priority"
+            aria-label={t("project_tasks.filter_priority")}
+            defaultValue={filters.priority ?? ""}
+            placeholder={t("project_tasks.all_priorities")}
+            options={[...TASK_PRIORITIES].reverse().map((priority) => ({
+              value: priority,
+              label: translatePriority(t, priority),
+            }))}
+            className="w-[150px]"
+            data-testid="filter-priority-select"
+          />
+          {hasOtherFilters || filters.sprintId ? (
             <Link
-              to=""
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-center"
+              to={`/projects/${projectId}${hasViewParam ? `?view=${view}` : ""}`}
+              className={buttonClass("ghost", "sm")}
               data-testid="reset-filters-link"
             >
+              <Icon name="x" size={14} />
               {t("project_tasks.btn_reset")}
             </Link>
-          </div>
+          ) : null}
         </Form>
-      </div>
+      ) : null}
 
-      {/* Task list */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {tasks.items.length === 0 ? (
-          <div className="p-12 text-center" data-testid="empty-tasks">
-            <h3 className="text-base font-medium text-gray-900">{t("project_tasks.empty_title")}</h3>
-            <p className="mt-1 text-sm text-gray-500">{t("project_tasks.empty_desc")}</p>
-            {canCreate ? (
-              <div className="mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(true);
-                  }}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-                >
-                  {t("project_tasks.btn_create_task")}
-                </button>
-              </div>
-            ) : null}
-          </div>
+      {actionData?.message && !actionData.success && !actionData.values ? (
+        <div className="px-7 pt-3">
+          <Banner tone="danger" role="alert" data-testid="action-error">
+            {actionData.message}
+          </Banner>
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {view === "board" ? (
+          tasks.items.length ? (
+            <BoardView
+              tasks={tasks.items}
+              statuses={statuses}
+              hrefFor={hrefFor}
+              onMove={moveTask}
+              onAdd={canCreate ? openCreate : undefined}
+            />
+          ) : (
+            <div className="flex-1">{emptyState}</div>
+          )
+        ) : view === "timeline" ? (
+          tasks.items.length ? (
+            <TimelineView tasks={tasks.items} hrefFor={hrefFor} today={getTodayDateString(new Date())} />
+          ) : (
+            <div className="flex-1">{emptyState}</div>
+          )
         ) : (
-          <table className="min-w-full divide-y divide-gray-200" data-testid="tasks-table">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  {t("project_tasks.th_key")}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  {t("project_tasks.th_title")}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  {t("project_tasks.th_priority")}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  {t("project_tasks.th_status")}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  {t("project_tasks.th_due_date")}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {tasks.items.map((task) => {
-                return (
-                  <tr key={task.id} className="hover:bg-gray-50" data-testid={`task-row-${task.id}`}>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-blue-600">
-                      {projectCode}-{task.number}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      <Link
-                        to={`/projects/${task.projectId}/tasks/${task.id}`}
-                        className="hover:underline"
-                        data-testid={`task-link-${task.id}`}
-                      >
-                        {task.title}
-                      </Link>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          task.priority === "URGENT"
-                            ? "bg-red-100 text-red-800"
-                            : task.priority === "HIGH"
-                              ? "bg-orange-100 text-orange-800"
-                              : task.priority === "MEDIUM"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {task.priority}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                      <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                        {task.statusName}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                      <div className="flex items-center gap-2">
-                        <span>{task.dueDate ?? "—"}</span>
-                        {task.isOverdue ? (
-                          <span className="inline-flex rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                            {t("project_tasks.badge_overdue")}
-                          </span>
-                        ) : task.isDueSoon ? (
-                          <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                            {t("project_tasks.badge_due_soon")}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-
-        {/* Pagination Bar */}
-        {tasks.totalPages > 1 ? (
-          <div
-            className="flex items-center justify-between border-t border-gray-200 px-6 py-3"
-            data-testid="pagination-bar"
-          >
-            <div className="text-sm text-gray-500">
-              {t("project_tasks.pagination_showing", {
-                from: (tasks.page - 1) * tasks.pageSize + 1,
-                to: Math.min(tasks.page * tasks.pageSize, tasks.total),
-                total: tasks.total,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              {tasks.page > 1 ? (
-                <Link
-                  to={makePageUrl(tasks.page - 1)}
-                  className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  data-testid="prev-page-button"
-                >
-                  {t("project_tasks.pagination_prev")}
-                </Link>
-              ) : (
-                <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
-                  {t("project_tasks.pagination_prev")}
-                </span>
-              )}
-              <span className="text-sm font-medium text-gray-700" data-testid="page-indicator">
-                {t("project_tasks.pagination_page", {
-                  page: tasks.page,
-                  totalPages: tasks.totalPages,
-                })}
-              </span>
-              {tasks.page < tasks.totalPages ? (
-                <Link
-                  to={makePageUrl(tasks.page + 1)}
-                  className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  data-testid="next-page-button"
-                >
-                  {t("project_tasks.pagination_next")}
-                </Link>
-              ) : (
-                <span className="rounded border border-gray-200 px-3 py-1 text-sm text-gray-400 cursor-not-allowed">
-                  {t("project_tasks.pagination_next")}
-                </span>
-              )}
-            </div>
+          <div className="flex-1 overflow-y-auto">
+            <ListView
+              data-testid="tasks-table"
+              tasks={tasks.items}
+              statuses={statuses}
+              hrefFor={hrefFor}
+              empty={emptyState}
+              onAdd={canCreate ? openCreate : undefined}
+              addLabel={(name) => t("project_tasks.add_to", { name })}
+            />
           </div>
-        ) : null}
+        )}
       </div>
 
-      {/* Create Task Modal */}
-      {isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-200 pb-3">
-              <h3 className="text-lg font-semibold text-gray-900">{t("project_tasks.modal_title")}</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsModalOpen(false);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label={t("project_tasks.modal_close")}
+      {tasks.totalPages > 1 ? (
+        <div
+          className="flex shrink-0 items-center justify-between border-t border-line px-7 py-2.5"
+          data-testid="pagination-bar"
+        >
+          <span className="text-[12px] leading-none text-fg-muted">
+            {t("project_tasks.pagination_showing", {
+              from: (tasks.page - 1) * tasks.pageSize + 1,
+              to: Math.min(tasks.page * tasks.pageSize, tasks.total),
+              total: tasks.total,
+            })}
+          </span>
+          <div className="flex items-center gap-2">
+            {tasks.page > 1 ? (
+              <Link
+                to={makePageUrl(tasks.page - 1)}
+                className={buttonClass("secondary", "sm")}
+                data-testid="prev-page-button"
               >
-                <span aria-hidden="true">&times;</span>
-              </button>
-            </div>
-
-            <Form method="post" className="mt-4 space-y-4">
-              <input type="hidden" name="intent" value="createTask" />
-
-              <div>
-                <label htmlFor="task-title" className="block text-sm font-medium text-gray-700">
-                  {t("project_tasks.modal_task_title")}
-                </label>
-                <input
-                  id="task-title"
-                  type="text"
-                  name="title"
-                  required
-                  defaultValue={actionData?.values?.title ?? ""}
-                  placeholder={t("project_tasks.placeholder_title")}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="task-title-input"
-                />
-                {actionData?.errors?.title ? (
-                  <p className="mt-1 text-xs text-red-600">{actionData.errors.title.join(", ")}</p>
-                ) : null}
-              </div>
-
-              <div>
-                <label htmlFor="task-desc" className="block text-sm font-medium text-gray-700">
-                  {t("project_tasks.modal_description")}
-                </label>
-                <textarea
-                  id="task-desc"
-                  name="description"
-                  rows={3}
-                  defaultValue={actionData?.values?.description ?? ""}
-                  placeholder={t("project_tasks.placeholder_description")}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="task-description-input"
-                />
-                {actionData?.errors?.description ? (
-                  <p className="mt-1 text-xs text-red-600">{actionData.errors.description.join(", ")}</p>
-                ) : null}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="task-priority" className="block text-sm font-medium text-gray-700">
-                    {t("project_tasks.modal_priority")}
-                  </label>
-                  <select
-                    id="task-priority"
-                    name="priority"
-                    defaultValue={actionData?.values?.priority ?? "MEDIUM"}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    data-testid="task-priority-select"
-                  >
-                    {TASK_PRIORITIES.map((p: TaskPriority) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="task-due" className="block text-sm font-medium text-gray-700">
-                    {t("project_tasks.modal_due_date")}
-                  </label>
-                  <input
-                    id="task-due"
-                    type="date"
-                    name="dueDate"
-                    defaultValue={actionData?.values?.dueDate ?? ""}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    data-testid="task-due-date-input"
-                  />
-                  {actionData?.errors?.dueDate ? (
-                    <p className="mt-1 text-xs text-red-600">{actionData.errors.dueDate.join(", ")}</p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="task-start" className="block text-sm font-medium text-gray-700">
-                  {t("project_tasks.modal_start_date")}
-                </label>
-                <input
-                  id="task-start"
-                  type="date"
-                  name="startDate"
-                  defaultValue={actionData?.values?.startDate ?? ""}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="task-start-date-input"
-                />
-              </div>
-
-              {canAssign && members.length > 0 ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t("project_tasks.modal_assignees")}
-                  </label>
-                  <div className="mt-2 max-h-36 overflow-y-auto space-y-1 rounded-lg border border-gray-200 p-2">
-                    {members.map((member) => (
-                      <label key={member.id} className="flex items-center gap-2 text-sm text-gray-700">
-                        <input
-                          type="checkbox"
-                          name="assigneeIds"
-                          value={member.id}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>
-                          {member.fullName} ({member.email})
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                  }}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  {t("project_tasks.btn_cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-                  data-testid="task-submit-button"
-                >
-                  {isSubmitting ? t("project_tasks.btn_submitting") : t("project_tasks.btn_submit")}
-                </button>
-              </div>
-            </Form>
+                {t("project_tasks.pagination_prev")}
+              </Link>
+            ) : (
+              <Button size="sm" disabled>
+                {t("project_tasks.pagination_prev")}
+              </Button>
+            )}
+            <span className="text-[12px] font-medium leading-none text-fg-secondary" data-testid="page-indicator">
+              {t("project_tasks.pagination_page", { page: tasks.page, totalPages: tasks.totalPages })}
+            </span>
+            {tasks.page < tasks.totalPages ? (
+              <Link
+                to={makePageUrl(tasks.page + 1)}
+                className={buttonClass("secondary", "sm")}
+                data-testid="next-page-button"
+              >
+                {t("project_tasks.pagination_next")}
+              </Link>
+            ) : (
+              <Button size="sm" disabled>
+                {t("project_tasks.pagination_next")}
+              </Button>
+            )}
           </div>
         </div>
       ) : null}
+
+      <Dialog
+        open={isDialogOpen}
+        onClose={closeCreate}
+        title={t("project_tasks.modal_title")}
+        width={520}
+        data-testid="create-task-dialog"
+        footer={
+          <>
+            <Button size="sm" onClick={closeCreate}>
+              {t("project_tasks.btn_cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="create-task-form"
+              variant="primary"
+              size="sm"
+              disabled={isSubmitting}
+              data-testid="task-submit-button"
+            >
+              {isSubmitting ? t("project_tasks.btn_submitting") : t("project_tasks.btn_submit")}
+            </Button>
+          </>
+        }
+      >
+        <Form id="create-task-form" method="post" className="flex flex-col gap-3.5">
+          <input type="hidden" name="intent" value="createTask" />
+          <Input
+            id="task-title"
+            name="title"
+            required
+            label={t("project_tasks.modal_task_title")}
+            placeholder={t("project_tasks.placeholder_title")}
+            defaultValue={actionData?.values?.title ?? ""}
+            error={actionData?.errors?.title?.join(", ")}
+            autoFocus
+            data-testid="task-title-input"
+          />
+          <Textarea
+            id="task-desc"
+            name="description"
+            rows={3}
+            label={t("project_tasks.modal_description")}
+            placeholder={t("project_tasks.placeholder_description")}
+            defaultValue={actionData?.values?.description ?? ""}
+            error={actionData?.errors?.description?.join(", ")}
+            data-testid="task-description-input"
+          />
+          <div className="grid grid-cols-3 gap-3.5">
+            <Select
+              id="task-priority"
+              name="priority"
+              label={t("project_tasks.modal_priority")}
+              defaultValue={actionData?.values?.priority ?? "MEDIUM"}
+              options={[...TASK_PRIORITIES].reverse().map((priority) => ({
+                value: priority,
+                label: translatePriority(t, priority),
+              }))}
+              data-testid="task-priority-select"
+            />
+            <Input
+              id="task-start"
+              type="date"
+              name="startDate"
+              label={t("project_tasks.modal_start_date")}
+              defaultValue={actionData?.values?.startDate ?? ""}
+              error={actionData?.errors?.startDate?.join(", ")}
+              data-testid="task-start-date-input"
+            />
+            <Input
+              id="task-due"
+              type="date"
+              name="dueDate"
+              label={t("project_tasks.modal_due_date")}
+              defaultValue={actionData?.values?.dueDate ?? ""}
+              error={actionData?.errors?.dueDate?.join(", ")}
+              data-testid="task-due-date-input"
+            />
+          </div>
+          {canAssign && members.length > 0 ? (
+            <Field label={t("project_tasks.modal_assignees")}>
+              <div className="flex max-h-36 flex-col gap-2 overflow-y-auto rounded-md border border-line-default p-2.5">
+                {members.map((member) => (
+                  <Checkbox
+                    key={member.id}
+                    name="assigneeIds"
+                    value={member.id}
+                    label={member.fullName}
+                    description={member.email}
+                  />
+                ))}
+              </div>
+            </Field>
+          ) : null}
+        </Form>
+      </Dialog>
+
+      <Toast text={moveError} id={moveFetcher.data} />
     </div>
   );
 }

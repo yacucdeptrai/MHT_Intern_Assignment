@@ -102,7 +102,7 @@ test.describe("Project Settings & Archive (FR-08 & FR-09)", () => {
 
     // Project should be visible on archived tab
     await expect(adminPage.getByTestId(`project-row-${code}`)).toBeVisible();
-    await expect(adminPage.getByTestId(`project-row-${code}`).getByText("ARCHIVED")).toBeVisible();
+    await expect(adminPage.getByTestId(`project-row-${code}`).getByText("Archived")).toBeVisible();
 
     await adminContext.close();
   });

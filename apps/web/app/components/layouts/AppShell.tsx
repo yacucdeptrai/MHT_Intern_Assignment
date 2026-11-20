@@ -11,6 +11,7 @@ import { useSidebarCollapsed, useTheme } from "../../utils/theme";
 import { LanguageSwitcher, useLanguageSwitch } from "../i18n/LanguageSwitcher";
 import { Avatar } from "../ui/Avatar";
 import { PRODUCT_INITIALS } from "../ui/brand";
+import { projectDot } from "../ui/projectColor";
 import { Breadcrumb, type BreadcrumbItem } from "../ui/Breadcrumb";
 import { Button } from "../ui/Button";
 import { CommandBar, type CommandGroup, type CommandItem } from "../ui/CommandBar";
@@ -53,24 +54,6 @@ interface ActiveRoute {
 }
 
 const PROJECT_ROUTE_ID = "routes/_app.projects.$projectId";
-
-const PROJECT_DOTS = [
-  "var(--blue-500)",
-  "var(--green-500)",
-  "var(--amber-500)",
-  "var(--violet-500)",
-  "var(--orange-500)",
-  "var(--red-500)",
-];
-
-/** Deterministic project square color from a token palette (projects have no stored color). */
-function projectDot(code: string): string {
-  let hash = 0;
-  for (const char of code) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  }
-  return PROJECT_DOTS[hash % PROJECT_DOTS.length] ?? "var(--blue-500)";
-}
 
 /** Maps the URL to the one sidebar item that should be active. */
 function resolveRoute(pathname: string): ActiveRoute {
@@ -258,6 +241,14 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
   const openCommand = () => {
     setIsCommandOpen(true);
   };
+  // Inside a project, New task opens that project's create form; elsewhere the command bar picks one.
+  const openNewTask = () => {
+    if (currentProject) {
+      void navigate(`/projects/${currentProject.id}?new=1`);
+    } else {
+      openCommand();
+    }
+  };
   const isOn = (page: PageId) => route.page === page;
   const roleLabel = translateRole(t, user.systemRole);
   const avatarSrc = user.avatarKey ? `/api/avatars/${user.id}` : null;
@@ -407,7 +398,7 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
             <span className="flex-1 whitespace-nowrap text-left">{t("shell.search_placeholder")}</span>
             <Kbd keys={["⌘", "K"]} size="xs" />
           </button>
-          <Button variant="primary" size="sm" icon="plus" onClick={openCommand} data-testid="topbar-new-task">
+          <Button variant="primary" size="sm" icon="plus" onClick={openNewTask} data-testid="topbar-new-task">
             {t("shell.new_task")}
           </Button>
         </header>

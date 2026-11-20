@@ -38,7 +38,7 @@ test.describe("Task Creation Journey (FR-12)", () => {
     // Verify task appears in table
     await expect(page.getByTestId("tasks-table")).toBeVisible();
     await expect(page.getByText("First Feature Task")).toBeVisible();
-    await expect(page.getByTestId("tasks-table").getByText("HIGH")).toBeVisible();
+    await expect(page.getByTestId("tasks-table").getByRole("img", { name: "High" })).toBeVisible();
     await expect(page.getByText(`${code}-1`)).toBeVisible();
   });
 

@@ -74,7 +74,6 @@ export function TaskRow({ task, href, selected = false, subtasks, "data-testid":
   return (
     <Link
       to={href}
-      role="row"
       data-testid={testId}
       aria-current={selected ? "true" : undefined}
       className={cx(
@@ -158,14 +157,14 @@ export function ListView({
       return acc;
     }, []);
   return (
-    <div className="@container flex-1" role="grid" data-testid={testId}>
+    <div className="@container flex-1" data-testid={testId}>
       {[...statuses, ...orphanStatuses].map((status) => {
         const rows = tasks.filter((task) => task.statusId === status.id);
         if (!rows.length) {
           return null;
         }
         return (
-          <div key={status.id} role="rowgroup">
+          <div key={status.id}>
             <GroupHeader
               glyph={statusGlyph(status.name, status.category)}
               label={status.name}

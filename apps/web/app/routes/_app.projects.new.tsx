@@ -5,11 +5,17 @@ import { Form, Link, useActionData, useNavigation } from "react-router";
 import { APP_NAME } from "@pm/domain";
 
 import { projectCreateAction } from "../actions/projectCreateAction";
+import { Banner } from "../components/ui/Banner";
+import { Button, buttonClass } from "../components/ui/Button";
+import { Input, Textarea } from "../components/ui/Input";
+import { Page } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Section } from "../components/ui/Section";
 import { projectCreateLoader } from "../loaders/projectCreateLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta() {
-  return [{ title: `Create Project — ${APP_NAME}` }];
+  return [{ title: `New project — ${APP_NAME}` }];
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -29,6 +35,11 @@ interface ActionData {
   values?: Record<string, string>;
 }
 
+/** Field error with the testid the journeys assert on. */
+function fieldError(message: string | undefined, testId: string) {
+  return message ? <span data-testid={testId}>{message}</span> : undefined;
+}
+
 export default function ProjectCreatePage() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
@@ -36,266 +47,121 @@ export default function ProjectCreatePage() {
   const isSubmitting = navigation.state === "submitting";
 
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
-  const codeError = actionData?.errors?.code?.[0];
-  const nameError = actionData?.errors?.name?.[0];
-  const descriptionError = actionData?.errors?.description?.[0];
-  const budgetError = actionData?.errors?.budget?.[0];
-  const startDateError = actionData?.errors?.startDate?.[0];
-  const endDateError = actionData?.errors?.endDate?.[0];
-  const slackChannelError = actionData?.errors?.slackChannelId?.[0];
-
   const values = actionData?.values ?? {};
+  const errorOf = (field: string) => actionData?.errors?.[field]?.[0];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="mx-auto max-w-3xl space-y-6">
-        {/* Navigation & Header */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link to="/projects" className="hover:text-gray-900 transition-colors">
-            {t("project_new.breadcrumb_projects")}
-          </Link>
-          <span>/</span>
-          <span className="text-gray-900 font-medium">{t("project_new.breadcrumb_new")}</span>
-        </div>
+    <Page
+      maxWidth={880}
+      header={<PageHeader title={t("project_new.title")} description={t("project_new.description")} />}
+    >
+      {formError ? (
+        <Banner tone="danger" role="alert" data-testid="form-error">
+          {formError}
+        </Banner>
+      ) : null}
 
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t("project_new.title")}</h1>
-          <p className="text-sm text-gray-600">{t("project_new.description")}</p>
-        </div>
-
-        {/* Global Error Banner */}
-        {formError ? (
-          <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 border border-red-200" data-testid="form-error">
-            {formError}
+      <Form method="post" data-testid="create-project-form">
+        <Section title={t("project_new.section_general")} description={t("project_new.section_general_desc")}>
+          <div className="grid grid-cols-2 gap-3.5">
+            <Input
+              id="code"
+              name="code"
+              required
+              label={t("project_new.code_label")}
+              placeholder={t("project_new.code_placeholder")}
+              hint={t("project_new.code_hint")}
+              defaultValue={values.code ?? ""}
+              error={fieldError(errorOf("code"), "error-code")}
+              className="font-mono uppercase"
+              data-testid="input-code"
+            />
+            <Input
+              id="name"
+              name="name"
+              required
+              label={t("project_new.name_label")}
+              placeholder={t("project_new.name_placeholder")}
+              defaultValue={values.name ?? ""}
+              error={fieldError(errorOf("name"), "error-name")}
+              data-testid="input-name"
+            />
           </div>
-        ) : null}
+          <Textarea
+            id="description"
+            name="description"
+            rows={3}
+            label={t("project_new.description_label")}
+            placeholder={t("project_new.description_placeholder")}
+            defaultValue={values.description ?? ""}
+            error={fieldError(errorOf("description"), "error-description")}
+            data-testid="input-description"
+          />
+        </Section>
 
-        {/* Form Card */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <Form method="post" className="space-y-6" data-testid="create-project-form">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {/* Project Code */}
-              <div>
-                <label htmlFor="code" className="block text-sm font-medium text-gray-700">
-                  {t("project_new.code_label")} <span className="text-red-500">*</span>
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="text"
-                    id="code"
-                    name="code"
-                    required
-                    maxLength={10}
-                    defaultValue={values.code ?? ""}
-                    placeholder={t("project_new.code_placeholder")}
-                    data-testid="input-code"
-                    className={`block w-full uppercase font-mono rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                      codeError
-                        ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">{t("project_new.code_hint")}</p>
-                {codeError ? (
-                  <p className="mt-1 text-xs text-red-600" data-testid="error-code">
-                    {codeError}
-                  </p>
-                ) : null}
-              </div>
+        <Section title={t("project_new.section_timeline")} description={t("project_new.section_timeline_desc")}>
+          <div className="grid grid-cols-2 gap-3.5">
+            <Input
+              id="startDate"
+              name="startDate"
+              type="date"
+              required
+              label={t("project_new.start_date_label")}
+              defaultValue={values.startDate ?? ""}
+              error={fieldError(errorOf("startDate"), "error-start-date")}
+              data-testid="input-start-date"
+            />
+            <Input
+              id="endDate"
+              name="endDate"
+              type="date"
+              required
+              label={t("project_new.end_date_label")}
+              defaultValue={values.endDate ?? ""}
+              error={fieldError(errorOf("endDate"), "error-end-date")}
+              data-testid="input-end-date"
+            />
+            <Input
+              id="budget"
+              name="budget"
+              type="number"
+              min="0"
+              label={t("project_new.budget_label")}
+              placeholder={t("project_new.budget_placeholder")}
+              defaultValue={values.budget ?? ""}
+              error={fieldError(errorOf("budget"), "error-budget")}
+              data-testid="input-budget"
+            />
+          </div>
+        </Section>
 
-              {/* Project Name */}
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  {t("project_new.name_label")} <span className="text-red-500">*</span>
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    required
-                    maxLength={150}
-                    defaultValue={values.name ?? ""}
-                    placeholder={t("project_new.name_placeholder")}
-                    data-testid="input-name"
-                    className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                      nameError
-                        ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-                {nameError ? (
-                  <p className="mt-1 text-xs text-red-600" data-testid="error-name">
-                    {nameError}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                {t("project_new.description_label")}
-              </label>
-              <div className="mt-1">
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={3}
-                  maxLength={10000}
-                  defaultValue={values.description ?? ""}
-                  placeholder={t("project_new.description_placeholder")}
-                  data-testid="input-description"
-                  className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                    descriptionError
-                      ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                      : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                  }`}
-                />
-              </div>
-              {descriptionError ? (
-                <p className="mt-1 text-xs text-red-600" data-testid="error-description">
-                  {descriptionError}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {/* Budget */}
-              <div>
-                <label htmlFor="budget" className="block text-sm font-medium text-gray-700">
-                  {t("project_new.budget_label")}
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="number"
-                    id="budget"
-                    name="budget"
-                    min={0}
-                    defaultValue={values.budget ?? ""}
-                    placeholder={t("project_new.budget_placeholder")}
-                    data-testid="input-budget"
-                    className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                      budgetError
-                        ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-                {budgetError ? (
-                  <p className="mt-1 text-xs text-red-600" data-testid="error-budget">
-                    {budgetError}
-                  </p>
-                ) : null}
-              </div>
-
-              {/* Slack Channel ID */}
-              <div>
-                <label htmlFor="slackChannelId" className="block text-sm font-medium text-gray-700">
-                  {t("project_new.slack_channel_label")}
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="text"
-                    id="slackChannelId"
-                    name="slackChannelId"
-                    maxLength={50}
-                    defaultValue={values.slackChannelId ?? ""}
-                    placeholder={t("project_new.slack_channel_placeholder")}
-                    data-testid="input-slack"
-                    className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                      slackChannelError
-                        ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-                {slackChannelError ? (
-                  <p className="mt-1 text-xs text-red-600" data-testid="error-slack">
-                    {slackChannelError}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {/* Start Date */}
-              <div>
-                <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                  {t("project_new.start_date_label")} <span className="text-red-500">*</span>
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="date"
-                    id="startDate"
-                    name="startDate"
-                    required
-                    defaultValue={values.startDate ?? ""}
-                    data-testid="input-start-date"
-                    className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                      startDateError
-                        ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-                {startDateError ? (
-                  <p className="mt-1 text-xs text-red-600" data-testid="error-start-date">
-                    {startDateError}
-                  </p>
-                ) : null}
-              </div>
-
-              {/* End Date */}
-              <div>
-                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
-                  {t("project_new.end_date_label")} <span className="text-red-500">*</span>
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="date"
-                    id="endDate"
-                    name="endDate"
-                    required
-                    defaultValue={values.endDate ?? ""}
-                    data-testid="input-end-date"
-                    className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 ${
-                      endDateError
-                        ? "border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    }`}
-                  />
-                </div>
-                {endDateError ? (
-                  <p className="mt-1 text-xs text-red-600" data-testid="error-end-date">
-                    {endDateError}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-              <Link
-                to="/projects"
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                {t("project_new.cancel")}
-              </Link>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                data-testid="submit-project-button"
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {isSubmitting ? t("project_new.submitting") : t("project_new.submit")}
-              </button>
-            </div>
-          </Form>
-        </div>
-      </div>
-    </div>
+        <Section title={t("project_new.section_integrations")} description={t("project_new.section_integrations_desc")}>
+          <Input
+            id="slackChannelId"
+            name="slackChannelId"
+            label={t("project_new.slack_channel_label")}
+            placeholder={t("project_new.slack_channel_placeholder")}
+            defaultValue={values.slackChannelId ?? ""}
+            error={fieldError(errorOf("slackChannelId"), "error-slack")}
+            className="font-mono"
+            data-testid="input-slack"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSubmitting}
+              data-testid="submit-project-button"
+            >
+              {isSubmitting ? t("project_new.submitting") : t("project_new.submit")}
+            </Button>
+            <Link to="/projects" className={buttonClass("ghost", "sm")}>
+              {t("project_new.cancel")}
+            </Link>
+          </div>
+        </Section>
+      </Form>
+    </Page>
   );
 }

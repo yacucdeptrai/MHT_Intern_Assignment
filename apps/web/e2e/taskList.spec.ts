@@ -77,8 +77,9 @@ test.describe("Task List & My Tasks Journey (FR-16)", () => {
     await expect(page.getByText(lowTitle)).toBeVisible();
 
     // Apply Priority=HIGH filter
+    // Filters sit behind the Filter button and apply as soon as they change.
+    await page.getByTestId("toggle-filters-button").click();
     await page.getByTestId("filter-priority-select").selectOption("HIGH");
-    await page.getByTestId("apply-filters-button").click();
 
     // Check URL has priority=HIGH
     await expect(page).toHaveURL(/priority=HIGH/);

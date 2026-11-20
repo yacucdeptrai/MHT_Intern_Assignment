@@ -129,6 +129,7 @@ export async function setupProjectWithTask(
   }
 
   await adminPage.goto(`/projects/${projectId}`);
+  await adminPage.getByTestId("toggle-filters-button").click();
   const doneStatusId = await adminPage
     .getByTestId("filter-status-select")
     .locator("option", { hasText: "Done" })

@@ -32,6 +32,8 @@ export interface TaskListItem {
   isTodayPriority: boolean;
   createdAt: number;
   updatedAt: number;
+  /** Optimistic-concurrency version; set on project task lists so the board can change status */
+  version?: number;
 }
 
 export interface ProjectOption {

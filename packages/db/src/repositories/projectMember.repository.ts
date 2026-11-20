@@ -2,6 +2,7 @@ import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 import type { MemberRow, ProjectRole } from "@pm/domain";
 
+import { chunk } from "../chunk";
 import type { AppDatabase } from "../client";
 import { projectMembers, type NewProjectMember, type ProjectMember } from "../schema/projectMembers";
 import { users } from "../schema/users";
@@ -80,11 +81,16 @@ export const projectMemberRepository = {
     if (projectIds.length === 0) {
       return [];
     }
-    return db
-      .select({ projectId: projectMembers.projectId, fullName: users.fullName })
-      .from(projectMembers)
-      .innerJoin(users, eq(projectMembers.userId, users.id))
-      .where(and(inArray(projectMembers.projectId, projectIds), eq(projectMembers.projectRole, "PM")))
-      .orderBy(asc(users.fullName));
+    const results = await Promise.all(
+      chunk(projectIds).map((ids) =>
+        db
+          .select({ projectId: projectMembers.projectId, fullName: users.fullName })
+          .from(projectMembers)
+          .innerJoin(users, eq(projectMembers.userId, users.id))
+          .where(and(inArray(projectMembers.projectId, ids), eq(projectMembers.projectRole, "PM")))
+          .orderBy(asc(users.fullName)),
+      ),
+    );
+    return results.flat().sort((a, b) => a.fullName.localeCompare(b.fullName));
   },
 };
