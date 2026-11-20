@@ -29,7 +29,10 @@ test.describe("Admin Status Configuration Journey", () => {
     await page.getByRole("button", { name: /Add Status|Thêm trạng thái/i }).click();
     await page.getByLabel(/Status Name|Tên trạng thái/i).fill(newStatusName);
     await page.getByLabel(/Category|Phân loại/i).selectOption("REVIEW");
-    await page.getByRole("button", { name: /Create|Tạo/i, exact: true }).click();
+    await page
+      .getByRole("main")
+      .getByRole("button", { name: /Create|Tạo/i, exact: true })
+      .click();
     /* cspell:enable */
 
     // 4. Verify new status is listed in table

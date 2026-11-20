@@ -18,7 +18,10 @@ test.describe("Sub-tasks Journey (FR-17)", () => {
     await page.getByRole("button", { name: "Create Project" }).click();
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Subtasks Test Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Subtasks Test Project ${code}` })
+      .click();
 
     // Create top-level task
     await page.getByTestId("create-task-button").click();

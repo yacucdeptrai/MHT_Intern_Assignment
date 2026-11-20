@@ -21,7 +21,7 @@ test.describe("Layout Separation and Route Guards", () => {
     await page.waitForURL("**/admin");
     const adminShell = page.locator("[data-testid='admin-shell']");
     await expect(adminShell).toBeVisible();
-    await expect(page.getByText("Admin & PM Portal")).toBeVisible();
+    await expect(page.getByText("Admin & PM portal")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: "Admin Dashboard" })).toBeVisible();
   });
 
@@ -37,7 +37,7 @@ test.describe("Layout Separation and Route Guards", () => {
   test("admin navigates to user management through AdminShell link", async ({ page }) => {
     await signInAsAdmin(page);
 
-    await page.getByRole("link", { name: "User Management" }).click();
+    await page.getByRole("link", { name: "Users", exact: true }).click();
     await page.waitForURL("**/admin/users");
     await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toBeVisible();
     await expect(page.locator("[data-testid='admin-shell']")).toBeVisible();

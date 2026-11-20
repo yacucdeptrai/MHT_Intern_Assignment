@@ -57,7 +57,7 @@ test.describe("Journey 3: Project Setup and Member Shell (FR-07, FR-10)", () => 
     // 4. Verify project appears for the member
     await member.page.goto("/projects");
     await expect(member.page.getByTestId(`project-row-${code}`)).toBeVisible();
-    await expect(member.page.getByText(name)).toBeVisible();
+    await expect(member.page.getByRole("main").getByText(name)).toBeVisible();
 
     // 5. Verify Member sees MemberShell navigation
     const nav = member.page.getByRole("navigation");
@@ -65,7 +65,7 @@ test.describe("Journey 3: Project Setup and Member Shell (FR-07, FR-10)", () => 
     // Member nav items
     await expect(nav.getByRole("link", { name: /Dashboard|Bảng điều khiển/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /My tasks|Công việc của tôi/i, exact: true })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /My projects|Dự án của tôi/i, exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: /All projects|Tất cả dự án/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /Calendar|Lịch biểu/i })).toBeVisible();
 
     // Admin links must NOT be visible to member

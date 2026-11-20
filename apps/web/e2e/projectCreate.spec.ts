@@ -27,7 +27,7 @@ test.describe("Project Creation & List (FR-07)", () => {
     await page.waitForURL("**/projects");
 
     await expect(page.getByTestId(`project-row-${code}`)).toBeVisible();
-    await expect(page.getByText(name)).toBeVisible();
+    await expect(page.getByRole("main").getByText(name)).toBeVisible();
   });
 
   test("FR-07 c2: duplicate code shows 400 error 'Project code is already in use' and keeps input", async ({

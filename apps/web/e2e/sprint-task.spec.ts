@@ -33,7 +33,10 @@ test.describe("Journey 4: Sprint Task Creation and Realtime Notification (FR-26)
     /* cspell:enable */
 
     await leadPage.waitForURL("**/projects");
-    await leadPage.getByRole("link", { name: `Realtime Project ${code}` }).click();
+    await leadPage
+      .getByRole("main")
+      .getByRole("link", { name: `Realtime Project ${code}` })
+      .click();
     await leadPage.waitForURL("**/projects/*");
     const projectId = leadPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
 

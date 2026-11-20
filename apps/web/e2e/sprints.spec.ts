@@ -20,7 +20,10 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     /* cspell:enable */
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Sprints E2E Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Sprints E2E Project ${code}` })
+      .click();
     await page.waitForURL("**/projects/*");
 
     const projectUrl = page.url();

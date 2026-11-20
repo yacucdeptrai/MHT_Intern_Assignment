@@ -39,7 +39,7 @@ test.describe("M2-T2: Project Visibility & Access Control (P3 / FR-16)", () => {
     await expect(nonMember.page.getByRole("heading", { name: "Not found" })).toBeVisible();
     await expect(nonMember.page.getByText("The requested page could not be found.")).toBeVisible();
     await expect(nonMember.page.getByTestId("project-header")).not.toBeVisible();
-    await expect(nonMember.page.getByText(name)).not.toBeVisible();
+    await expect(nonMember.page.getByRole("main").getByText(name)).not.toBeVisible();
 
     await nonMember.context.close();
   });

@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 
-import { AdminShell } from "../components/layouts/AdminShell";
-import { MemberShell } from "../components/layouts/MemberShell";
+import { AppShell } from "../components/layouts/AppShell";
+import { notificationService } from "../services/notification.service";
+import { projectService } from "../services/project/project.service";
 import { requireUser } from "../utils/auth.server";
 import { requestContextKey } from "../utils/requestContext.server";
 import { useRealtimeNotifications } from "../utils/useRealtimeNotifications";
@@ -10,24 +11,25 @@ import { useRealtimeNotifications } from "../utils/useRealtimeNotifications";
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const ctx = context.get(requestContextKey);
   const user = await requireUser(ctx, request);
-  return { user };
+  // Sidebar data: the projects this user can open, and the unread notification badge.
+  const [projects, unreadCount] = await Promise.all([
+    projectService.listProjects(ctx),
+    notificationService.countUnread(ctx),
+  ]);
+  return {
+    user,
+    sidebarProjects: projects.map((project) => ({ id: project.id, name: project.name, code: project.code })),
+    unreadCount,
+  };
 }
 
 export default function AppLayout() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, sidebarProjects, unreadCount } = useLoaderData<typeof loader>();
   useRealtimeNotifications(Boolean(user));
 
-  if (user.systemRole === "ADMIN" || user.systemRole === "PM") {
-    return (
-      <AdminShell user={user}>
-        <Outlet />
-      </AdminShell>
-    );
-  }
-
   return (
-    <MemberShell user={user}>
+    <AppShell user={user} projects={sidebarProjects} unreadCount={unreadCount}>
       <Outlet />
-    </MemberShell>
+    </AppShell>
   );
 }

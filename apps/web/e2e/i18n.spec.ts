@@ -52,12 +52,12 @@ test.describe("i18n language switching and localization coverage", () => {
         path: "/admin",
         vi: {
           heading: "Bảng điều khiển Quản trị",
-          nav: "Nhật ký Kiểm toán",
+          nav: "Nhật ký kiểm toán",
           absentEn: ["Admin Dashboard", "Audit Log"],
         },
         en: {
           heading: "Admin Dashboard",
-          nav: "Audit Log",
+          nav: "Audit log",
           absentVi: ["Bảng điều khiển Quản trị", "Nhật ký Kiểm toán"],
         },
       },
@@ -65,12 +65,12 @@ test.describe("i18n language switching and localization coverage", () => {
         path: "/admin/users",
         vi: {
           heading: "Quản lý người dùng",
-          nav: "Nhật ký Kiểm toán",
+          nav: "Nhật ký kiểm toán",
           absentEn: ["User Management"],
         },
         en: {
           heading: "User Management",
-          nav: "Audit Log",
+          nav: "Audit log",
           absentVi: ["Quản lý người dùng"],
         },
       },
@@ -91,12 +91,12 @@ test.describe("i18n language switching and localization coverage", () => {
         path: "/admin/audit-log",
         vi: {
           heading: "Nhật ký hệ thống",
-          nav: "Quản lý Người dùng",
+          nav: "Người dùng",
           absentEn: ["System Audit Log"],
         },
         en: {
           heading: "System Audit Log",
-          nav: "User Management",
+          nav: "Users",
           absentVi: ["Nhật ký hệ thống"],
         },
       },
@@ -139,7 +139,7 @@ test.describe("i18n language switching and localization coverage", () => {
         },
         en: {
           heading: "Project & Task Management",
-          nav: "My Tasks",
+          nav: "My tasks",
           absentVi: ["Quản lý Dự án & Công việc"],
         },
       },
@@ -152,7 +152,7 @@ test.describe("i18n language switching and localization coverage", () => {
         },
         en: {
           heading: "Projects",
-          nav: "My Tasks",
+          nav: "My tasks",
           absentVi: ["Dự án"],
         },
       },
@@ -178,7 +178,7 @@ test.describe("i18n language switching and localization coverage", () => {
         },
         en: {
           heading: "Calendar",
-          nav: "My Tasks",
+          nav: "My tasks",
           absentVi: ["Lịch biểu"],
         },
       },

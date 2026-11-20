@@ -16,7 +16,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await page.getByRole("button", { name: "Create Project" }).click();
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Update Task Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Update Task Project ${code}` })
+      .click();
 
     // Create task
     await page.getByTestId("create-task-button").click();
@@ -72,7 +75,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await page.getByRole("button", { name: "Create Project" }).click();
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Conflict Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Conflict Project ${code}` })
+      .click();
 
     // Create task
     await page.getByTestId("create-task-button").click();
@@ -124,7 +130,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await adminPage.getByRole("button", { name: "Create Project" }).click();
 
     await adminPage.waitForURL("**/projects");
-    await adminPage.getByRole("link", { name: `Role Check Project ${code}` }).click();
+    await adminPage
+      .getByRole("main")
+      .getByRole("link", { name: `Role Check Project ${code}` })
+      .click();
     await adminPage.waitForURL("**/projects/*");
 
     // Add member to project
@@ -175,7 +184,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await adminPage.getByRole("button", { name: "Create Project" }).click();
 
     await adminPage.waitForURL("**/projects");
-    await adminPage.getByRole("link", { name: `Secret Project ${code}` }).click();
+    await adminPage
+      .getByRole("main")
+      .getByRole("link", { name: `Secret Project ${code}` })
+      .click();
     await adminPage.waitForURL("**/projects/*");
 
     await adminPage.getByTestId("create-task-button").click();
@@ -210,7 +222,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await adminPage.getByRole("button", { name: "Create Project" }).click();
 
     await adminPage.waitForURL("**/projects");
-    await adminPage.getByRole("link", { name: `Assign Task Project ${code}` }).click();
+    await adminPage
+      .getByRole("main")
+      .getByRole("link", { name: `Assign Task Project ${code}` })
+      .click();
     await adminPage.waitForURL("**/projects/*");
 
     const projectUrl = adminPage.url();
@@ -269,7 +284,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await page.getByRole("button", { name: "Create Project" }).click();
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Archive Task Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Archive Task Project ${code}` })
+      .click();
 
     // Create task 1: Task to Remain
     await page.getByTestId("create-task-button").click();

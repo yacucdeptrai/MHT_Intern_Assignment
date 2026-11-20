@@ -111,7 +111,7 @@ export async function setupProjectWithTask(
   /* cspell:enable */
 
   await adminPage.waitForURL("**/projects");
-  await adminPage.getByRole("link", { name: projectName }).click();
+  await adminPage.getByRole("main").getByRole("link", { name: projectName }).click();
   await adminPage.waitForURL("**/projects/*");
 
   const projectId = adminPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
@@ -192,7 +192,7 @@ export async function addMemberToNewProject(browser: Browser, member: TestUser):
   await adminPage.getByRole("button", { name: /Create Project|Tạo dự án/i }).click();
   /* cspell:enable */
   await adminPage.waitForURL("**/projects");
-  await adminPage.getByRole("link", { name: projectName }).click();
+  await adminPage.getByRole("main").getByRole("link", { name: projectName }).click();
   await adminPage.waitForURL("**/projects/*");
   const projectId = adminPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
 
