@@ -152,6 +152,7 @@ describe("Dashboard Routes and Loaders (FR-33)", () => {
         createdAt: now,
         updatedAt: now,
       }),
+      projectMemberRepository.insertStmt(ctx.db, { projectId, userId, projectRole: "PM", createdAt: now }),
       taskStatusRepository.insertStmt(ctx.db, {
         id: statusTodoId,
         name: "Todo",
@@ -179,6 +180,59 @@ describe("Dashboard Routes and Loaders (FR-33)", () => {
     expect(result.projectsAtRisk.some((p) => p.id === projectId)).toBe(true);
     const risk = result.projectsAtRisk.find((p) => p.id === projectId);
     expect(risk?.overdueCount).toBeGreaterThanOrEqual(1);
+    // The dashboard "Projects at risk" table shows the project manager.
+    expect(risk?.pmName).toBe("ADMIN User");
+  });
+
+  it("FR-33 c1: member dashboard lists REVIEW tasks for the Waiting for review card and tags overdue status category", async () => {
+    const { request, ctx, userId } = await createAuthenticatedRequest("http://localhost/", "MEMBER");
+    const now = ctx.clock.now();
+    const projectId = crypto.randomUUID();
+    const reviewStatusId = crypto.randomUUID();
+    const taskId = crypto.randomUUID();
+
+    await ctx.db.batch([
+      projectRepository.insertStmt(ctx.db, {
+        id: projectId,
+        code: `REV${Date.now().toString().slice(-4)}`,
+        name: "Review Dashboard Project",
+        startDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "ACTIVE",
+        createdById: userId,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      projectMemberRepository.insertStmt(ctx.db, { projectId, userId, projectRole: "MEMBER", createdAt: now }),
+      taskStatusRepository.insertStmt(ctx.db, {
+        id: reviewStatusId,
+        name: "In Review",
+        category: "REVIEW",
+        isDefault: false,
+        position: 1,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+    await ctx.db.batch([
+      taskRepository.insertStmt(ctx.db, {
+        id: taskId,
+        projectId,
+        statusId: reviewStatusId,
+        title: "Overdue review task",
+        dueDate: "2026-11-10",
+        createdById: userId,
+        statusChangedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      ...taskAssigneeRepository.insertBatchStmt(ctx.db, taskId, [userId], now),
+    ]);
+
+    const result = await memberIndexLoader(makeLoaderArgs(request, ctx));
+    expect(result.inReview.map((t) => t.id)).toContain(taskId);
+    expect(result.inProgress.map((t) => t.id)).not.toContain(taskId);
+    expect(result.overdue.find((t) => t.id === taskId)?.statusCategory).toBe("REVIEW");
   });
 
   it("FR-33 c2: member attempting to access /admin throws 403 Forbidden", async () => {

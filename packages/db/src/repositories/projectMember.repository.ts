@@ -1,4 +1,4 @@
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 import type { MemberRow, ProjectRole } from "@pm/domain";
 
@@ -70,5 +70,21 @@ export const projectMemberRepository = {
 
   async listByUser(db: AppDatabase, userId: string): Promise<ProjectMember[]> {
     return db.select().from(projectMembers).where(eq(projectMembers.userId, userId));
+  },
+
+  /** Project managers of the given projects, ordered by name (dashboard "Projects at risk" PM column). */
+  async listPmNamesByProjects(
+    db: AppDatabase,
+    projectIds: string[],
+  ): Promise<Array<{ projectId: string; fullName: string }>> {
+    if (projectIds.length === 0) {
+      return [];
+    }
+    return db
+      .select({ projectId: projectMembers.projectId, fullName: users.fullName })
+      .from(projectMembers)
+      .innerJoin(users, eq(projectMembers.userId, users.id))
+      .where(and(inArray(projectMembers.projectId, projectIds), eq(projectMembers.projectRole, "PM")))
+      .orderBy(asc(users.fullName));
   },
 };

@@ -5,7 +5,7 @@ import { Form, Link, useLocation, useNavigate, useRouteLoaderData } from "react-
 import type { SessionUser } from "@pm/domain";
 import { APP_NAME } from "@pm/domain";
 
-import { translateRole } from "../../i18n/roleLabels";
+import { translateRole } from "../../i18n/labels";
 import type { ProjectHeaderLoaderData } from "../../loaders/projectHeaderLoader";
 import { useSidebarCollapsed, useTheme } from "../../utils/theme";
 import { LanguageSwitcher, useLanguageSwitch } from "../i18n/LanguageSwitcher";
@@ -183,7 +183,7 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
       ...(currentProject ? [{ label: currentProject.name, to: `/projects/${currentProject.id}` }] : []),
       { label: tabLabel },
     ];
-  } else if (route.page.startsWith("admin-") || (isPortal && route.page === "dashboard")) {
+  } else if (route.page.startsWith("admin-")) {
     crumbs = [{ label: t("nav.management") }, { label: pageLabel[route.page] }];
   } else {
     crumbs = [{ label: APP_NAME, to: dashboardPath }, { label: pageLabel[route.page] }];

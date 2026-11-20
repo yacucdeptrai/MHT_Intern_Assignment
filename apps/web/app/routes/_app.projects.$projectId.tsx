@@ -7,7 +7,7 @@ import { APP_NAME } from "@pm/domain";
 import { Badge, type BadgeTone } from "../components/ui/Badge";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Tabs, type TabItem } from "../components/ui/Tabs";
-import { translateProjectStatus, translateRole } from "../i18n/roleLabels";
+import { translateProjectStatus, translateRole } from "../i18n/labels";
 import { projectHeaderLoader } from "../loaders/projectHeaderLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 

@@ -79,7 +79,7 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     await expect(
       userPage.getByRole("heading", {
         level: 1,
-        name: /Project & Task Management|Hệ thống Quản lý Dự án & Công việc/i,
+        name: /^(Dashboard|Bảng điều khiển)$/,
       }),
     ).toBeVisible();
     await expect(userPage.getByText(new RegExp(`(Welcome back|Chào mừng trở lại), ${testName}`))).toBeVisible();

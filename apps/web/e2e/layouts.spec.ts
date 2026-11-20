@@ -21,8 +21,8 @@ test.describe("Layout Separation and Route Guards", () => {
     await page.waitForURL("**/admin");
     const adminShell = page.locator("[data-testid='admin-shell']");
     await expect(adminShell).toBeVisible();
-    await expect(page.getByText("Admin & PM portal")).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1, name: "Admin Dashboard" })).toBeVisible();
+    await expect(page.getByTestId("workspace-subtitle")).toHaveText("Admin & PM portal");
+    await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   });
 
   test("admin navigating to / is automatically redirected to /admin", async ({ page }) => {

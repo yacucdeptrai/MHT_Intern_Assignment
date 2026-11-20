@@ -62,4 +62,6 @@ export interface ProjectRiskItem {
   code: string;
   name: string;
   overdueCount: number;
+  /** First project manager by name, when the project has one */
+  pmName?: string | null;
 }

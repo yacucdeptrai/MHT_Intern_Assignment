@@ -89,6 +89,7 @@ export default function InvitePage() {
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [formKey, setFormKey] = useState(0);
   const [prevActionData, setPrevActionData] = useState(actionData);
   // A failed submit clears both password fields (never echo a rejected password back).
   if (actionData !== prevActionData) {
@@ -96,6 +97,7 @@ export default function InvitePage() {
     if (actionData && !actionData.success) {
       setPassword("");
       setConfirmPassword("");
+      setFormKey((key) => key + 1);
     }
   }
 
@@ -137,7 +139,7 @@ export default function InvitePage() {
         </Banner>
       ) : null}
 
-      <Form method="post" className="flex flex-col gap-4">
+      <Form key={formKey} method="post" className="flex flex-col gap-4">
         <Input
           id="password"
           name="password"
@@ -148,7 +150,13 @@ export default function InvitePage() {
           autoComplete="new-password"
           label={t("invite.new_password")}
           placeholder={t("invite.new_password_placeholder")}
-          value={password}
+          defaultValue=""
+          // Uncontrolled so text typed before hydration is kept; the ref syncs it into state.
+          ref={(element) => {
+            if (element && element.value !== password) {
+              setPassword(element.value);
+            }
+          }}
           onChange={(event) => {
             setPassword(event.target.value);
           }}
@@ -164,7 +172,12 @@ export default function InvitePage() {
           autoComplete="new-password"
           label={t("invite.confirm_password")}
           placeholder={t("invite.confirm_password_placeholder")}
-          value={confirmPassword}
+          defaultValue=""
+          ref={(element) => {
+            if (element && element.value !== confirmPassword) {
+              setConfirmPassword(element.value);
+            }
+          }}
           onChange={(event) => {
             setConfirmPassword(event.target.value);
           }}

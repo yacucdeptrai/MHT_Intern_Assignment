@@ -18,7 +18,7 @@ test.describe("i18n language switching and localization coverage", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "vi");
 
     // Vietnamese strings must be present, English must be absent
-    await expect(page.getByRole("heading", { level: 1, name: "Hệ thống Quản lý Dự án & Công việc" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Đăng nhập" })).toBeVisible();
     await expect(page.getByText("Sign in with your email and password")).not.toBeVisible();
     await expect(page.getByText("Đăng nhập bằng email và mật khẩu của bạn")).toBeVisible();
     await expect(page.getByLabel("Địa chỉ email")).toBeVisible();
@@ -30,7 +30,7 @@ test.describe("i18n language switching and localization coverage", () => {
     await switchToLang(page, "en");
 
     // English strings must be present, Vietnamese must be absent
-    await expect(page.getByRole("heading", { level: 1, name: "Project & Task Management" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
     await expect(page.getByText("Sign in with your email and password")).toBeVisible();
     await expect(page.getByText("Đăng nhập bằng email và mật khẩu của bạn")).not.toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
@@ -40,7 +40,7 @@ test.describe("i18n language switching and localization coverage", () => {
 
     // 3. Switch back to Vietnamese
     await switchToLang(page, "vi");
-    await expect(page.getByRole("heading", { level: 1, name: "Hệ thống Quản lý Dự án & Công việc" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Đăng nhập" })).toBeVisible();
     await expect(page.getByText("Sign in with your email and password")).not.toBeVisible();
   });
 
@@ -51,12 +51,12 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/admin",
         vi: {
-          heading: "Bảng điều khiển Quản trị",
+          heading: "Bảng điều khiển",
           nav: "Nhật ký kiểm toán",
           absentEn: ["Admin Dashboard", "Audit Log"],
         },
         en: {
-          heading: "Admin Dashboard",
+          heading: "Dashboard",
           nav: "Audit log",
           absentVi: ["Bảng điều khiển Quản trị", "Nhật ký Kiểm toán"],
         },
@@ -133,14 +133,14 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/",
         vi: {
-          heading: "Quản lý Dự án & Công việc",
+          heading: "Bảng điều khiển",
           nav: "Công việc của tôi",
-          absentEn: ["Project & Task Management"],
+          absentEn: ["Dashboard"],
         },
         en: {
-          heading: "Project & Task Management",
+          heading: "Dashboard",
           nav: "My tasks",
-          absentVi: ["Quản lý Dự án & Công việc"],
+          absentVi: ["Bảng điều khiển"],
         },
       },
       {

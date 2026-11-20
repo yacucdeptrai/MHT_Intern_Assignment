@@ -97,6 +97,7 @@ export const dashboardService = {
     }));
 
     const inProgress = taskListItems.filter((t) => t.statusCategory === "IN_PROGRESS");
+    const inReview = taskListItems.filter((t) => t.statusCategory === "REVIEW");
     const todayPriorities = taskListItems.filter((t) => t.isTodayPriority);
 
     const overdue: OverdueItem[] = taskListItems
@@ -112,6 +113,7 @@ export const dashboardService = {
         daysOverdue: calculateDaysOverdue(t.dueDate as string, now),
         priority: t.priority,
         statusName: t.statusName,
+        statusCategory: t.statusCategory,
       }))
       .sort((a, b) => {
         if (b.daysOverdue !== a.daysOverdue) {
@@ -122,6 +124,7 @@ export const dashboardService = {
 
     return {
       inProgress,
+      inReview,
       todayPriorities,
       overdue,
       unreadCount,
@@ -154,9 +157,20 @@ export const dashboardService = {
       }),
     ]);
 
+    const pms = await projectMemberRepository.listPmNamesByProjects(
+      ctx.db,
+      projectsAtRisk.map((project) => project.id),
+    );
+    const pmByProject = new Map<string, string>();
+    for (const pm of pms) {
+      if (!pmByProject.has(pm.projectId)) {
+        pmByProject.set(pm.projectId, pm.fullName);
+      }
+    }
+
     return {
       ...personalDashboard,
-      projectsAtRisk,
+      projectsAtRisk: projectsAtRisk.map((project) => ({ ...project, pmName: pmByProject.get(project.id) ?? null })),
     };
   },
 };
