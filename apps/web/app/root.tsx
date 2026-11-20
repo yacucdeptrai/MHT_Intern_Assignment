@@ -16,6 +16,7 @@ import type { Route } from "./+types/root";
 import { getScopedI18n } from "./i18n/i18n";
 import { DEFAULT_LANGUAGE } from "./i18n/types";
 import { getLanguage } from "./utils/i18n.server";
+import { THEME_BOOT_SCRIPT } from "./utils/theme";
 import "./app.css";
 
 export function loader({ request }: LoaderFunctionArgs) {
@@ -28,10 +29,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const lang = data?.lang ?? DEFAULT_LANGUAGE;
 
   return (
-    <html lang={lang}>
+    <html lang={lang} data-theme="light" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Meta />
         <Links />
       </head>
@@ -73,8 +75,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   return (
     <main className="mx-auto max-w-3xl p-8">
-      <h1 className="text-2xl font-semibold">{message}</h1>
-      <p className="mt-2 text-gray-600">{details}</p>
+      <h1 className="text-[length:var(--text-2xl)] font-semibold tracking-[-0.025em] text-fg">{message}</h1>
+      <p className="mt-2 text-[13px] text-fg-secondary">{details}</p>
     </main>
   );
 }

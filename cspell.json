@@ -44,6 +44,8 @@
     "presentationml",
     "revalidator",
     "spreadsheetml",
-    "wordprocessingml"
+    "wordprocessingml",
+    "gantt",
+    "topbar"
   ]
 }
