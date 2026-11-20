@@ -164,7 +164,7 @@ test.describe("i18n language switching and localization coverage", () => {
           absentEn: ["Calendar"],
         },
         en: {
-          heading: "My Tasks",
+          heading: "My tasks",
           nav: "Calendar",
           absentVi: ["Công việc của tôi"],
         },
@@ -198,14 +198,14 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/profile",
         vi: {
-          heading: "Hồ sơ cá nhân",
+          heading: "Hồ sơ",
           section: "Thông tin cá nhân",
-          absentEn: ["User Profile", "Personal Information"],
+          absentEn: ["Profile", "Personal information"],
         },
         en: {
-          heading: "User Profile",
-          section: "Personal Information",
-          absentVi: ["Hồ sơ cá nhân", "Thông tin cá nhân"],
+          heading: "Profile",
+          section: "Personal information",
+          absentVi: ["Hồ sơ", "Thông tin cá nhân"],
         },
       },
     ];

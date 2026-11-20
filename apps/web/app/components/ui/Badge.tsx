@@ -51,3 +51,11 @@ export function Badge({ tone = "neutral", dot = false, icon, size = "md", classN
     </span>
   );
 }
+
+/** Badge tone for a system or project role. */
+export function roleTone(role: string): BadgeTone {
+  if (role === "ADMIN") return "accent";
+  if (role === "PM") return "review";
+  if (role === "TEAM_LEAD") return "progress";
+  return "neutral";
+}

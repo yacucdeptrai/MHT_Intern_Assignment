@@ -34,19 +34,25 @@ test.describe("Notification Center Journey (FR-25)", () => {
     const firstLink = list.locator('[data-testid^="notification-link-"]').first();
     await expect(firstLink).toBeVisible();
 
-    // 2. FR-25 c2: Mark a single notification as read
-    const firstMarkReadBtn = list.locator('[data-testid^="mark-read-btn-"]').first();
-    await firstMarkReadBtn.click();
+    // 2. FR-25 c2: Opening a notification marks it as read
+    await expect(member.page.getByTestId("tab-unread")).toContainText(String(initialCount));
+    await firstLink.click();
+    await member.page.waitForURL(/\/projects\//);
+    await member.page.goto("/notifications");
 
     // Unread count decrements
     await expect(unreadCountEl).toHaveText(String(initialCount - 1));
 
-    // 3. FR-25 c2: Mark all as read
+    // 3. FR-25 c2: Mark all as read (disabled once nothing is unread)
     const markAllReadBtn = member.page.getByTestId("mark-all-read-btn");
-    if (await markAllReadBtn.isVisible()) {
+    if (await markAllReadBtn.isEnabled()) {
       await markAllReadBtn.click();
       await expect(unreadCountEl).toHaveText("0");
     }
+    await expect(markAllReadBtn).toBeDisabled();
+    await member.page.getByTestId("tab-unread").click();
+    await expect(member.page.getByTestId("no-notifications-msg")).toContainText("You're all caught up");
+    await member.page.getByTestId("tab-all").click();
 
     // 4. FR-25 c3: Click link to target task page while member has access
     await member.page.goto("/notifications");
