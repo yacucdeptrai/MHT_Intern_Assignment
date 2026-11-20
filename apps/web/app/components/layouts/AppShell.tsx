@@ -103,6 +103,12 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
   const [theme, toggleTheme] = useTheme();
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
+  // Keep the active item visible in long project lists (the current project and its tabs).
+  useEffect(() => {
+    const active = document.querySelector<HTMLElement>('[data-testid="app-sidebar"] nav [aria-current="page"]');
+    active?.scrollIntoView({ block: "nearest" });
+  }, [location.pathname]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {

@@ -69,10 +69,10 @@ test.describe("Notification Center Journey (FR-25)", () => {
 
     await adminPage.goto(`/projects/${projectId}/members`);
     await expect(adminPage.getByTestId("members-table")).toBeVisible();
-    adminPage.once("dialog", (dialog) => dialog.accept());
     const memberRow = adminPage.locator("tr", { hasText: member.email });
     /* cspell:disable */
     await memberRow.getByRole("button", { name: /Remove|Gỡ bỏ/i }).click();
+    await adminPage.getByTestId("confirm-remove-btn").click();
     /* cspell:enable */
     await expect(adminPage.getByTestId("success-banner")).toBeVisible();
     await expect(adminPage.getByTestId("members-table")).not.toContainText(member.email);

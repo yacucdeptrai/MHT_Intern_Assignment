@@ -75,8 +75,8 @@ test.describe("Project Settings & Archive (FR-08 & FR-09)", () => {
     await page.waitForURL("**/settings");
 
     // Archive project via Danger Zone
-    page.on("dialog", (dialog) => dialog.accept());
     await page.getByTestId("archive-project-button").click();
+    await page.getByTestId("confirm-archive-btn").click();
     await page.waitForURL("**/projects");
 
     // Verify project is no longer visible in active list for PM

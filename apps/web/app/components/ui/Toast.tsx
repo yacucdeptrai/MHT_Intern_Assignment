@@ -6,10 +6,11 @@ export interface ToastProps {
   /** Change to re-show the same text (e.g. a submission counter) */
   id?: unknown;
   durationMs?: number;
+  "data-testid"?: string;
 }
 
 /** Bottom-center confirmation ("Profile updated"), inverse surface, auto-hides. */
-export function Toast({ text, id, durationMs = 4000 }: ToastProps) {
+export function Toast({ text, id, durationMs = 4000, "data-testid": testId = "toast" }: ToastProps) {
   const [hiddenFor, setHiddenFor] = useState<unknown>(undefined);
   const key = id ?? text;
 
@@ -31,7 +32,7 @@ export function Toast({ text, id, durationMs = 4000 }: ToastProps) {
   return (
     <div
       role="status"
-      data-testid="toast"
+      data-testid={testId}
       className="fixed bottom-16 left-1/2 z-[80] -translate-x-1/2 rounded-lg bg-inverse px-3.5 py-2.5 text-[12.5px] font-medium leading-none text-fg-inverse shadow-lg"
     >
       {text}
