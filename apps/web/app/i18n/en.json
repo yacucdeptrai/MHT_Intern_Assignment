@@ -32,20 +32,22 @@
     "submitting": "Setting password..."
   },
   "nav": {
-    "admin_portal": "Admin & PM Portal",
+    "admin_portal": "Admin & PM portal",
     "workspace": "Workspace",
     "management": "Management",
     "personal": "Personal",
     "dashboard": "Dashboard",
     "projects": "Projects",
-    "my_projects": "My Projects",
-    "user_management": "User Management",
     "statuses": "Statuses",
-    "audit_log": "Audit Log",
-    "my_tasks": "My Tasks",
+    "audit_log": "Audit log",
+    "my_tasks": "My tasks",
     "calendar": "Calendar",
     "notifications": "Notifications",
-    "sign_out": "Sign out"
+    "sign_out": "Sign out",
+    "search": "Search",
+    "users": "Users",
+    "all_projects": "All projects",
+    "profile": "Profile"
   },
   "projects": {
     "title": "Projects",
@@ -90,13 +92,16 @@
   },
   "project_layout": {
     "status_archived": "Archived",
-    "your_role": "Your Role:",
     "aria_tabs": "Project tabs",
     "tab_tasks": "Tasks",
     "tab_sprints": "Sprints",
     "tab_members": "Members",
     "tab_settings": "Settings",
-    "tab_reports": "Reports"
+    "tab_reports": "Reports",
+    "status_ACTIVE": "Active",
+    "status_ON_HOLD": "On hold",
+    "status_COMPLETED": "Completed",
+    "your_role_badge": "Your role: {{role}}"
   },
   "project_tasks": {
     "title": "Project Tasks",
@@ -826,5 +831,29 @@
     "user_at_least_one_admin": "At least one administrator is required",
     "audit_view_forbidden": "You do not have permission to view the system audit log",
     "audit_invalid_filters": "Invalid audit log filters"
+  },
+  "shell": {
+    "expand_sidebar": "Expand sidebar",
+    "collapse_sidebar": "Collapse sidebar",
+    "breadcrumb": "Breadcrumb",
+    "search_placeholder": "Search or create…",
+    "new_task": "New task",
+    "role_admin": "Admin",
+    "role_pm": "PM",
+    "role_team_lead": "Team lead",
+    "role_member": "Member"
+  },
+  "command": {
+    "title": "Command menu",
+    "placeholder": "Jump to a page or run a command…",
+    "no_results": "No results for “{{query}}”",
+    "navigate": "Navigate",
+    "select": "Select",
+    "create_task": "Create task",
+    "group_goto": "Go to",
+    "group_projects": "Projects",
+    "group_commands": "Commands",
+    "theme_dark": "Switch to dark theme",
+    "theme_light": "Switch to light theme"
   }
 }

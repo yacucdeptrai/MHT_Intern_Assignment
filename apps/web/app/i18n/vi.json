@@ -32,20 +32,22 @@
     "submitting": "Đang đặt mật khẩu..."
   },
   "nav": {
-    "admin_portal": "Cổng Quản trị & PM",
+    "admin_portal": "Cổng quản trị & PM",
     "workspace": "Không gian làm việc",
     "management": "Quản lý",
     "personal": "Cá nhân",
     "dashboard": "Bảng điều khiển",
     "projects": "Dự án",
-    "my_projects": "Dự án của tôi",
-    "user_management": "Quản lý Người dùng",
     "statuses": "Trạng thái",
-    "audit_log": "Nhật ký Kiểm toán",
+    "audit_log": "Nhật ký kiểm toán",
     "my_tasks": "Công việc của tôi",
     "calendar": "Lịch biểu",
     "notifications": "Thông báo",
-    "sign_out": "Đăng xuất"
+    "sign_out": "Đăng xuất",
+    "search": "Tìm kiếm",
+    "users": "Người dùng",
+    "all_projects": "Tất cả dự án",
+    "profile": "Hồ sơ"
   },
   "projects": {
     "title": "Dự án",
@@ -90,13 +92,16 @@
   },
   "project_layout": {
     "status_archived": "Đã lưu trữ",
-    "your_role": "Vai trò của bạn:",
     "aria_tabs": "Các thẻ dự án",
     "tab_tasks": "Công việc",
     "tab_sprints": "Chu kỳ",
     "tab_members": "Thành viên",
     "tab_settings": "Cài đặt",
-    "tab_reports": "Báo cáo"
+    "tab_reports": "Báo cáo",
+    "status_ACTIVE": "Đang hoạt động",
+    "status_ON_HOLD": "Tạm dừng",
+    "status_COMPLETED": "Hoàn thành",
+    "your_role_badge": "Vai trò của bạn: {{role}}"
   },
   "project_tasks": {
     "title": "Công việc dự án",
@@ -826,5 +831,29 @@
     "user_at_least_one_admin": "Hệ thống cần ít nhất một quản trị viên",
     "audit_view_forbidden": "Bạn không có quyền xem nhật ký hệ thống",
     "audit_invalid_filters": "Bộ lọc nhật ký kiểm toán không hợp lệ"
+  },
+  "shell": {
+    "expand_sidebar": "Mở rộng thanh bên",
+    "collapse_sidebar": "Thu gọn thanh bên",
+    "breadcrumb": "Đường dẫn",
+    "search_placeholder": "Tìm kiếm hoặc tạo mới…",
+    "new_task": "Công việc mới",
+    "role_admin": "Quản trị viên",
+    "role_pm": "PM",
+    "role_team_lead": "Trưởng nhóm",
+    "role_member": "Thành viên"
+  },
+  "command": {
+    "title": "Bảng lệnh",
+    "placeholder": "Chuyển đến trang hoặc chạy lệnh…",
+    "no_results": "Không có kết quả cho “{{query}}”",
+    "navigate": "Di chuyển",
+    "select": "Chọn",
+    "create_task": "Tạo công việc",
+    "group_goto": "Chuyển đến",
+    "group_projects": "Dự án",
+    "group_commands": "Lệnh",
+    "theme_dark": "Chuyển sang giao diện tối",
+    "theme_light": "Chuyển sang giao diện sáng"
   }
 }
