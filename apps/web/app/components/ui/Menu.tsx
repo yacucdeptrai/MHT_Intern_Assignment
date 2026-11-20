@@ -11,6 +11,8 @@ export interface MenuItem {
   danger?: boolean;
   checked?: boolean;
   disabled?: boolean;
+  /** Renders a hairline separator instead of an item */
+  divider?: boolean;
   onSelect?: () => void;
   "data-testid"?: string;
 }
@@ -26,29 +28,33 @@ export interface MenuProps {
 export function Menu({ items, onClose, width = 220, className }: MenuProps) {
   return (
     <div role="menu" className={cx("flex flex-col rounded-lg bg-raised p-1 shadow-lg", className)} style={{ width }}>
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          role="menuitem"
-          disabled={item.disabled}
-          data-testid={item["data-testid"]}
-          onClick={() => {
-            item.onSelect?.();
-            onClose?.();
-          }}
-          className={cx(
-            "flex h-[30px] cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-[13px] leading-none hover:bg-hover disabled:cursor-default disabled:opacity-50",
-            item.danger ? "text-danger" : "text-fg",
-          )}
-        >
-          {item.icon ? (
-            <Icon name={item.icon} size={14} className={item.danger ? "text-danger" : "text-fg-muted"} />
-          ) : null}
-          <span className="flex-1">{item.label}</span>
-          {item.checked ? <Icon name="check" size={14} className="text-fg" /> : null}
-        </button>
-      ))}
+      {items.map((item) =>
+        item.divider ? (
+          <div key={item.id} role="separator" className="-mx-1 my-1 h-px bg-line" />
+        ) : (
+          <button
+            key={item.id}
+            type="button"
+            role="menuitem"
+            disabled={item.disabled}
+            data-testid={item["data-testid"]}
+            onClick={() => {
+              item.onSelect?.();
+              onClose?.();
+            }}
+            className={cx(
+              "flex h-[30px] cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-[13px] leading-none hover:bg-hover disabled:cursor-default disabled:opacity-50",
+              item.danger ? "text-danger" : "text-fg",
+            )}
+          >
+            {item.icon ? (
+              <Icon name={item.icon} size={14} className={item.danger ? "text-danger" : "text-fg-muted"} />
+            ) : null}
+            <span className="flex-1">{item.label}</span>
+            {item.checked ? <Icon name="check" size={14} className="text-fg" /> : null}
+          </button>
+        ),
+      )}
     </div>
   );
 }

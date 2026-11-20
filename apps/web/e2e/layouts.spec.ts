@@ -39,7 +39,7 @@ test.describe("Layout Separation and Route Guards", () => {
 
     await page.getByRole("link", { name: "Users", exact: true }).click();
     await page.waitForURL("**/admin/users");
-    await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Users", exact: true })).toBeVisible();
     await expect(page.locator("[data-testid='admin-shell']")).toBeVisible();
   });
 });

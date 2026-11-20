@@ -43,8 +43,8 @@ export async function createSignedInMember(
   await adminPage.goto("/admin/users");
 
   /* cspell:disable */
-  const createButton = adminPage.getByRole("button", { name: /^(\+ Create User|\+ Thêm người dùng)$/i });
-  const modalHeading = adminPage.getByRole("heading", { level: 2, name: /Create New User|Tạo người dùng mới/i });
+  const createButton = adminPage.getByTestId("btn-open-create-user");
+  const modalHeading = adminPage.getByRole("heading", { level: 2, name: /^(Create user|Tạo người dùng)$/i });
   await expect(async () => {
     await createButton.click();
     await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -58,11 +58,9 @@ export async function createSignedInMember(
   if (role !== "MEMBER") {
     await adminPage.locator("#create-systemRole").selectOption(role);
   }
-  await adminPage.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
+  await adminPage.getByTestId("btn-submit-create-user").click();
 
-  await expect(
-    adminPage.getByText(/User account created successfully!|Tài khoản người dùng đã được tạo thành công!/i),
-  ).toBeVisible();
+  await expect(adminPage.getByText(/User account created|Đã tạo tài khoản người dùng/i)).toBeVisible();
   /* cspell:enable */
   const inviteUrl = await adminPage.locator("input[readonly]").inputValue();
   await adminContext.close();

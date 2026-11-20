@@ -11,11 +11,11 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     await signInAsAdmin(page);
 
     await page.goto("/admin/users");
-    await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Users", exact: true })).toBeVisible();
 
     // 2. Open Create User Modal
-    const createButton = page.getByRole("button", { name: "+ Create User" });
-    const modalHeading = page.getByRole("heading", { level: 2, name: "Create New User" });
+    const createButton = page.getByTestId("btn-open-create-user");
+    const modalHeading = page.getByRole("heading", { level: 2, name: "Create user", exact: true });
     await expect(async () => {
       await createButton.click();
       await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -27,10 +27,10 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
 
     await page.getByLabel("Full Name").fill(testName);
     await page.getByLabel("Email Address").fill(testEmail);
-    await page.getByRole("button", { name: "Create User", exact: true }).click();
+    await page.getByTestId("btn-submit-create-user").click();
 
     // 3. Extract invite link
-    await expect(page.getByText("User account created successfully!")).toBeVisible();
+    await expect(page.getByText("User account created", { exact: true })).toBeVisible();
     const inviteInput = page.locator("input[readonly]");
     await expect(inviteInput).toBeVisible();
     const inviteUrl = await inviteInput.inputValue();

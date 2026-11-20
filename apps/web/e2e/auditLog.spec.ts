@@ -74,7 +74,6 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
     await adminPage.getByTestId("filter-action").selectOption("TASK_REJECTED");
     await adminPage.getByTestId("filter-from").fill(todayStr);
     await adminPage.getByTestId("filter-to").fill(todayStr);
-    await adminPage.getByTestId("btn-apply-audit-filters").click();
 
     await expect(adminPage).toHaveURL(/entityType=TASK/);
     await expect(adminPage).toHaveURL(/action=TASK_REJECTED/);

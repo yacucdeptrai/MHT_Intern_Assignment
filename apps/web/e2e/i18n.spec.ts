@@ -64,14 +64,14 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/admin/users",
         vi: {
-          heading: "Quản lý người dùng",
+          heading: "Người dùng",
           nav: "Nhật ký kiểm toán",
-          absentEn: ["User Management"],
+          absentEn: ["Users"],
         },
         en: {
-          heading: "User Management",
+          heading: "Users",
           nav: "Audit log",
-          absentVi: ["Quản lý người dùng"],
+          absentVi: ["Người dùng"],
         },
       },
       {
@@ -79,10 +79,10 @@ test.describe("i18n language switching and localization coverage", () => {
         vi: {
           heading: "Trạng thái công việc",
           nav: "Trạng thái",
-          absentEn: ["Task Statuses"],
+          absentEn: ["Task statuses"],
         },
         en: {
-          heading: "Task Statuses",
+          heading: "Task statuses",
           nav: "Statuses",
           absentVi: ["Trạng thái công việc"],
         },
@@ -92,10 +92,10 @@ test.describe("i18n language switching and localization coverage", () => {
         vi: {
           heading: "Nhật ký hệ thống",
           nav: "Người dùng",
-          absentEn: ["System Audit Log"],
+          absentEn: ["Audit log"],
         },
         en: {
-          heading: "System Audit Log",
+          heading: "Audit log",
           nav: "Users",
           absentVi: ["Nhật ký hệ thống"],
         },
