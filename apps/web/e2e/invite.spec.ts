@@ -56,11 +56,17 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     ).toBeVisible();
     await expect(userPage.getByText(testEmail)).toBeVisible();
 
-    // 5. Test validation: password mismatch
+    // 5. Test validation: the expiry note shows, and short or mismatched passwords keep submit disabled
+    const submitButton = userPage.getByRole("button", { name: /Set Password and Sign In|Đặt mật khẩu và Đăng nhập/i });
+    await expect(userPage.getByTestId("invite-expiry")).toContainText(/can be used once|chỉ dùng được một lần/);
+    await expect(submitButton).toBeDisabled();
+    await userPage.getByLabel(/New Password|Mật khẩu mới/i).fill("short");
+    await expect(userPage.getByText("Password must be at least 10 characters")).toBeVisible();
+    await expect(submitButton).toBeDisabled();
     await userPage.getByLabel(/New Password|Mật khẩu mới/i).fill("Password123!");
     await userPage.getByLabel(/Confirm Password|Xác nhận mật khẩu/i).fill("Mismatch123!");
-    await userPage.getByRole("button", { name: /Set Password and Sign In|Đặt mật khẩu và Đăng nhập/i }).click();
     await expect(userPage.getByText("Passwords do not match")).toBeVisible();
+    await expect(submitButton).toBeDisabled();
 
     // 6. Test success: submit matching valid password (>=10 chars)
     const validPassword = "SecurePassword123!";

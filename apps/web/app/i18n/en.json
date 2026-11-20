@@ -13,23 +13,27 @@
     "email_placeholder": "name@company.com",
     "password": "Password",
     "sign_in": "Sign in",
-    "signing_in": "Signing in...",
+    "signing_in": "Signing in…",
     "or_continue_with": "Or continue with",
     "continue_with_google": "Continue with Google",
-    "continue_with_microsoft": "Continue with Microsoft"
+    "continue_with_microsoft": "Continue with Microsoft",
+    "no_account": "No account? Ask your administrator for an invite."
   },
   "invite": {
     "invalid_title": "This invite is invalid or has expired",
     "invalid_description": "The link you followed has expired, already been used, or does not exist. Please contact your organization administrator for a new invite.",
-    "title": "Accept Invitation",
+    "title": "Accept invitation",
     "set_password_for": "Set a password for",
     "to_join": "to join",
-    "new_password": "New Password",
+    "new_password": "New password",
     "new_password_placeholder": "At least 10 characters",
-    "confirm_password": "Confirm Password",
+    "confirm_password": "Confirm password",
     "confirm_password_placeholder": "Re-enter password",
-    "submit": "Set Password and Sign In",
-    "submitting": "Setting password..."
+    "submit": "Set password and sign in",
+    "submitting": "Setting password…",
+    "error_short": "Password must be at least {{min}} characters",
+    "error_mismatch": "Passwords do not match",
+    "expires_note": "This link expires on {{date}} and can be used once."
   },
   "nav": {
     "admin_portal": "Admin & PM portal",

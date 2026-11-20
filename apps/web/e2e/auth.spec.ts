@@ -15,13 +15,18 @@ const adminPassword = requireEnv("ADMIN_SEED_PASSWORD");
 test.describe("Journey 1: Authentication (FR-01, FR-02)", () => {
   test("renders login page and form elements", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Hệ thống Quản lý Dự án & Công việc");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Đăng nhập");
+    await expect(page.getByText("Hệ thống Quản lý Dự án & Công việc")).toBeVisible();
     await expect(page.getByLabel("Địa chỉ email")).toBeVisible();
     await expect(page.getByLabel("Mật khẩu")).toBeVisible();
     await expect(page.getByRole("button", { name: "Đăng nhập" })).toBeVisible();
 
     await page.getByTestId("lang-en").click();
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Project & Task Management");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sign in");
+    await expect(page.getByText("Project & Task Management")).toBeVisible();
+    await expect(page.getByText("No account? Ask your administrator for an invite.")).toBeVisible();
+    await expect(page.getByTestId("lang-en")).toHaveText("English");
+    await expect(page.getByTestId("lang-vi")).toHaveText("Tiếng Việt");
     await expect(page.getByLabel("Email address")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();

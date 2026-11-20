@@ -1,3 +1,4 @@
+/* cspell:words Tiếng Việt endonyms */
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLocation } from "react-router";
 
@@ -23,9 +24,15 @@ export function useLanguageSwitch() {
   return { currentLang, switchTo };
 }
 
-export function LanguageSwitcher() {
+export interface LanguageSwitcherProps {
+  /** "short" (EN / VI) in the sidebar footer; "full" (English / Tiếng Việt) on auth screens */
+  variant?: "short" | "full";
+}
+
+export function LanguageSwitcher({ variant = "short" }: LanguageSwitcherProps) {
   const { t } = useTranslation();
   const { currentLang, switchTo } = useLanguageSwitch();
+  const isFull = variant === "full";
 
   return (
     <ViewSwitcher<SupportedLanguage>
@@ -33,8 +40,9 @@ export function LanguageSwitcher() {
       value={currentLang}
       onChange={switchTo}
       views={[
-        { id: "en", label: "EN", title: t("common.english"), "data-testid": "lang-en" },
-        { id: "vi", label: "VI", title: t("common.vietnamese"), "data-testid": "lang-vi" },
+        // Language names are endonyms, so they are not translated.
+        { id: "en", label: isFull ? "English" : "EN", title: t("common.english"), "data-testid": "lang-en" },
+        { id: "vi", label: isFull ? "Tiếng Việt" : "VI", title: t("common.vietnamese"), "data-testid": "lang-vi" },
       ]}
     />
   );

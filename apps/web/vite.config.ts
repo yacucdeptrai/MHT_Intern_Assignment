@@ -8,4 +8,8 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  // Pre-bundle the per-icon Lucide modules so the dev server does not reload when it first sees them.
+  optimizeDeps: {
+    include: ["lucide-react/icons/*"],
+  },
 });

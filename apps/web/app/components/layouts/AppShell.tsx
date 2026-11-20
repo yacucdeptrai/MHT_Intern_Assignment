@@ -10,6 +10,7 @@ import type { ProjectHeaderLoaderData } from "../../loaders/projectHeaderLoader"
 import { useSidebarCollapsed, useTheme } from "../../utils/theme";
 import { LanguageSwitcher, useLanguageSwitch } from "../i18n/LanguageSwitcher";
 import { Avatar } from "../ui/Avatar";
+import { PRODUCT_INITIALS } from "../ui/brand";
 import { Breadcrumb, type BreadcrumbItem } from "../ui/Breadcrumb";
 import { Button } from "../ui/Button";
 import { CommandBar, type CommandGroup, type CommandItem } from "../ui/CommandBar";
@@ -307,7 +308,7 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
         header={
           <WorkspaceSwitcher
             name={APP_NAME}
-            initials="PT"
+            initials={PRODUCT_INITIALS}
             to={dashboardPath}
             subtitle={isPortal ? t("nav.admin_portal") : t("nav.workspace")}
           />

@@ -13,23 +13,27 @@
     "email_placeholder": "ten@congty.com",
     "password": "Mật khẩu",
     "sign_in": "Đăng nhập",
-    "signing_in": "Đang đăng nhập...",
+    "signing_in": "Đang đăng nhập…",
     "or_continue_with": "Hoặc tiếp tục với",
     "continue_with_google": "Tiếp tục với Google",
-    "continue_with_microsoft": "Tiếp tục với Microsoft"
+    "continue_with_microsoft": "Tiếp tục với Microsoft",
+    "no_account": "Chưa có tài khoản? Hãy nhờ quản trị viên gửi lời mời."
   },
   "invite": {
     "invalid_title": "Lời mời này không hợp lệ hoặc đã hết hạn",
     "invalid_description": "Liên kết bạn truy cập đã hết hạn, đã được sử dụng hoặc không tồn tại. Vui lòng liên hệ quản trị viên tổ chức để nhận lời mời mới.",
-    "title": "Chấp nhận Lời mời",
+    "title": "Chấp nhận lời mời",
     "set_password_for": "Đặt mật khẩu cho",
     "to_join": "để tham gia",
-    "new_password": "Mật khẩu Mới",
+    "new_password": "Mật khẩu mới",
     "new_password_placeholder": "Tối thiểu 10 ký tự",
-    "confirm_password": "Xác nhận Mật khẩu",
+    "confirm_password": "Xác nhận mật khẩu",
     "confirm_password_placeholder": "Nhập lại mật khẩu",
-    "submit": "Đặt Mật khẩu và Đăng nhập",
-    "submitting": "Đang đặt mật khẩu..."
+    "submit": "Đặt mật khẩu và đăng nhập",
+    "submitting": "Đang đặt mật khẩu…",
+    "error_short": "Mật khẩu phải có ít nhất {{min}} ký tự",
+    "error_mismatch": "Mật khẩu không khớp",
+    "expires_note": "Liên kết này hết hạn vào {{date}} và chỉ dùng được một lần."
   },
   "nav": {
     "admin_portal": "Cổng quản trị & PM",

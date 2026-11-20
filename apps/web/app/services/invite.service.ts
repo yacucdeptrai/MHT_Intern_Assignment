@@ -19,6 +19,8 @@ export interface ValidateTokenResult {
   email?: string;
   projectId?: string | null;
   projectName?: string;
+  /** ISO timestamp; shown as "This link expires on …" */
+  expiresAt?: string;
 }
 
 export interface CreateInviteResult {
@@ -106,6 +108,7 @@ export const inviteService = {
         status: "valid",
         email: invite.email,
         projectId: invite.projectId,
+        expiresAt: invite.expiresAt.toISOString(),
       };
     } catch {
       return { status: "invalid" };
