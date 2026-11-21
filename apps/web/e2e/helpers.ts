@@ -163,10 +163,9 @@ export async function setupProjectWithTask(
 }
 
 export async function moveTaskToStatus(page: Page, statusLabel: string): Promise<void> {
-  const select = page.getByTestId("select-task-status");
-  await expect(select).toBeVisible();
-  await select.selectOption({ label: statusLabel });
-  await page.getByTestId("btn-change-status").click();
+  // The drawer's status picker lists the statuses the user may move the task to.
+  await page.getByTestId("status-picker").click();
+  await page.getByRole("menuitem", { name: statusLabel, exact: true }).click();
   await expect(page.getByTestId("task-status-badge")).toHaveText(statusLabel);
   await expect(page.getByTestId("sidebar-status")).toHaveText(statusLabel);
 }

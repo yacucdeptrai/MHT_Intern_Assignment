@@ -113,6 +113,8 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   label?: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
+  /** Shows the required asterisk without native browser validation */
+  requiredMark?: boolean;
   ref?: Ref<HTMLTextAreaElement>;
   fieldClassName?: string;
 }
@@ -123,6 +125,7 @@ export function Textarea({
   hint,
   error,
   required,
+  requiredMark,
   id,
   rows = 4,
   className,
@@ -143,7 +146,14 @@ export function Textarea({
     return control;
   }
   return (
-    <Field label={label} hint={hint} error={error} required={required} htmlFor={id} className={fieldClassName}>
+    <Field
+      label={label}
+      hint={hint}
+      error={error}
+      required={requiredMark ?? required}
+      htmlFor={id}
+      className={fieldClassName}
+    >
       {control}
     </Field>
   );

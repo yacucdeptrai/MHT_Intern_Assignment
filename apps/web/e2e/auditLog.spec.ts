@@ -35,6 +35,7 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
 
     // FR-24 c1, c3: Project member opens task and sees task history newest first, including reason & diffs
     await member.page.reload();
+    await member.page.getByTestId("drawer-tab-activity").click();
     const historySection = member.page.getByTestId("task-history-section");
     await expect(historySection).toBeVisible();
 

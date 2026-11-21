@@ -37,7 +37,7 @@ test.describe("Task Update Journey (FR-13)", () => {
     await expect(page.getByTestId("task-detail-page")).toBeVisible();
     await expect(page.getByTestId("task-title")).toHaveText("Original Task Title");
     await expect(page.getByTestId("display-task-version")).toHaveText("1");
-    await expect(page.getByTestId("task-priority-badge")).toHaveText("LOW");
+    await expect(page.getByTestId("task-priority-badge")).toHaveText("Low");
 
     // Click Edit Task
     await page.getByTestId("edit-task-button").click();
@@ -56,10 +56,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     // Verify updated details and version incremented to 2
     await expect(page.getByTestId("task-title")).toHaveText("Modified Task Title");
     await expect(page.getByTestId("task-description")).toHaveText("Modified description content");
-    await expect(page.getByTestId("task-priority-badge")).toHaveText("URGENT");
+    await expect(page.getByTestId("task-priority-badge")).toHaveText("Urgent");
     await expect(page.getByTestId("display-task-version")).toHaveText("2");
-    await expect(page.getByTestId("sidebar-start-date")).toHaveText("2026-11-10");
-    await expect(page.getByTestId("sidebar-due-date")).toHaveText("2026-11-20");
+    await expect(page.getByTestId("sidebar-start-date")).toHaveText("Nov 10");
+    await expect(page.getByTestId("sidebar-due-date")).toHaveText("Nov 20");
   });
 
   test("FR-13 c2: optimistic conflict banner shown when submitting stale version", async ({ page }) => {
@@ -305,11 +305,10 @@ test.describe("Task Update Journey (FR-13)", () => {
     await page.waitForURL("**/tasks/*");
 
     // Click Archive Task
+    await page.getByRole("button", { name: "More" }).click();
     await expect(page.getByTestId("archive-task-button")).toBeVisible();
-    page.once("dialog", (dialog) => {
-      void dialog.accept();
-    });
     await page.getByTestId("archive-task-button").click();
+    await page.getByTestId("confirm-archive-task-btn").click();
 
     // Redirects to project tasks list
     await page.waitForURL("**/projects/*");

@@ -53,7 +53,7 @@ test.describe("Task Approval Journey (FR-22)", () => {
     await expect(lead.page.getByTestId("sidebar-status")).toHaveText("Done");
     await expect(lead.page.getByTestId("frozen-done-indicator")).toBeVisible();
     await expect(lead.page.getByTestId("approve-task-button")).toHaveCount(0);
-    await expect(lead.page.getByTestId("form-change-status")).toHaveCount(0);
+    await expect(lead.page.getByTestId("status-picker")).toHaveCount(0);
 
     await lead.context.close();
     await assignee.context.close();

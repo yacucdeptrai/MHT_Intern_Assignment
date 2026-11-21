@@ -6,6 +6,8 @@ test.describe("Task Status Transition Journey (FR-21)", () => {
   test("FR-21 c1, c4: assignee moves task To Do -> In Progress -> Review; non-editor member has no status form", async ({
     browser,
   }) => {
+    // Sets up two members and a project through the UI before the journey itself.
+    test.setTimeout(60_000);
     const assignee = await createSignedInMember(browser, "MEMBER");
     const bystander = await createSignedInMember(browser, "MEMBER");
 
@@ -22,9 +24,11 @@ test.describe("Task Status Transition Journey (FR-21)", () => {
     await expect(assignee.page.getByTestId("task-status-badge")).toHaveText("To Do");
     await expect(assignee.page.getByTestId("display-task-version")).toHaveText("2");
 
-    // Done status is excluded from the update dropdown by domain policy
-    const optionTexts = await assignee.page.getByTestId("select-task-status").locator("option").allTextContents();
+    // Done status is excluded from the status picker by domain policy
+    await assignee.page.getByTestId("status-picker").click();
+    const optionTexts = await assignee.page.getByRole("menuitem").allTextContents();
     expect(optionTexts).not.toContain("Done");
+    await assignee.page.keyboard.press("Escape");
 
     await moveTaskToStatus(assignee.page, "In Progress");
     await expect(assignee.page.getByTestId("display-task-version")).toHaveText("3");
@@ -35,7 +39,7 @@ test.describe("Task Status Transition Journey (FR-21)", () => {
     // FR-21 c4: bystander member cannot see status move controls
     await bystander.page.goto(taskUrl);
     await expect(bystander.page.getByTestId("sidebar-status")).toHaveText("Review");
-    await expect(bystander.page.getByTestId("form-change-status")).toHaveCount(0);
+    await expect(bystander.page.getByTestId("status-picker")).toHaveCount(0);
 
     await assignee.context.close();
     await bystander.context.close();

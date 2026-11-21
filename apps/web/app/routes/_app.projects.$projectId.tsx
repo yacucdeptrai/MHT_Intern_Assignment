@@ -50,11 +50,12 @@ export default function ProjectLayout() {
   const activeTab = tabs.some((tab) => tab.id === sub) ? sub : "tasks";
   const roleLabel = translateRole(t, project.projectRole);
   const tasksData = useRouteLoaderData<ProjectTasksLoaderData>("routes/_app.projects.$projectId._index");
-  // Only the task list itself is full-bleed; other tabs (and the task page) use the padded column.
-  const isTasksTab = activeTab === "tasks" && pathname.replace(/\/+$/, "") === base;
+  // The task list (and the task drawer over it) is full-bleed; other tabs use the padded column.
+  const isTaskRoute = pathname.startsWith(`${base}/tasks/`);
+  const isTasksTab = activeTab === "tasks" && (pathname.replace(/\/+$/, "") === base || isTaskRoute);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className={`flex h-full min-h-0 flex-col${isTaskRoute ? " min-[1200px]:pr-[var(--drawer-width)]" : ""}`}>
       <PageHeader
         data-testid="project-header"
         titleTestId="project-title"

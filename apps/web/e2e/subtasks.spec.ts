@@ -65,7 +65,7 @@ test.describe("Sub-tasks Journey (FR-17)", () => {
     /* cspell:enable */
 
     // Navigate into first sub-task
-    await page.getByRole("link", { name: "First Subtask" }).click();
+    await page.getByTestId("subtasks-section").getByRole("link", { name: "First Subtask" }).click();
     await page.waitForURL("**/tasks/*");
 
     // FR-17 c2: Verify sub-task shows breadcrumb pointing to parent and does NOT show Add Sub-task button

@@ -55,10 +55,12 @@ test.describe("Journey 5: Task Approval Workflow (FR-22, FR-23)", () => {
 
     // 4. Reason appears as a comment, and task returns to In Progress
     await expect(lead.page.getByTestId("task-status-badge")).toHaveText("In Progress");
+    await lead.page.getByTestId("drawer-tab-activity").click();
     await expect(lead.page.getByTestId("comments-section")).toContainText(rejectionReason);
 
     // 5. Member sees rejection comment and resubmits to Review
     await assignee.page.reload();
+    await assignee.page.getByTestId("drawer-tab-activity").click();
     await expect(assignee.page.getByTestId("comments-section")).toContainText(rejectionReason);
     await moveTaskToStatus(assignee.page, "Review");
     await expect(assignee.page.getByTestId("task-status-badge")).toHaveText("Review");
