@@ -19,6 +19,9 @@ import { Icon, type IconName } from "../ui/Icon";
 import { IconButton } from "../ui/IconButton";
 import { Kbd } from "../ui/Kbd";
 import { Sidebar, SidebarItem, SidebarSection, WorkspaceSwitcher } from "../ui/Sidebar";
+import { StatusIcon, statusGlyph } from "../ui/TaskIcons";
+import { Toast } from "../ui/Toast";
+import { useCommandTasks } from "./useCommandTasks";
 
 export interface SidebarProject {
   id: string;
@@ -187,6 +190,43 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
     },
   });
 
+  // Quick-add and view switches target the open project, else the first one the user can see.
+  const targetProject = currentProject ?? sidebarProjects[0] ?? null;
+  const commandTasks = useCommandTasks(isCommandOpen, currentProject?.id ?? null);
+  const switchView = (view: "list" | "board" | "timeline") => {
+    if (targetProject) {
+      void navigate(`/projects/${targetProject.id}${view === "list" ? "" : `?view=${view}`}`);
+    }
+  };
+  const viewCommands: CommandItem[] = targetProject
+    ? [
+        {
+          id: "view-list",
+          icon: "layout-list",
+          label: t("command.view_list"),
+          onSelect: () => {
+            switchView("list");
+          },
+        },
+        {
+          id: "view-board",
+          icon: "kanban",
+          label: t("command.view_board"),
+          onSelect: () => {
+            switchView("board");
+          },
+        },
+        {
+          id: "view-timeline",
+          icon: "chart-gantt",
+          label: t("command.view_timeline"),
+          onSelect: () => {
+            switchView("timeline");
+          },
+        },
+      ]
+    : [];
+
   const commandGroups: CommandGroup[] = [
     {
       title: t("command.group_goto"),
@@ -219,6 +259,7 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
     {
       title: t("command.group_commands"),
       items: [
+        ...viewCommands,
         {
           id: "theme",
           icon: theme === "dark" ? "sun" : "moon",
@@ -241,6 +282,18 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
           onSelect: toggleSidebar,
         },
       ],
+    },
+    {
+      title: t("command.group_tasks"),
+      items: commandTasks.tasks.map((task) => ({
+        id: `task-${task.id}`,
+        iconEl: <StatusIcon category={statusGlyph(task.statusName, task.statusCategory)} />,
+        label: task.title,
+        hint: `${task.projectCode ?? currentProject?.code ?? ""}-${String(task.number)}`,
+        onSelect: () => {
+          void navigate(`/projects/${task.projectId}/tasks/${task.id}`);
+        },
+      })),
     },
   ];
 
@@ -417,6 +470,23 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
           setIsCommandOpen(false);
         }}
         groups={commandGroups}
+        placeholder={t("command.placeholder")}
+        onCreate={
+          targetProject
+            ? (title) => {
+                commandTasks.createTask(targetProject.id, title);
+              }
+            : undefined
+        }
+        // Inside a project the target is implicit (as in the kit); elsewhere name the project it goes to.
+        createLabel={
+          !currentProject && targetProject ? t("command.create_task_in", { code: targetProject.code }) : undefined
+        }
+      />
+      <Toast
+        text={commandTasks.createError ?? undefined}
+        id={commandTasks.createResult}
+        data-testid="command-create-error"
       />
     </div>
   );

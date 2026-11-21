@@ -815,7 +815,7 @@
   },
   "command": {
     "title": "Bảng lệnh",
-    "placeholder": "Chuyển đến trang hoặc chạy lệnh…",
+    "placeholder": "Tìm công việc, chuyển trang, hoặc gõ tiêu đề để tạo…",
     "no_results": "Không có kết quả cho “{{query}}”",
     "navigate": "Di chuyển",
     "select": "Chọn",
@@ -824,7 +824,12 @@
     "group_projects": "Dự án",
     "group_commands": "Lệnh",
     "theme_dark": "Chuyển sang giao diện tối",
-    "theme_light": "Chuyển sang giao diện sáng"
+    "theme_light": "Chuyển sang giao diện sáng",
+    "group_tasks": "Công việc",
+    "view_list": "Chuyển sang dạng Danh sách",
+    "view_board": "Chuyển sang dạng Bảng",
+    "view_timeline": "Chuyển sang dạng Dòng thời gian",
+    "create_task_in": "Tạo công việc trong {{code}}"
   },
   "labels": {
     "category_TODO": "Cần làm",

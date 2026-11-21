@@ -815,7 +815,7 @@
   },
   "command": {
     "title": "Command menu",
-    "placeholder": "Jump to a page or run a command…",
+    "placeholder": "Search tasks, jump to a page, or type a title to create…",
     "no_results": "No results for “{{query}}”",
     "navigate": "Navigate",
     "select": "Select",
@@ -824,7 +824,12 @@
     "group_projects": "Projects",
     "group_commands": "Commands",
     "theme_dark": "Switch to dark theme",
-    "theme_light": "Switch to light theme"
+    "theme_light": "Switch to light theme",
+    "group_tasks": "Tasks",
+    "view_list": "Switch to List view",
+    "view_board": "Switch to Board view",
+    "view_timeline": "Switch to Timeline view",
+    "create_task_in": "Create task in {{code}}"
   },
   "labels": {
     "category_TODO": "To do",
