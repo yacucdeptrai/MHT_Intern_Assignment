@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { expect, test } from "@playwright/test";
 
 import { APP_TIMEZONE } from "@pm/domain";
@@ -85,6 +87,18 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
     await expect(auditRows.nth(0)).toContainText("TASK_REJECTED");
     await expect(auditRows.nth(0)).toContainText(projectCode);
     await expect(auditRows.nth(0)).toContainText(rejectionReason);
+
+    // The header's Export CSV downloads the same filtered entries the table shows.
+    const downloadPromise = adminPage.waitForEvent("download");
+    await adminPage.getByTestId("audit-export-csv-btn").click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^audit-log-\d{4}-\d{2}-\d{2}\.csv$/);
+    const csvPath = await download.path();
+    const csvLines = readFileSync(csvPath, "utf8").replace(String.fromCharCode(0xfeff), "").trim().split("\r\n");
+    expect(csvLines).toHaveLength(2);
+    expect(csvLines[1]).toContain("TASK_REJECTED");
+    expect(csvLines[1]).toContain(projectCode);
+    expect(csvLines[1]).toContain(rejectionReason);
 
     await adminContext.close();
     await lead.context.close();

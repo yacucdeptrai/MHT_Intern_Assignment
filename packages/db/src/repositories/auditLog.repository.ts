@@ -32,6 +32,27 @@ interface JoinedAuditRow {
   createdAt: Date;
 }
 
+/** Shared WHERE clause for the system audit log list and its CSV export. */
+function systemLogsWhere(options?: ListSystemAuditLogsOptions): SQL | undefined {
+  const conditions: SQL[] = [];
+  if (options?.actorId) {
+    conditions.push(eq(auditLogs.actorId, options.actorId));
+  }
+  if (options?.entityType) {
+    conditions.push(eq(auditLogs.entityType, options.entityType));
+  }
+  if (options?.action) {
+    conditions.push(eq(auditLogs.action, options.action));
+  }
+  if (options?.fromMs !== undefined) {
+    conditions.push(gte(auditLogs.createdAt, new Date(options.fromMs)));
+  }
+  if (options?.toMs !== undefined) {
+    conditions.push(lte(auditLogs.createdAt, new Date(options.toMs)));
+  }
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
 function mapToAuditLogRow(row: JoinedAuditRow): AuditLogRow {
   let actorName: string;
   if (row.actorId === null) {
@@ -111,24 +132,7 @@ export const auditLogRepository = {
     const page = Math.max(1, options?.page ?? 1);
     const pageSize = Math.max(1, options?.pageSize ?? 50);
 
-    const conditions: SQL[] = [];
-    if (options?.actorId) {
-      conditions.push(eq(auditLogs.actorId, options.actorId));
-    }
-    if (options?.entityType) {
-      conditions.push(eq(auditLogs.entityType, options.entityType));
-    }
-    if (options?.action) {
-      conditions.push(eq(auditLogs.action, options.action));
-    }
-    if (options?.fromMs !== undefined) {
-      conditions.push(gte(auditLogs.createdAt, new Date(options.fromMs)));
-    }
-    if (options?.toMs !== undefined) {
-      conditions.push(lte(auditLogs.createdAt, new Date(options.toMs)));
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const whereClause = systemLogsWhere(options);
 
     const [rows, countResult] = await db.batch([
       db
@@ -165,6 +169,36 @@ export const auditLogRepository = {
       pageSize,
       totalPages: Math.ceil(total / pageSize) || 1,
     };
+  },
+
+  /** Newest-first filtered rows for the CSV export, at most `limit` rows and no count query. */
+  async listSystemLogsForExport(
+    db: AppDatabase,
+    options: Omit<ListSystemAuditLogsOptions, "page" | "pageSize">,
+    limit: number,
+  ): Promise<AuditLogRow[]> {
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        actorId: auditLogs.actorId,
+        actorFullName: users.fullName,
+        actorDeletedAt: users.deletedAt,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        projectId: auditLogs.projectId,
+        projectCode: projects.code,
+        projectName: projects.name,
+        changes: auditLogs.changes,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.actorId, users.id))
+      .leftJoin(projects, eq(auditLogs.projectId, projects.id))
+      .where(systemLogsWhere(options))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+    return rows.map(mapToAuditLogRow);
   },
 
   async listActors(db: AppDatabase): Promise<AuditActorOption[]> {
