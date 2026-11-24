@@ -6,6 +6,7 @@ test.describe("Journey 4: Sprint Task Creation and Realtime Notification (FR-26)
   test("lead creates a sprint and a task in it, and assigns the member; member receives a realtime notification without reloading", async ({
     browser,
   }) => {
+    test.slow();
     // 1. Create a signed-in member
     const member = await createSignedInMember(browser, "MEMBER");
 

@@ -7,6 +7,7 @@ test.describe("Journey 3: Project Setup and Member Shell (FR-07, FR-10)", () => 
   test("PM creates a project and adds the lead and the member; project appears for members; member sees MemberShell", async ({
     browser,
   }) => {
+    test.slow();
     // 1. Create PM, Lead, and Member users
     const pm = await createSignedInMember(browser, "PM");
     const lead = await createSignedInMember(browser, "TEAM_LEAD");

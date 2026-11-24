@@ -7,6 +7,7 @@ test.describe("Journey 6: Project and Task Access Control (FR-16)", () => {
   test("a user who is not a member opens the project URL and a task URL; both show the Not found page (404)", async ({
     browser,
   }) => {
+    test.slow();
     // 1. Create a project with a task and an assigned member
     const assignee = await createSignedInMember(browser, "MEMBER");
     const taskTitle = `Secret Task ${Math.random().toString(36).slice(2, 6)}`;

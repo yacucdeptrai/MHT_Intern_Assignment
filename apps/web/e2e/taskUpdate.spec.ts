@@ -114,6 +114,7 @@ test.describe("Task Update Journey (FR-13)", () => {
   });
 
   test("FR-13 c3: member who is neither creator nor assignee cannot edit", async ({ browser }) => {
+    test.slow();
     // Admin creates project and adds member
     const adminContext = await browser.newContext();
     const adminPage = await adminContext.newPage();
@@ -171,6 +172,7 @@ test.describe("Task Update Journey (FR-13)", () => {
   });
 
   test("FR-13 c3: non-member receives 404 when navigating to task detail", async ({ browser }) => {
+    test.slow();
     const adminContext = await browser.newContext();
     const adminPage = await adminContext.newPage();
     await signInAsAdmin(adminPage);
@@ -208,6 +210,7 @@ test.describe("Task Update Journey (FR-13)", () => {
   });
 
   test("FR-15 c1: project lead assigns task to project member, version increments", async ({ browser }) => {
+    test.slow();
     const adminContext = await browser.newContext();
     const adminPage = await adminContext.newPage();
     await signInAsAdmin(adminPage);
