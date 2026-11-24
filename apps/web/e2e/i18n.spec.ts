@@ -18,7 +18,7 @@ test.describe("i18n language switching and localization coverage", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "vi");
 
     // Vietnamese strings must be present, English must be absent
-    await expect(page.getByRole("heading", { level: 1, name: "Hệ thống Quản lý Dự án & Công việc" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Đăng nhập" })).toBeVisible();
     await expect(page.getByText("Sign in with your email and password")).not.toBeVisible();
     await expect(page.getByText("Đăng nhập bằng email và mật khẩu của bạn")).toBeVisible();
     await expect(page.getByLabel("Địa chỉ email")).toBeVisible();
@@ -30,7 +30,7 @@ test.describe("i18n language switching and localization coverage", () => {
     await switchToLang(page, "en");
 
     // English strings must be present, Vietnamese must be absent
-    await expect(page.getByRole("heading", { level: 1, name: "Project & Task Management" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
     await expect(page.getByText("Sign in with your email and password")).toBeVisible();
     await expect(page.getByText("Đăng nhập bằng email và mật khẩu của bạn")).not.toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
@@ -40,7 +40,7 @@ test.describe("i18n language switching and localization coverage", () => {
 
     // 3. Switch back to Vietnamese
     await switchToLang(page, "vi");
-    await expect(page.getByRole("heading", { level: 1, name: "Hệ thống Quản lý Dự án & Công việc" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Đăng nhập" })).toBeVisible();
     await expect(page.getByText("Sign in with your email and password")).not.toBeVisible();
   });
 
@@ -51,27 +51,27 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/admin",
         vi: {
-          heading: "Bảng điều khiển Quản trị",
-          nav: "Nhật ký Kiểm toán",
+          heading: "Bảng điều khiển",
+          nav: "Nhật ký kiểm toán",
           absentEn: ["Admin Dashboard", "Audit Log"],
         },
         en: {
-          heading: "Admin Dashboard",
-          nav: "Audit Log",
+          heading: "Dashboard",
+          nav: "Audit log",
           absentVi: ["Bảng điều khiển Quản trị", "Nhật ký Kiểm toán"],
         },
       },
       {
         path: "/admin/users",
         vi: {
-          heading: "Quản lý người dùng",
-          nav: "Nhật ký Kiểm toán",
-          absentEn: ["User Management"],
+          heading: "Người dùng",
+          nav: "Nhật ký kiểm toán",
+          absentEn: ["Users"],
         },
         en: {
-          heading: "User Management",
-          nav: "Audit Log",
-          absentVi: ["Quản lý người dùng"],
+          heading: "Users",
+          nav: "Audit log",
+          absentVi: ["Người dùng"],
         },
       },
       {
@@ -79,10 +79,10 @@ test.describe("i18n language switching and localization coverage", () => {
         vi: {
           heading: "Trạng thái công việc",
           nav: "Trạng thái",
-          absentEn: ["Task Statuses"],
+          absentEn: ["Task statuses"],
         },
         en: {
-          heading: "Task Statuses",
+          heading: "Task statuses",
           nav: "Statuses",
           absentVi: ["Trạng thái công việc"],
         },
@@ -91,12 +91,12 @@ test.describe("i18n language switching and localization coverage", () => {
         path: "/admin/audit-log",
         vi: {
           heading: "Nhật ký hệ thống",
-          nav: "Quản lý Người dùng",
-          absentEn: ["System Audit Log"],
+          nav: "Người dùng",
+          absentEn: ["Audit log"],
         },
         en: {
-          heading: "System Audit Log",
-          nav: "User Management",
+          heading: "Audit log",
+          nav: "Users",
           absentVi: ["Nhật ký hệ thống"],
         },
       },
@@ -133,14 +133,14 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/",
         vi: {
-          heading: "Quản lý Dự án & Công việc",
+          heading: "Bảng điều khiển",
           nav: "Công việc của tôi",
-          absentEn: ["Project & Task Management"],
+          absentEn: ["Dashboard"],
         },
         en: {
-          heading: "Project & Task Management",
-          nav: "My Tasks",
-          absentVi: ["Quản lý Dự án & Công việc"],
+          heading: "Dashboard",
+          nav: "My tasks",
+          absentVi: ["Bảng điều khiển"],
         },
       },
       {
@@ -152,7 +152,7 @@ test.describe("i18n language switching and localization coverage", () => {
         },
         en: {
           heading: "Projects",
-          nav: "My Tasks",
+          nav: "My tasks",
           absentVi: ["Dự án"],
         },
       },
@@ -164,7 +164,7 @@ test.describe("i18n language switching and localization coverage", () => {
           absentEn: ["Calendar"],
         },
         en: {
-          heading: "My Tasks",
+          heading: "My tasks",
           nav: "Calendar",
           absentVi: ["Công việc của tôi"],
         },
@@ -178,7 +178,7 @@ test.describe("i18n language switching and localization coverage", () => {
         },
         en: {
           heading: "Calendar",
-          nav: "My Tasks",
+          nav: "My tasks",
           absentVi: ["Lịch biểu"],
         },
       },
@@ -198,14 +198,14 @@ test.describe("i18n language switching and localization coverage", () => {
       {
         path: "/profile",
         vi: {
-          heading: "Hồ sơ cá nhân",
+          heading: "Hồ sơ",
           section: "Thông tin cá nhân",
-          absentEn: ["User Profile", "Personal Information"],
+          absentEn: ["Profile", "Personal information"],
         },
         en: {
-          heading: "User Profile",
-          section: "Personal Information",
-          absentVi: ["Hồ sơ cá nhân", "Thông tin cá nhân"],
+          heading: "Profile",
+          section: "Personal information",
+          absentVi: ["Hồ sơ", "Thông tin cá nhân"],
         },
       },
     ];

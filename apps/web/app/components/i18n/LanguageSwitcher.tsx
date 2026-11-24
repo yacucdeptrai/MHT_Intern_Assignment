@@ -1,16 +1,18 @@
+/* cspell:words Tiếng Việt endonyms */
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLocation } from "react-router";
 
 import type { SupportedLanguage } from "../../i18n/types";
+import { ViewSwitcher } from "../ui/ViewSwitcher";
 
-export function LanguageSwitcher() {
-  const { i18n, t } = useTranslation();
+/** Hook shared by the sidebar switcher and the ⌘K language command. */
+export function useLanguageSwitch() {
+  const { i18n } = useTranslation();
   const fetcher = useFetcher();
   const location = useLocation();
-
   const currentLang: SupportedLanguage = i18n.language.startsWith("en") ? "en" : "vi";
 
-  const handleSwitch = (newLang: SupportedLanguage) => {
+  const switchTo = (newLang: SupportedLanguage) => {
     if (newLang === currentLang) {
       return;
     }
@@ -19,44 +21,29 @@ export function LanguageSwitcher() {
     void fetcher.submit({ lang: newLang, redirectTo }, { method: "post", action: "/api/set-language" });
   };
 
+  return { currentLang, switchTo };
+}
+
+export interface LanguageSwitcherProps {
+  /** "short" (EN / VI) in the sidebar footer; "full" (English / Tiếng Việt) on auth screens */
+  variant?: "short" | "full";
+}
+
+export function LanguageSwitcher({ variant = "short" }: LanguageSwitcherProps) {
+  const { t } = useTranslation();
+  const { currentLang, switchTo } = useLanguageSwitch();
+  const isFull = variant === "full";
+
   return (
-    <div
-      aria-label={t("common.language")}
-      title={t("common.language")}
-      className="inline-flex items-center rounded-md border border-gray-300 bg-white p-0.5 shadow-sm text-xs font-medium"
-    >
-      <button
-        type="button"
-        onClick={() => {
-          handleSwitch("vi");
-        }}
-        aria-label={t("common.switch_to_vi")}
-        title={t("common.vietnamese")}
-        data-testid="lang-vi"
-        className={`px-2 py-1 rounded ${
-          currentLang === "vi"
-            ? "bg-blue-600 text-white font-semibold"
-            : "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-        }`}
-      >
-        VI
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          handleSwitch("en");
-        }}
-        aria-label={t("common.switch_to_en")}
-        title={t("common.english")}
-        data-testid="lang-en"
-        className={`px-2 py-1 rounded ${
-          currentLang === "en"
-            ? "bg-blue-600 text-white font-semibold"
-            : "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-        }`}
-      >
-        EN
-      </button>
-    </div>
+    <ViewSwitcher<SupportedLanguage>
+      label={t("common.language")}
+      value={currentLang}
+      onChange={switchTo}
+      views={[
+        // Language names are endonyms, so they are not translated.
+        { id: "en", label: isFull ? "English" : "EN", title: t("common.english"), "data-testid": "lang-en" },
+        { id: "vi", label: isFull ? "Tiếng Việt" : "VI", title: t("common.vietnamese"), "data-testid": "lang-vi" },
+      ]}
+    />
   );
 }

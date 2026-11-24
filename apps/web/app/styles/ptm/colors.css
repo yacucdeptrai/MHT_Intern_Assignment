@@ -1,0 +1,189 @@
+/* Base palette — neutral, faintly cool greys + one restrained blue accent */
+:root {
+  --white: #ffffff;
+  --black: #000000;
+  --gray-25: #fbfbfc;
+  --gray-50: #f7f7f8;
+  --gray-100: #f1f1f3;
+  --gray-150: #ebebee;
+  --gray-200: #e4e4e8;
+  --gray-300: #d4d4da;
+  --gray-400: #a9a9b2;
+  --gray-500: #80808a;
+  --gray-600: #62626b;
+  --gray-700: #45454c;
+  --gray-800: #2c2c31;
+  --gray-850: #222226;
+  --gray-900: #19191c;
+  --gray-925: #141416;
+  --gray-950: #0f0f11;
+  --blue-50: #eff2fe;
+  --blue-100: #e1e7fd;
+  --blue-200: #c6d1fb;
+  --blue-400: #7d93f2;
+  --blue-500: #5470ea;
+  --blue-600: #3d5ce0;
+  --blue-700: #2f49c0;
+  --blue-900: #1c2a66;
+  --green-50: #ecf7f0;
+  --green-100: #d6efdf;
+  --green-500: #2f9e5f;
+  --green-600: #23834d;
+  --green-700: #1d6b40;
+  --amber-50: #fdf5e6;
+  --amber-100: #fbe9c6;
+  --amber-500: #d48a10;
+  --amber-600: #b3720a;
+  --amber-700: #8f5a08;
+  --orange-50: #fdf0e9;
+  --orange-100: #fadfd0;
+  --orange-500: #e0651f;
+  --orange-600: #c25317;
+  --orange-700: #9c4213;
+  --red-50: #fdeeee;
+  --red-100: #fadcdc;
+  --red-500: #e0484a;
+  --red-600: #c93638;
+  --red-700: #a32a2c;
+  --violet-50: #f3f0fd;
+  --violet-100: #e7e1fb;
+  --violet-500: #8467e0;
+  --violet-600: #6f52cc;
+  --violet-700: #5a40ab;
+}
+
+/* Semantic aliases — light (default) */
+:root {
+  --bg-app: var(--gray-50);
+  --bg-sidebar: var(--gray-50);
+  --bg-surface: var(--white);
+  --bg-raised: var(--white);
+  --bg-subtle: var(--gray-50);
+  --bg-muted: var(--gray-100);
+  --bg-hover: rgba(20, 20, 30, 0.045);
+  --bg-active: rgba(20, 20, 30, 0.075);
+  --bg-selected: var(--blue-50);
+  --bg-overlay: rgba(15, 15, 20, 0.32);
+  --bg-inverse: var(--gray-900);
+
+  --border-subtle: var(--gray-150);
+  --border: var(--gray-200);
+  --border-strong: var(--gray-300);
+  --border-focus: var(--blue-500);
+
+  --text-1: var(--gray-900);
+  --text-2: var(--gray-600);
+  --text-3: var(--gray-500);
+  --text-4: var(--gray-400);
+  --text-inverse: var(--white);
+  --text-on-accent: var(--white);
+  --text-link: var(--blue-600);
+
+  --accent: var(--blue-600);
+  --accent-hover: var(--blue-700);
+  --accent-subtle: var(--blue-50);
+  --accent-subtle-border: var(--blue-200);
+  --accent-text: var(--blue-700);
+  --focus-ring: 0 0 0 3px rgba(61, 92, 224, 0.22);
+
+  --success: var(--green-600);
+  --success-subtle: var(--green-50);
+  --warning: var(--amber-600);
+  --warning-subtle: var(--amber-50);
+  --danger: var(--red-600);
+  --danger-subtle: var(--red-50);
+  --danger-hover: var(--red-700);
+
+  /* Status categories (TODO · IN_PROGRESS · REVIEW · DONE) */
+  --status-todo: var(--gray-500);
+  --status-todo-bg: var(--gray-100);
+  --status-todo-text: var(--gray-700);
+  --status-progress: var(--amber-500);
+  --status-progress-bg: var(--amber-50);
+  --status-progress-text: var(--amber-700);
+  --status-review: var(--violet-500);
+  --status-review-bg: var(--violet-50);
+  --status-review-text: var(--violet-700);
+  --status-done: var(--green-500);
+  --status-done-bg: var(--green-50);
+  --status-done-text: var(--green-700);
+  --status-cancelled: var(--gray-400);
+
+  /* Priorities (LOW · MEDIUM · HIGH · URGENT) */
+  --priority-low: var(--gray-400);
+  --priority-medium: var(--gray-600);
+  --priority-high: var(--orange-500);
+  --priority-urgent: var(--red-500);
+  --priority-urgent-bg: var(--red-50);
+
+  /* Due-date flags */
+  --due-overdue: var(--red-600);
+  --due-overdue-bg: var(--red-50);
+  --due-soon: var(--amber-700);
+  --due-soon-bg: var(--amber-50);
+}
+
+/* Semantic aliases — dark */
+[data-theme="dark"] {
+  --bg-app: var(--gray-950);
+  --bg-sidebar: var(--gray-950);
+  --bg-surface: var(--gray-925);
+  --bg-raised: var(--gray-900);
+  --bg-subtle: var(--gray-900);
+  --bg-muted: var(--gray-850);
+  --bg-hover: rgba(255, 255, 255, 0.045);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-selected: rgba(84, 112, 234, 0.14);
+  --bg-overlay: rgba(0, 0, 0, 0.55);
+  --bg-inverse: var(--gray-100);
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-focus: var(--blue-400);
+
+  --text-1: #ededf0;
+  --text-2: #a3a3ad;
+  --text-3: #7d7d87;
+  --text-4: #5a5a63;
+  --text-inverse: var(--gray-900);
+  --text-link: var(--blue-400);
+
+  --accent: var(--blue-500);
+  --accent-hover: var(--blue-400);
+  --accent-subtle: rgba(84, 112, 234, 0.14);
+  --accent-subtle-border: rgba(84, 112, 234, 0.32);
+  --accent-text: var(--blue-400);
+  --focus-ring: 0 0 0 3px rgba(125, 147, 242, 0.28);
+
+  --success: var(--green-500);
+  --success-subtle: rgba(47, 158, 95, 0.14);
+  --warning: var(--amber-500);
+  --warning-subtle: rgba(212, 138, 16, 0.14);
+  --danger: var(--red-500);
+  --danger-subtle: rgba(224, 72, 74, 0.14);
+  --danger-hover: #ea6a6c;
+
+  --status-todo: var(--gray-500);
+  --status-todo-bg: rgba(255, 255, 255, 0.06);
+  --status-todo-text: #b4b4bd;
+  --status-progress: var(--amber-500);
+  --status-progress-bg: rgba(212, 138, 16, 0.14);
+  --status-progress-text: #e8b04f;
+  --status-review: var(--violet-500);
+  --status-review-bg: rgba(132, 103, 224, 0.16);
+  --status-review-text: #b3a0f0;
+  --status-done: var(--green-500);
+  --status-done-bg: rgba(47, 158, 95, 0.15);
+  --status-done-text: #6cc792;
+  --status-cancelled: var(--gray-600);
+
+  --priority-low: var(--gray-600);
+  --priority-medium: var(--gray-400);
+  --priority-urgent-bg: rgba(224, 72, 74, 0.15);
+
+  --due-overdue: #ef7a7c;
+  --due-overdue-bg: rgba(224, 72, 74, 0.14);
+  --due-soon: #e8b04f;
+  --due-soon-bg: rgba(212, 138, 16, 0.14);
+}

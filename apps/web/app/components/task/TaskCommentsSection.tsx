@@ -4,7 +4,10 @@ import { Form } from "react-router";
 
 import type { CommentDto, CommentThread } from "@pm/domain";
 
-import { formatAuditTimestamp } from "../../utils/formatAudit";
+import { formatRelativeTime } from "../../utils/format";
+import { Avatar } from "../ui/Avatar";
+import { Button } from "../ui/Button";
+import { cx } from "../ui/cx";
 
 export interface CommentActionFeedback {
   success?: boolean | undefined;
@@ -19,6 +22,8 @@ export interface TaskCommentsSectionProps {
   canComment: boolean;
   isSubmitting: boolean;
   actionData?: CommentActionFeedback | undefined;
+  /** Name shown beside the composer */
+  currentUserName?: string;
 }
 
 interface CommentCardProps {
@@ -28,62 +33,128 @@ interface CommentCardProps {
   onReplyClick: (commentId: string) => void;
 }
 
+/** Avatar + bordered card: author · time, body, reply / delete actions. */
 function CommentCard({ item, canComment, isSubmitting, onReplyClick }: CommentCardProps) {
-  const { t } = useTranslation();
-
+  const { t, i18n } = useTranslation();
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2" data-testid={`comment-item-${item.id}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex gap-2" data-testid={`comment-item-${item.id}`}>
+      <Avatar name={item.authorName} size={20} />
+      <div className="flex flex-1 flex-col gap-1 rounded-lg border border-line px-3 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900">{item.authorName}</span>
-          <span className="font-mono text-xs text-gray-500">{formatAuditTimestamp(item.createdAt)}</span>
-        </div>
-
-        <div className="flex items-center gap-2">
+          <span className="flex-1 text-[12.5px] font-medium leading-none text-fg">
+            {item.authorName}{" "}
+            <span className="font-normal text-fg-muted" suppressHydrationWarning>
+              {`· ${formatRelativeTime(new Date(item.createdAt), i18n.language)}`}
+            </span>
+          </span>
           {canComment && !item.isDeleted ? (
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => {
                 onReplyClick(item.id);
               }}
-              className="rounded px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
               data-testid={`reply-comment-btn-${item.id}`}
             >
               {t("task_comments.btn_reply")}
-            </button>
+            </Button>
           ) : null}
-
           {item.canDelete ? (
             <Form method="post" className="inline">
               <input type="hidden" name="intent" value="deleteComment" />
               <input type="hidden" name="commentId" value={item.id} />
-              <button
+              <Button
                 type="submit"
+                size="sm"
+                variant="ghost"
                 disabled={isSubmitting}
-                className="rounded px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                 data-testid={`delete-comment-btn-${item.id}`}
               >
                 {t("task_comments.btn_delete")}
-              </button>
+              </Button>
             </Form>
           ) : null}
         </div>
+        {item.isDeleted ? (
+          <p className="m-0 text-[13px] italic leading-normal text-fg-muted" data-testid={`comment-deleted-${item.id}`}>
+            {t("task_comments.comment_deleted")}
+          </p>
+        ) : (
+          <p
+            className="m-0 whitespace-pre-wrap text-[13px] leading-normal text-fg"
+            data-testid={`comment-body-${item.id}`}
+          >
+            {item.body}
+          </p>
+        )}
       </div>
-
-      {item.isDeleted ? (
-        <p className="text-sm italic text-gray-400" data-testid={`comment-deleted-${item.id}`}>
-          {t("task_comments.comment_deleted")}
-        </p>
-      ) : (
-        <p className="whitespace-pre-wrap text-sm text-gray-800" data-testid={`comment-body-${item.id}`}>
-          {item.body}
-        </p>
-      )}
     </div>
   );
 }
 
-export function TaskCommentsSection({ comments, canComment, isSubmitting, actionData }: TaskCommentsSectionProps) {
+/** Composer: borderless textarea inside a bordered box, submit bottom-right. */
+function Composer({
+  id,
+  value,
+  onChange,
+  placeholder,
+  label,
+  error,
+  errorTestId,
+  inputTestId,
+  children,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  label: string;
+  error?: string | undefined;
+  errorTestId: string;
+  inputTestId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-1 flex-col gap-1">
+      <div
+        className={cx(
+          "flex flex-col rounded-lg border bg-surface",
+          error ? "border-danger" : "border-line-default focus-within:border-line-focus focus-within:shadow-focus",
+        )}
+      >
+        <label htmlFor={id} className="sr-only">
+          {label}
+        </label>
+        <textarea
+          id={id}
+          name="body"
+          rows={2}
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder={placeholder}
+          className="resize-none border-0 bg-transparent px-3 py-2 text-[13px] leading-normal text-fg shadow-none outline-none placeholder:text-fg-faint focus-visible:shadow-none"
+          data-testid={inputTestId}
+        />
+        <div className="flex items-center justify-end gap-1 px-1.5 pb-1.5">{children}</div>
+      </div>
+      {error ? (
+        <span className="text-[11.5px] leading-[1.35] text-danger" data-testid={errorTestId}>
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+export function TaskCommentsSection({
+  comments,
+  canComment,
+  isSubmitting,
+  actionData,
+  currentUserName = "",
+}: TaskCommentsSectionProps) {
   const { t } = useTranslation();
   const [commentDraft, setCommentDraft] = useState("");
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
@@ -99,7 +170,6 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
     }
   }
 
-  const totalCount = comments.reduce((acc, thread) => acc + 1 + thread.replies.length, 0);
   const isCommentActionError = actionData?.success === false && actionData.intent === "comment";
   const isReplyError = isCommentActionError && Boolean(actionData.values?.parentCommentId);
   const isRootError = isCommentActionError && !actionData.values?.parentCommentId;
@@ -115,33 +185,26 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-5" data-testid="comments-section">
-      <h2 className="text-base font-bold text-gray-900">{t("task_comments.heading", { count: totalCount })}</h2>
-
+    <div className="flex flex-col gap-3.5" data-testid="comments-section">
       {comments.length === 0 ? (
-        <p className="text-sm italic text-gray-500" data-testid="comments-empty">
+        <span className="text-[12.5px] leading-[1.4] text-fg-muted" data-testid="comments-empty">
           {t("task_comments.no_comments")}
-        </p>
+        </span>
       ) : (
-        <div className="space-y-4" data-testid="comments-thread-list">
+        <div className="flex flex-col gap-3.5" data-testid="comments-thread-list">
           {comments.map((thread) => {
             const isReplyingInThisThread =
-              replyingToId === thread.root.id || thread.replies.some((r) => r.id === replyingToId);
-
+              replyingToId === thread.root.id || thread.replies.some((reply) => reply.id === replyingToId);
             return (
-              <div key={thread.root.id} className="space-y-3" data-testid="comment-thread">
+              <div key={thread.root.id} className="flex flex-col gap-2" data-testid="comment-thread">
                 <CommentCard
                   item={thread.root}
                   canComment={canComment}
                   isSubmitting={isSubmitting}
                   onReplyClick={handleToggleReply}
                 />
-
                 {thread.replies.length > 0 ? (
-                  <div
-                    className="ml-6 space-y-2 border-l-2 border-gray-200 pl-4"
-                    data-testid={`comment-replies-${thread.root.id}`}
-                  >
+                  <div className="ml-7 flex flex-col gap-2" data-testid={`comment-replies-${thread.root.id}`}>
                     {thread.replies.map((reply) => (
                       <CommentCard
                         key={reply.id}
@@ -153,58 +216,41 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
                     ))}
                   </div>
                 ) : null}
-
                 {canComment && isReplyingInThisThread && replyingToId ? (
-                  <Form
-                    method="post"
-                    className="ml-6 space-y-2 rounded-lg border border-blue-200 bg-blue-50/40 p-3"
-                    data-testid="form-reply-comment"
-                  >
+                  <Form method="post" className="ml-7 flex gap-2" data-testid="form-reply-comment">
                     <input type="hidden" name="intent" value="comment" />
                     <input type="hidden" name="parentCommentId" value={replyingToId} />
-                    <label
-                      htmlFor={`reply-input-${thread.root.id}`}
-                      className="block text-xs font-medium text-gray-700"
-                    >
-                      {t("task_comments.label_reply")}
-                    </label>
-                    <textarea
+                    <Avatar name={currentUserName} size={20} />
+                    <Composer
                       id={`reply-input-${thread.root.id}`}
-                      name="body"
-                      rows={2}
                       value={replyDraft}
-                      onChange={(e) => {
-                        setReplyDraft(e.target.value);
-                      }}
+                      onChange={setReplyDraft}
+                      label={t("task_comments.label_reply")}
                       placeholder={t("task_comments.placeholder_reply")}
-                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-                      data-testid="input-reply-body"
-                    />
-                    {isReplyError && bodyErrorText ? (
-                      <p className="text-xs text-red-600" data-testid="error-reply-body">
-                        {bodyErrorText}
-                      </p>
-                    ) : null}
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
+                      error={isReplyError ? bodyErrorText : undefined}
+                      errorTestId="error-reply-body"
+                      inputTestId="input-reply-body"
+                    >
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() => {
                           setReplyingToId(null);
                         }}
-                        className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                         data-testid="cancel-reply-button"
                       >
                         {t("task_comments.btn_cancel")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="submit"
+                        size="sm"
+                        variant={replyDraft.trim() ? "primary" : "secondary"}
                         disabled={isSubmitting}
-                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                         data-testid="submit-reply-button"
                       >
                         {t("task_comments.btn_post_reply")}
-                      </button>
-                    </div>
+                      </Button>
+                    </Composer>
                   </Form>
                 ) : null}
               </div>
@@ -214,43 +260,29 @@ export function TaskCommentsSection({ comments, canComment, isSubmitting, action
       )}
 
       {canComment ? (
-        <Form method="post" className="space-y-3 border-t border-gray-100 pt-4" data-testid="form-add-comment">
+        <Form method="post" className="flex items-start gap-2" data-testid="form-add-comment">
           <input type="hidden" name="intent" value="comment" />
-          <div>
-            <label
-              htmlFor="new-comment-body"
-              className="block text-xs font-semibold uppercase tracking-wider text-gray-500"
-            >
-              {t("task_comments.label_add_comment")}
-            </label>
-            <textarea
-              id="new-comment-body"
-              name="body"
-              rows={3}
-              value={commentDraft}
-              onChange={(e) => {
-                setCommentDraft(e.target.value);
-              }}
-              placeholder={t("task_comments.placeholder_new_comment")}
-              className="mt-1.5 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              data-testid="input-comment-body"
-            />
-            {isRootError && bodyErrorText ? (
-              <p className="mt-1 text-xs text-red-600" data-testid="error-comment-body">
-                {bodyErrorText}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex justify-end">
-            <button
+          <Avatar name={currentUserName} size={20} />
+          <Composer
+            id="new-comment-body"
+            value={commentDraft}
+            onChange={setCommentDraft}
+            label={t("task_comments.label_add_comment")}
+            placeholder={t("task_comments.placeholder_new_comment")}
+            error={isRootError ? bodyErrorText : undefined}
+            errorTestId="error-comment-body"
+            inputTestId="input-comment-body"
+          >
+            <Button
               type="submit"
+              size="sm"
+              variant={commentDraft.trim() ? "primary" : "secondary"}
               disabled={isSubmitting}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               data-testid="submit-comment-button"
             >
               {t("task_comments.btn_post_comment")}
-            </button>
-          </div>
+            </Button>
+          </Composer>
         </Form>
       ) : null}
     </div>

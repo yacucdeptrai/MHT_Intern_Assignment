@@ -1,12 +1,22 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, Link, useLoaderData } from "react-router";
+import { Form, useFetcher, useLoaderData, useNavigate } from "react-router";
 
-import { MarkReadSchema, type NotificationDto, type NotificationPayload, type NotificationType } from "@pm/domain";
+import { MarkReadSchema, type NotificationDto, type NotificationType } from "@pm/domain";
+
+import { Avatar } from "../components/ui/Avatar";
+import { Button } from "../components/ui/Button";
+import { cx } from "../components/ui/cx";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Icon, type IconName } from "../components/ui/Icon";
+import { Page } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Tabs } from "../components/ui/Tabs";
 
 import { notificationService } from "../services/notification.service";
 import { requireUser } from "../utils/auth.server";
-import { formatAuditTimestamp } from "../utils/formatAudit";
+import { formatRelativeTime } from "../utils/format";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -61,130 +71,156 @@ export async function action({ context, request }: ActionFunctionArgs) {
   return Response.json({ success: false, message: `Unknown intent: ${intentStr}` }, { status: 400 });
 }
 
-export default function NotificationsRoute() {
-  const { t } = useTranslation();
-  const { notifications, unreadCount } = useLoaderData<typeof loader>();
+const NOTIFICATION_ICON: Record<NotificationType, IconName> = {
+  TASK_ASSIGNED: "user-plus",
+  TASK_COMMENTED: "message-square",
+  TASK_APPROVED: "thumbs-up",
+  TASK_REJECTED: "thumbs-down",
+  TASK_REOPENED: "rotate-ccw",
+  PROJECT_MEMBER_ADDED: "users",
+};
 
-  function formatNotificationMessage(type: NotificationType, payload: NotificationPayload): string {
+type NotificationTab = "all" | "unread";
+
+export default function NotificationsRoute() {
+  const { t, i18n } = useTranslation();
+  const { notifications, unreadCount } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const markReadFetcher = useFetcher();
+  const [tab, setTab] = useState<NotificationTab>("all");
+
+  function actionText(type: NotificationType): string {
     switch (type) {
       case "TASK_ASSIGNED":
-        return t("notifications.type_task_assigned", { actorName: payload.actorName });
+        return t("notifications.type_task_assigned");
       case "TASK_COMMENTED":
-        return t("notifications.type_task_commented", { actorName: payload.actorName });
+        return t("notifications.type_task_commented");
       case "TASK_APPROVED":
-        return t("notifications.type_task_approved", { actorName: payload.actorName });
+        return t("notifications.type_task_approved");
       case "TASK_REJECTED":
-        return t("notifications.type_task_rejected", { actorName: payload.actorName });
+        return t("notifications.type_task_rejected");
       case "TASK_REOPENED":
-        return t("notifications.type_task_reopened", { actorName: payload.actorName });
+        return t("notifications.type_task_reopened");
       case "PROJECT_MEMBER_ADDED":
-        return t("notifications.type_project_member_added", { actorName: payload.actorName });
+        return t("notifications.type_project_member_added");
     }
   }
 
+  const items = notifications.items.filter((n: NotificationDto) => tab === "all" || n.readAt === null);
+
+  /** Opening a notification marks it read (FR-25 c2) and goes to its task or project (c3). */
+  const open = (n: NotificationDto) => {
+    if (n.readAt === null) {
+      void markReadFetcher.submit({ intent: "markRead", notificationId: n.id }, { method: "post" });
+    }
+    void navigate(n.targetUrl);
+  };
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto py-4">
-      {/* Header with Title and Unread Count */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900" data-testid="notification-center-title">
-            {t("notifications.title")}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {t("notifications.subtitle_prefix")}{" "}
-            <span className="font-semibold text-blue-600" data-testid="unread-count">
-              {unreadCount}
-            </span>{" "}
-            {unreadCount === 1 ? t("notifications.subtitle_unread") : t("notifications.subtitle_unread_plural")}
-          </p>
-        </div>
-
-        {unreadCount > 0 ? (
-          <Form method="post">
-            <input type="hidden" name="intent" value="markAllRead" />
-            <button
-              type="submit"
-              className="rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-              data-testid="mark-all-read-btn"
-            >
-              {t("notifications.btn_mark_all_read")}
-            </button>
-          </Form>
-        ) : null}
-      </div>
-
-      {/* Notifications List */}
-      {notifications.items.length === 0 ? (
-        <div
-          className="text-center py-12 rounded-xl border border-gray-200 bg-white"
-          data-testid="no-notifications-msg"
-        >
-          <p className="text-gray-500 text-sm">{t("notifications.empty")}</p>
-        </div>
+    <Page
+      maxWidth={760}
+      header={
+        <PageHeader
+          title={<span data-testid="notification-center-title">{t("notifications.title")}</span>}
+          description={
+            <>
+              {t("notifications.subtitle_prefix")} <span data-testid="unread-count">{unreadCount}</span>{" "}
+              {unreadCount === 1 ? t("notifications.subtitle_unread") : t("notifications.subtitle_unread_plural")}
+            </>
+          }
+          actions={
+            <Form method="post">
+              <input type="hidden" name="intent" value="markAllRead" />
+              <Button type="submit" size="sm" icon="check" disabled={unreadCount === 0} data-testid="mark-all-read-btn">
+                {t("notifications.btn_mark_all_read")}
+              </Button>
+            </Form>
+          }
+          tabs={
+            <Tabs
+              value={tab}
+              onChange={(id) => {
+                setTab(id === "unread" ? "unread" : "all");
+              }}
+              label={t("notifications.title")}
+              items={[
+                { id: "all", label: t("notifications.tab_all"), count: notifications.total, "data-testid": "tab-all" },
+                { id: "unread", label: t("notifications.tab_unread"), count: unreadCount, "data-testid": "tab-unread" },
+              ]}
+            />
+          }
+        />
+      }
+    >
+      {items.length === 0 ? (
+        tab === "unread" ? (
+          <EmptyState
+            icon="bell"
+            title={t("notifications.caught_up_title")}
+            description={t("notifications.caught_up_desc")}
+            data-testid="no-notifications-msg"
+          />
+        ) : (
+          <EmptyState icon="bell" title={t("notifications.empty")} data-testid="no-notifications-msg" />
+        )
       ) : (
         <ul
-          className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+          className="m-0 flex list-none flex-col overflow-hidden rounded-lg border border-line bg-surface p-0"
           data-testid="notifications-list"
         >
-          {notifications.items.map((n: NotificationDto) => {
+          {items.map((n: NotificationDto) => {
             const isUnread = n.readAt === null;
             return (
-              <li
-                key={n.id}
-                className={`p-4 transition hover:bg-gray-50 ${isUnread ? "bg-blue-50/40" : "bg-white"}`}
-                data-testid={`notification-item-${n.id}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {isUnread ? (
-                        <span
-                          className="inline-block h-2 w-2 rounded-full bg-blue-600"
-                          data-testid={`unread-dot-${n.id}`}
-                        />
-                      ) : null}
-                      <Link
-                        to={n.targetUrl}
-                        className="text-base font-semibold text-blue-700 hover:underline truncate"
-                        data-testid={`notification-link-${n.id}`}
-                      >
-                        {n.payload.title}
-                      </Link>
-                    </div>
-
-                    <p className="text-sm text-gray-700">{formatNotificationMessage(n.type, n.payload)}</p>
-
+              <li key={n.id} data-testid={`notification-item-${n.id}`} className="border-b border-line last:border-b-0">
+                <a
+                  href={n.targetUrl}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    open(n);
+                  }}
+                  data-testid={`notification-link-${n.id}`}
+                  className={cx(
+                    "flex gap-3 px-4 py-3 no-underline hover:bg-hover hover:no-underline",
+                    isUnread ? "bg-surface" : "bg-subtle",
+                  )}
+                >
+                  <span className="w-2 shrink-0 pt-[7px]">
+                    {isUnread ? (
+                      <span className="block size-[7px] rounded-full bg-accent" data-testid={`unread-dot-${n.id}`} />
+                    ) : null}
+                  </span>
+                  <span className="relative shrink-0">
+                    <Avatar name={n.payload.actorName} size={28} />
+                    <span className="absolute -bottom-1 -right-1 inline-flex size-4 items-center justify-center rounded-full bg-raised text-fg-secondary shadow-[0_0_0_1px_var(--border)]">
+                      <Icon name={NOTIFICATION_ICON[n.type]} size={10} />
+                    </span>
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="text-[13px] leading-[1.4] text-fg-secondary">
+                      <span className="font-medium text-fg">{n.payload.actorName}</span> {actionText(n.type)}
+                    </span>
+                    <span className="truncate text-[13px] font-medium leading-[1.3] text-fg">{n.payload.title}</span>
                     {n.payload.reason ? (
-                      <p
-                        className="text-xs text-red-600 bg-red-50 p-2 rounded mt-1 border border-red-100"
+                      <span
+                        className="mt-0.5 rounded-md bg-subtle px-2.5 py-1.5 text-[12.5px] leading-[1.4] text-fg-secondary"
                         data-testid={`notification-reason-${n.id}`}
                       >
-                        <span className="font-semibold">{t("notifications.reason_label")}</span> {n.payload.reason}
-                      </p>
+                        {t("notifications.reason_label")} {n.payload.reason}
+                      </span>
                     ) : null}
-
-                    <p className="text-xs text-gray-400">{formatAuditTimestamp(new Date(n.createdAt).getTime())}</p>
-                  </div>
-
-                  {isUnread ? (
-                    <Form method="post" className="shrink-0">
-                      <input type="hidden" name="intent" value="markRead" />
-                      <input type="hidden" name="notificationId" value={n.id} />
-                      <button
-                        type="submit"
-                        className="text-xs font-medium text-gray-500 hover:text-blue-600 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
-                        data-testid={`mark-read-btn-${n.id}`}
-                      >
-                        {t("notifications.btn_mark_read")}
-                      </button>
-                    </Form>
-                  ) : null}
-                </div>
+                  </span>
+                  <span
+                    className="whitespace-nowrap pt-[3px] text-[12px] leading-none text-fg-muted"
+                    suppressHydrationWarning
+                  >
+                    {formatRelativeTime(n.createdAt, i18n.language)}
+                  </span>
+                </a>
               </li>
             );
           })}
         </ul>
       )}
-    </div>
+    </Page>
   );
 }

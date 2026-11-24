@@ -35,6 +35,7 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
 
     // FR-24 c1, c3: Project member opens task and sees task history newest first, including reason & diffs
     await member.page.reload();
+    await member.page.getByTestId("drawer-tab-activity").click();
     const historySection = member.page.getByTestId("task-history-section");
     await expect(historySection).toBeVisible();
 
@@ -49,7 +50,7 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
 
     // FR-24 c4: System PM (who can access /admin dashboard) does not see Audit Log link and gets 403 on /admin/audit-log
     await pm.page.goto("/admin");
-    await expect(pm.page.getByRole("link", { name: "Audit Log" })).toHaveCount(0);
+    await expect(pm.page.getByRole("link", { name: "Audit log" })).toHaveCount(0);
     const pmAuditRes = await pm.page.goto("/admin/audit-log");
     expect(pmAuditRes?.status()).toBe(403);
     await expect(pm.page.getByRole("heading", { name: "Forbidden" })).toBeVisible();
@@ -64,7 +65,7 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
     const adminPage = await adminContext.newPage();
     await signInAsAdmin(adminPage);
 
-    await adminPage.getByRole("link", { name: "Audit Log" }).click();
+    await adminPage.getByRole("link", { name: "Audit log" }).click();
     await adminPage.waitForURL("**/admin/audit-log");
     await expect(adminPage.getByTestId("audit-pagination")).toContainText("50 per page");
 
@@ -74,7 +75,6 @@ test.describe("Audit Log and Task History Journey (FR-24)", () => {
     await adminPage.getByTestId("filter-action").selectOption("TASK_REJECTED");
     await adminPage.getByTestId("filter-from").fill(todayStr);
     await adminPage.getByTestId("filter-to").fill(todayStr);
-    await adminPage.getByTestId("btn-apply-audit-filters").click();
 
     await expect(adminPage).toHaveURL(/entityType=TASK/);
     await expect(adminPage).toHaveURL(/action=TASK_REJECTED/);

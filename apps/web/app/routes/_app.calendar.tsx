@@ -1,9 +1,21 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
-import { Form, Link, useLoaderData, useSubmit } from "react-router";
+import { Link, useLoaderData, useNavigate } from "react-router";
 
-import type { CalendarEvent } from "@pm/domain";
-import { APP_NAME, CalendarQuerySchema, getCalendarNavDates, getTodayDateString } from "@pm/domain";
+import type { CalendarEvent, StatusCategory } from "@pm/domain";
+import { APP_NAME, CalendarQuerySchema, getCalendarNavDates, getTodayDateString, STATUS_CATEGORIES } from "@pm/domain";
+
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { cx } from "../components/ui/cx";
+import { IconButton } from "../components/ui/IconButton";
+import { Page, Toolbar } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Select } from "../components/ui/Select";
+import { StatusIcon, statusGlyph } from "../components/ui/TaskIcons";
+import { ViewSwitcher } from "../components/ui/ViewSwitcher";
+import { translateCategory } from "../i18n/labels";
 
 import { calendarService } from "../services/calendar.service";
 import { requireUser } from "../utils/auth.server";
@@ -39,412 +51,391 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   };
 }
 
-function formatDateHeading(
-  view: "day" | "week" | "month",
-  dateStr: string,
-  range: { from: string; to: string },
-  lng: string,
-) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const utcDate = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
-  const locale = lng === "vi" ? "vi-VN" : "en-US";
+const DAY_MS = 86_400_000;
 
-  if (view === "day") {
-    return utcDate.toLocaleDateString(locale, {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-  }
-
-  if (view === "week") {
-    const [fy, fm, fd] = range.from.split("-").map(Number);
-    const [ty, tm, td] = range.to.split("-").map(Number);
-    const fromDate = new Date(Date.UTC(fy ?? 1970, (fm ?? 1) - 1, fd ?? 1));
-    const toDate = new Date(Date.UTC(ty ?? 1970, (tm ?? 1) - 1, td ?? 1));
-    const fromStr = fromDate.toLocaleDateString(locale, { month: "short", day: "numeric", timeZone: "UTC" });
-    const toStr = toDate.toLocaleDateString(locale, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    });
-    return `${fromStr} – ${toStr}`;
-  }
-
-  return utcDate.toLocaleDateString(locale, {
-    year: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
+function parseDay(value: string): number {
+  const [y, m, d] = value.split("-").map(Number);
+  return Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1);
 }
 
-function getDaysBetween(fromStr: string, toStr: string): string[] {
-  const days: string[] = [];
-  const [fy, fm, fd] = fromStr.split("-").map(Number);
-  const [ty, tm, td] = toStr.split("-").map(Number);
-  let cur = new Date(Date.UTC(fy ?? 1970, (fm ?? 1) - 1, fd ?? 1));
-  const end = new Date(Date.UTC(ty ?? 1970, (tm ?? 1) - 1, td ?? 1));
-
-  while (cur <= end) {
-    const y = cur.getUTCFullYear();
-    const m = String(cur.getUTCMonth() + 1).padStart(2, "0");
-    const d = String(cur.getUTCDate()).padStart(2, "0");
-    days.push(`${y}-${m}-${d}`);
-    cur = new Date(cur.getTime() + 86400000);
-  }
-  return days;
+function toDayString(ms: number): string {
+  const date = new Date(ms);
+  return `${String(date.getUTCFullYear())}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
-export default function CalendarPage() {
+/** Monday on or before the given day (UTC). */
+function mondayOf(ms: number): number {
+  const dow = new Date(ms).getUTCDay();
+  return ms - ((dow + 6) % 7) * DAY_MS;
+}
+
+function localeOf(lang: string): string {
+  return lang.startsWith("vi") ? "vi-VN" : "en-US";
+}
+
+function formatDay(ms: number, lang: string, options: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(localeOf(lang), { ...options, timeZone: "UTC" }).format(new Date(ms));
+}
+
+interface Placed {
+  event: CalendarEvent;
+  /** Column index range within the week, inclusive */
+  startCol: number;
+  endCol: number;
+  /** The bar continues from the previous week */
+  isContinued: boolean;
+}
+
+/** First and last day an event occupies: the span for spans, the due date otherwise. */
+function eventDays(event: CalendarEvent): [number, number] {
+  const due = parseDay(event.dueDate);
+  const start = event.isSpan && event.startDate ? parseDay(event.startDate) : due;
+  return [Math.min(start, due), due];
+}
+
+/** Packs the week's events into lanes so overlapping bars stack. */
+function weekLanes(events: CalendarEvent[], weekStart: number): Placed[][] {
+  const weekEnd = weekStart + 6 * DAY_MS;
+  const inWeek = events
+    .map((event) => ({ event, days: eventDays(event) }))
+    .filter(({ days }) => days[0] <= weekEnd && days[1] >= weekStart)
+    .sort((a, b) => a.days[0] - b.days[0] || b.days[1] - a.days[1]);
+  const lanes: Placed[][] = [];
+  for (const { event, days } of inWeek) {
+    const startCol = Math.round((Math.max(days[0], weekStart) - weekStart) / DAY_MS);
+    const endCol = Math.round((Math.min(days[1], weekEnd) - weekStart) / DAY_MS);
+    let lane = lanes.find((existing) => existing.every((item) => item.endCol < startCol || item.startCol > endCol));
+    if (!lane) {
+      lane = [];
+      lanes.push(lane);
+    }
+    lane.push({ event, startCol, endCol, isContinued: days[0] < weekStart });
+  }
+  return lanes;
+}
+
+const CATEGORY_BAR: Record<StatusCategory, string> = {
+  TODO: "bg-status-todo-bg text-status-todo-text",
+  IN_PROGRESS: "bg-status-progress-bg text-status-progress-text",
+  REVIEW: "bg-status-review-bg text-status-review-text",
+  DONE: "bg-status-done-bg text-status-done-text",
+};
+
+const CATEGORY_EDGE: Record<StatusCategory, string> = {
+  TODO: "var(--status-todo)",
+  IN_PROGRESS: "var(--status-progress)",
+  REVIEW: "var(--status-review)",
+  DONE: "var(--status-done)",
+};
+
+function taskHref(event: CalendarEvent): string {
+  return `/projects/${event.projectId}/tasks/${event.id}`;
+}
+
+interface WeekRowProps {
+  weekStart: number;
+  events: CalendarEvent[];
+  maxLanes: number;
+  minHeight: number;
+  todayStr: string;
+  /** Month being shown; days outside it are dimmed */
+  monthIndex?: number;
+  showDates?: boolean;
+}
+
+function WeekRow({ weekStart, events, maxLanes, minHeight, todayStr, monthIndex, showDates = true }: WeekRowProps) {
   const { t, i18n } = useTranslation();
-  const { view, date, range, events, projects, selectedProjectId, navDates, todayStr } = useLoaderData<typeof loader>();
-  const submit = useSubmit();
-
-  const projectParam = selectedProjectId ? `&projectId=${selectedProjectId}` : "";
-  const heading = formatDateHeading(view, date, range, i18n.language);
-
+  const lanes = weekLanes(events, weekStart);
+  const shown = lanes.slice(0, maxLanes);
+  const hidden = lanes.slice(maxLanes).reduce((count, lane) => count + lane.length, 0);
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6" data-testid="calendar-page">
-      {/* Page Header & Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t("calendar.title")}</h1>
-          <p className="mt-1 text-sm text-gray-500">{t("calendar.subtitle")}</p>
-        </div>
-
-        {/* View Switcher (FR-35 c3) */}
-        <div
-          className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 shadow-2xs"
-          data-testid="calendar-view-toggle"
-        >
-          <Link
-            to={`/calendar?view=day&date=${date}${projectParam}`}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              view === "day" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-600 hover:text-gray-900"
-            }`}
+    <div
+      className="relative grid grid-cols-7 border-b border-line last:border-b-0"
+      style={{ minHeight }}
+      data-testid="calendar-week-row"
+    >
+      {Array.from({ length: 7 }, (_, index) => {
+        const day = weekStart + index * DAY_MS;
+        const date = new Date(day);
+        const isToday = toDayString(day) === todayStr;
+        const isOutside = monthIndex != null && date.getUTCMonth() !== monthIndex;
+        return (
+          <div
+            key={day}
+            className={cx("px-2 py-1.5", index < 6 && "border-r border-line", index > 4 && "bg-subtle")}
+            data-testid={`calendar-day-${toDayString(day)}`}
           >
-            {t("calendar.view_day")}
-          </Link>
-          <Link
-            to={`/calendar?view=week&date=${date}${projectParam}`}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              view === "week" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {t("calendar.view_week")}
-          </Link>
-          <Link
-            to={`/calendar?view=month&date=${date}${projectParam}`}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              view === "month" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {t("calendar.view_month")}
-          </Link>
-        </div>
+            {showDates ? (
+              <span
+                className={cx(
+                  "inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-[5px] text-[12px] leading-none",
+                  isToday
+                    ? "bg-accent font-semibold text-fg-on-accent"
+                    : cx("font-medium", isOutside ? "text-fg-faint" : "text-fg-secondary"),
+                )}
+              >
+                {date.getUTCDate() === 1
+                  ? formatDay(day, i18n.language, { month: "short", day: "numeric" })
+                  : date.getUTCDate()}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+      <div
+        className="pointer-events-none absolute inset-x-0 flex flex-col gap-[3px]"
+        style={{ top: showDates ? 32 : 8 }}
+      >
+        {shown.map((lane, laneIndex) => (
+          <div key={laneIndex} className="relative h-[22px]">
+            {lane.map(({ event, startCol, endCol, isContinued }) => (
+              <Link
+                key={event.id}
+                to={taskHref(event)}
+                title={`${event.projectCode}-${String(event.number)} · ${event.title}`}
+                data-testid={`calendar-event-${event.id}`}
+                className={cx(
+                  "pointer-events-auto absolute flex h-[22px] items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-sm px-[7px] text-[11.5px] font-medium leading-none no-underline hover:no-underline",
+                  CATEGORY_BAR[event.statusCategory],
+                )}
+                style={{
+                  left: `calc(${String((startCol / 7) * 100)}% + 4px)`,
+                  width: `calc(${String(((endCol - startCol + 1) / 7) * 100)}% - 8px)`,
+                  boxShadow: isContinued ? "none" : `inset 2px 0 0 ${CATEGORY_EDGE[event.statusCategory]}`,
+                }}
+              >
+                <span className="font-mono text-[10.5px] font-medium opacity-75">{`${event.projectCode}-${String(event.number)}`}</span>
+                <span className="truncate">{event.title}</span>
+              </Link>
+            ))}
+          </div>
+        ))}
+        {hidden ? (
+          <span className="px-2 text-[11px] font-medium leading-none text-fg-muted">
+            {t("calendar.more_tasks", { count: hidden })}
+          </span>
+        ) : null}
       </div>
-
-      {/* Toolbar: Navigation, Heading, and Project Filter */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
-        {/* Navigation Controls (FR-35 c3) */}
-        <div className="flex items-center gap-2" data-testid="calendar-nav">
-          <Link
-            to={`/calendar?view=${view}&date=${navDates.prev}${projectParam}`}
-            className="p-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-            title={t("calendar.btn_previous")}
-            aria-label={t("calendar.btn_previous")}
-          >
-            ←
-          </Link>
-          <Link
-            to={`/calendar?view=${view}&date=${todayStr}${projectParam}`}
-            className="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            {t("calendar.btn_today")}
-          </Link>
-          <Link
-            to={`/calendar?view=${view}&date=${navDates.next}${projectParam}`}
-            className="p-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-            title={t("calendar.btn_next")}
-            aria-label={t("calendar.btn_next")}
-          >
-            →
-          </Link>
-          <h2 className="text-base font-semibold text-gray-900 ml-2" data-testid="calendar-heading">
-            {heading}
-          </h2>
-        </div>
-
-        {/* Project Filter (FR-35 c2) */}
-        <div className="flex items-center gap-3" data-testid="calendar-project-filter">
-          <label htmlFor="calendar-project-select" className="text-xs font-medium text-gray-500 shrink-0">
-            {t("calendar.label_project")}
-          </label>
-          <Form method="get" className="shrink-0">
-            <input type="hidden" name="view" value={view} />
-            <input type="hidden" name="date" value={date} />
-            <select
-              id="calendar-project-select"
-              name="projectId"
-              value={selectedProjectId ?? ""}
-              onChange={(e) => {
-                void submit(e.currentTarget.form);
-              }}
-              className="block rounded-lg border border-gray-300 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-gray-900 shadow-2xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">{t("calendar.all_projects")}</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
-                </option>
-              ))}
-            </select>
-          </Form>
-        </div>
-      </div>
-
-      {/* Main Calendar View Area */}
-      {view === "day" && <DayView date={date} events={events} />}
-      {view === "week" && <WeekView range={range} events={events} todayStr={todayStr} />}
-      {view === "month" && <MonthView range={range} events={events} todayStr={todayStr} />}
     </div>
   );
 }
 
 function DayView({ date, events }: { date: string; events: CalendarEvent[] }) {
-  const { t } = useTranslation();
-  const dayEvents = events.filter((e) =>
-    e.isSpan && e.startDate ? e.startDate <= date && e.dueDate >= date : e.dueDate === date,
-  );
-
+  const { t, i18n } = useTranslation();
+  const day = parseDay(date);
+  const items = events.filter((event) => {
+    const [start, end] = eventDays(event);
+    return start <= day && end >= day;
+  });
   return (
-    <div
-      className="bg-white rounded-xl border border-gray-200 p-6 shadow-2xs space-y-4"
-      data-testid="calendar-day-view"
-    >
-      <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-900">
-          {t("calendar.day_scheduled_items", { count: dayEvents.length })}
-        </h3>
-        <span className="text-xs text-gray-500">{date}</span>
-      </div>
-
-      {dayEvents.length === 0 ? (
-        <p className="text-sm text-gray-500 italic py-8 text-center">{t("calendar.day_empty")}</p>
+    <div className="flex flex-col gap-2 p-4" data-testid="calendar-day-view">
+      <span className="mb-1 text-[13px] font-semibold leading-none text-fg">
+        {t("calendar.day_scheduled_items", { count: items.length })}
+      </span>
+      {items.length === 0 ? (
+        <span className="text-[13px] leading-[1.4] text-fg-muted">{t("calendar.day_empty")}</span>
       ) : (
-        <div className="divide-y divide-gray-100 space-y-3">
-          {dayEvents.map((event) => (
-            <div key={event.id} className="pt-3 first:pt-0 flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <Link
-                  to={`/projects/${event.projectId}/tasks/${event.id}`}
-                  className="text-sm font-medium text-gray-900 hover:text-blue-600 block truncate"
-                >
-                  {event.projectCode ? `${event.projectCode}-${event.number}: ` : ""}
-                  {event.title}
-                </Link>
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className="text-xs text-gray-500">{event.projectName}</span>
-                  {event.isSpan ? (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800">
-                      {t("calendar.span_format", { start: event.startDate, end: event.dueDate })}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center text-xs text-gray-500">
-                      {t("calendar.due_format", { date: event.dueDate })}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{event.statusName}</span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded font-medium ${
-                    event.priority === "URGENT" || event.priority === "HIGH"
-                      ? "bg-red-50 text-red-700 border border-red-200"
-                      : "bg-gray-50 text-gray-700 border border-gray-200"
-                  }`}
-                >
-                  {event.priority}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+        items.map((event) => {
+          const [start, end] = eventDays(event);
+          return (
+            <Link
+              key={event.id}
+              to={taskHref(event)}
+              data-testid={`calendar-event-${event.id}`}
+              className="flex items-center gap-2.5 rounded-lg border border-line px-3 py-2.5 no-underline hover:bg-hover hover:no-underline"
+              style={{ boxShadow: `inset 3px 0 0 ${CATEGORY_EDGE[event.statusCategory]}` }}
+            >
+              <StatusIcon category={statusGlyph(event.statusName, event.statusCategory)} />
+              <span className="w-[62px] truncate font-mono text-[12px] font-medium leading-none text-fg-muted">
+                {`${event.projectCode}-${String(event.number)}`}
+              </span>
+              <span className="min-w-0 flex-1 text-[13px] font-medium leading-[1.3] text-fg">{event.title}</span>
+              {event.dueDate === date ? (
+                <Badge tone="warning" size="sm">
+                  {t("calendar.due_today_badge")}
+                </Badge>
+              ) : (
+                <Badge tone="outline" size="sm">
+                  {t("calendar.span_badge")}
+                </Badge>
+              )}
+              <span className="whitespace-nowrap text-[12px] leading-none text-fg-muted">
+                {t("calendar.span_format", {
+                  start: formatDay(start, i18n.language, { month: "short", day: "numeric" }),
+                  end: formatDay(end, i18n.language, { month: "short", day: "numeric" }),
+                })}
+              </span>
+            </Link>
+          );
+        })
       )}
     </div>
   );
 }
 
-function WeekView({
-  range,
-  events,
-  todayStr,
-}: {
-  range: { from: string; to: string };
-  events: CalendarEvent[];
-  todayStr: string;
-}) {
+export default function CalendarPage() {
   const { t, i18n } = useTranslation();
-  const days = getDaysBetween(range.from, range.to);
-  const locale = i18n.language === "vi" ? "vi-VN" : "en-US";
+  const { view, date, events, projects, selectedProjectId, navDates, todayStr } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const lang = i18n.language;
+
+  const urlFor = (next: { view?: string; date?: string; projectId?: string | null }) => {
+    const params = new URLSearchParams();
+    params.set("view", next.view ?? view);
+    params.set("date", next.date ?? date);
+    const projectId = next.projectId === undefined ? selectedProjectId : next.projectId;
+    if (projectId) {
+      params.set("projectId", projectId);
+    }
+    return `/calendar?${params.toString()}`;
+  };
+
+  const anchor = parseDay(date);
+  const anchorDate = new Date(anchor);
+  const weekStart = mondayOf(anchor);
+  const dayNames = Array.from({ length: 7 }, (_, index) =>
+    formatDay(Date.UTC(2024, 0, 1 + index), lang, { weekday: "short" }),
+  );
+
+  let title: string;
+  let body: ReactNode;
+  if (view === "month") {
+    const first = Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth(), 1);
+    const gridStart = mondayOf(first);
+    title = formatDay(anchor, lang, { month: "short", year: "numeric" });
+    body = (
+      <div data-testid="calendar-month-view">
+        {Array.from({ length: 6 }, (_, week) => (
+          <WeekRow
+            key={week}
+            weekStart={gridStart + week * 7 * DAY_MS}
+            events={events}
+            maxLanes={3}
+            minHeight={118}
+            todayStr={todayStr}
+            monthIndex={anchorDate.getUTCMonth()}
+          />
+        ))}
+      </div>
+    );
+  } else if (view === "week") {
+    title = `${formatDay(weekStart, lang, { month: "short", day: "numeric" })} – ${formatDay(weekStart + 6 * DAY_MS, lang, { month: "short", day: "numeric" })}`;
+    body = (
+      <div data-testid="calendar-week-view">
+        <WeekRow
+          weekStart={weekStart}
+          events={events}
+          maxLanes={14}
+          minHeight={420}
+          todayStr={todayStr}
+          showDates={false}
+        />
+      </div>
+    );
+  } else {
+    title = formatDay(anchor, lang, { weekday: "short", month: "short", day: "numeric" });
+    body = <DayView date={date} events={events} />;
+  }
 
   return (
-    <div
-      className="bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden"
-      data-testid="calendar-week-view"
-    >
-      <div className="grid grid-cols-7 divide-x divide-gray-200 border-b border-gray-200 bg-gray-50 text-center">
-        {days.map((dayStr) => {
-          const [y, m, d] = dayStr.split("-").map(Number);
-          const dt = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
-          const dayName = dt.toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" });
-          const isToday = dayStr === todayStr;
+    <div data-testid="calendar-page" className="flex min-h-full flex-col">
+      <Page maxWidth={1240} header={<PageHeader title={t("calendar.title")} description={t("calendar.subtitle")} />}>
+        <Toolbar>
+          <span
+            className="min-w-[150px] text-[16px] font-semibold leading-none tracking-[-0.015em] text-fg"
+            data-testid="calendar-heading"
+          >
+            {title}
+          </span>
+          <div className="flex items-center gap-2" data-testid="calendar-nav">
+            <IconButton
+              icon="chevron-left"
+              label={t("calendar.btn_previous")}
+              variant="outline"
+              onClick={() => {
+                void navigate(urlFor({ date: navDates.prev }));
+              }}
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                void navigate(urlFor({ date: todayStr }));
+              }}
+            >
+              {t("calendar.btn_today")}
+            </Button>
+            <IconButton
+              icon="chevron-right"
+              label={t("calendar.btn_next")}
+              variant="outline"
+              onClick={() => {
+                void navigate(urlFor({ date: navDates.next }));
+              }}
+            />
+          </div>
+          <span className="flex-1" />
+          <div data-testid="calendar-project-filter">
+            <Select
+              size="sm"
+              aria-label={t("calendar.label_project")}
+              value={selectedProjectId ?? ""}
+              onChange={(event) => {
+                void navigate(urlFor({ projectId: event.target.value || null }));
+              }}
+              placeholder={t("calendar.all_projects")}
+              options={projects.map((project) => ({ value: project.id, label: `${project.code} · ${project.name}` }))}
+              className="w-[200px]"
+            />
+          </div>
+          <div data-testid="calendar-view-toggle">
+            <ViewSwitcher<CalendarViewId>
+              label={t("calendar.title")}
+              value={view}
+              onChange={(next) => {
+                void navigate(urlFor({ view: next }));
+              }}
+              views={[
+                { id: "day", label: t("calendar.view_day"), "data-testid": "calendar-view-day" },
+                { id: "week", label: t("calendar.view_week"), "data-testid": "calendar-view-week" },
+                { id: "month", label: t("calendar.view_month"), "data-testid": "calendar-view-month" },
+              ]}
+            />
+          </div>
+        </Toolbar>
 
-          return (
-            <div key={dayStr} className={`py-3 px-2 ${isToday ? "bg-blue-50/80" : ""}`}>
-              <div className="text-xs font-medium text-gray-500 uppercase">{dayName}</div>
-              <div
-                className={`mt-1 text-sm font-semibold inline-flex items-center justify-center w-7 h-7 rounded-full ${
-                  isToday ? "bg-blue-600 text-white" : "text-gray-900"
-                }`}
-              >
-                {d}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-7 divide-x divide-gray-200 min-h-[360px]">
-        {days.map((dayStr) => {
-          const matching = events.filter((e) =>
-            e.isSpan && e.startDate ? e.startDate <= dayStr && e.dueDate >= dayStr : e.dueDate === dayStr,
-          );
-
-          return (
-            <div key={dayStr} className="p-2 space-y-1.5 flex flex-col">
-              {matching.map((e) => (
-                <Link
-                  key={e.id}
-                  to={`/projects/${e.projectId}/tasks/${e.id}`}
-                  className={`block p-1.5 rounded text-xs transition-colors border ${
-                    e.isSpan
-                      ? "bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100"
-                      : "bg-blue-50 text-blue-900 border-blue-200 hover:bg-blue-100"
-                  }`}
-                  title={`${e.title} (${e.isSpan ? `${e.startDate} → ${e.dueDate}` : `Due ${e.dueDate}`})`}
-                >
-                  <div className="font-semibold truncate">
-                    {e.projectCode}-{e.number}
-                  </div>
-                  <div className="truncate">{e.title}</div>
-                  {e.isSpan && (
-                    <div className="text-[10px] text-purple-700 font-medium">{t("calendar.span_badge")}</div>
+        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+          {view !== "day" ? (
+            <div className="grid grid-cols-7 border-b border-line">
+              {dayNames.map((name, index) => (
+                <div
+                  key={name}
+                  className={cx(
+                    "px-2.5 py-2 text-[11.5px] font-medium leading-none text-fg-muted",
+                    index < 6 && "border-r border-line",
                   )}
-                </Link>
+                >
+                  {view === "week" ? `${name} ${String(new Date(weekStart + index * DAY_MS).getUTCDate())}` : name}
+                </div>
               ))}
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+          {body}
+        </div>
+
+        <div className="flex gap-3.5 text-[12px] leading-none text-fg-muted" data-testid="calendar-legend">
+          {STATUS_CATEGORIES.map((category) => (
+            <span key={category} className="inline-flex items-center gap-1.5">
+              <span
+                className={cx("size-2.5 rounded-[3px]", CATEGORY_BAR[category])}
+                style={{ boxShadow: `inset 2px 0 0 ${CATEGORY_EDGE[category]}` }}
+              />
+              {translateCategory(t, category)}
+            </span>
+          ))}
+        </div>
+      </Page>
     </div>
   );
 }
 
-function MonthView({
-  range,
-  events,
-  todayStr,
-}: {
-  range: { from: string; to: string };
-  events: CalendarEvent[];
-  todayStr: string;
-}) {
-  const { t, i18n } = useTranslation();
-  const days = getDaysBetween(range.from, range.to);
-
-  // Determine starting weekday offset for the first day of the month (Monday = 0, Sunday = 6)
-  const [fy, fm, fd] = range.from.split("-").map(Number);
-  const firstDate = new Date(Date.UTC(fy ?? 1970, (fm ?? 1) - 1, fd ?? 1));
-  const firstDayOfWeek = firstDate.getUTCDay(); // 0 is Sun, 1 is Mon...
-  const leadingBlankCount = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-
-  const weekdays =
-    i18n.language === "vi"
-      ? ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
-      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-  return (
-    <div
-      className="bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden"
-      data-testid="calendar-month-view"
-    >
-      <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center">
-        {weekdays.map((wd) => (
-          <div key={wd} className="py-2.5 text-xs font-semibold text-gray-500 uppercase">
-            {wd}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 border-collapse divide-x divide-y divide-gray-200 min-h-[480px]">
-        {/* Leading empty cells */}
-        {Array.from({ length: leadingBlankCount }).map((_, i) => (
-          <div key={`blank-${i}`} className="bg-gray-50/50 p-2 min-h-[100px]" />
-        ))}
-
-        {/* Days of the month */}
-        {days.map((dayStr) => {
-          const [, , d] = dayStr.split("-").map(Number);
-          const isToday = dayStr === todayStr;
-          const matching = events.filter((e) =>
-            e.isSpan && e.startDate ? e.startDate <= dayStr && e.dueDate >= dayStr : e.dueDate === dayStr,
-          );
-
-          return (
-            <div key={dayStr} className={`p-2 min-h-[100px] flex flex-col ${isToday ? "bg-blue-50/30" : ""}`}>
-              <div className="flex items-center justify-between pb-1">
-                <span
-                  className={`text-xs font-semibold inline-flex items-center justify-center w-5 h-5 rounded-full ${
-                    isToday ? "bg-blue-600 text-white" : "text-gray-700"
-                  }`}
-                >
-                  {d}
-                </span>
-                {matching.length > 0 && <span className="text-[10px] text-gray-400">{matching.length}</span>}
-              </div>
-
-              <div className="space-y-1 overflow-y-auto max-h-[90px]">
-                {matching.slice(0, 3).map((e) => (
-                  <Link
-                    key={e.id}
-                    to={`/projects/${e.projectId}/tasks/${e.id}`}
-                    className={`block px-1.5 py-0.5 rounded text-[11px] truncate border ${
-                      e.isSpan
-                        ? "bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100"
-                        : "bg-blue-50 text-blue-900 border-blue-200 hover:bg-blue-100"
-                    }`}
-                    title={`${e.title} (${e.isSpan ? `${e.startDate} → ${e.dueDate}` : `Due ${e.dueDate}`})`}
-                  >
-                    <span className="font-semibold mr-1">{e.projectCode}:</span>
-                    {e.title}
-                  </Link>
-                ))}
-                {matching.length > 3 && (
-                  <span className="text-[10px] text-gray-500 italic block pl-1">
-                    {t("calendar.more_tasks", { count: matching.length - 3 })}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+type CalendarViewId = "day" | "week" | "month";

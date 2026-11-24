@@ -1,16 +1,35 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
+import {
+  Form,
+  useActionData,
+  useFetcher,
+  useLoaderData,
+  useNavigation,
+  useRouteLoaderData,
+  useSubmit,
+} from "react-router";
 
-import { APP_NAME, PROJECT_ROLES, type ProjectRole } from "@pm/domain";
+import { APP_NAME, PROJECT_ROLES, type InviteRow, type MemberRow, type ProjectRole } from "@pm/domain";
 
 import { projectMembersAction } from "../actions/projectMembersAction";
+import { Avatar } from "../components/ui/Avatar";
+import { Badge, roleTone } from "../components/ui/Badge";
+import { Banner } from "../components/ui/Banner";
+import { Button } from "../components/ui/Button";
+import { Dialog } from "../components/ui/Dialog";
+import { Input } from "../components/ui/Input";
+import { Panel } from "../components/ui/Page";
+import { Select } from "../components/ui/Select";
+import { Table } from "../components/ui/Table";
+import { translateRole } from "../i18n/labels";
 import { projectMembersLoader, type UserSearchItem } from "../loaders/projectMembersLoader";
+import { formatShortDate } from "../utils/format";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta() {
-  return [{ title: `Project Members — ${APP_NAME}` }];
+  return [{ title: `Members — ${APP_NAME}` }];
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
@@ -34,31 +53,44 @@ interface ActionData {
 }
 
 export default function ProjectMembersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { members, pendingInvites, permissions, isArchived } = useLoaderData<typeof loader>();
+  const appData = useRouteLoaderData<{ user: { id: string } }>("routes/_app");
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const submit = useSubmit();
   const searchFetcher = useFetcher<{ searchResults?: UserSearchItem[] }>();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [addRole, setAddRole] = useState<ProjectRole>("MEMBER");
-
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<ProjectRole>("MEMBER");
-
   const [copied, setCopied] = useState(false);
+  const [removing, setRemoving] = useState<MemberRow | null>(null);
+  // Re-mount role selects after each action so a rejected change (e.g. last PM) snaps back.
+  const [actionCount, setActionCount] = useState(0);
+  const [prevActionData, setPrevActionData] = useState(actionData);
+  if (actionData !== prevActionData) {
+    setPrevActionData(actionData);
+    setActionCount((count) => count + 1);
+  }
 
   const isSubmitting = navigation.state === "submitting";
-
+  const canManage = permissions.canManageMembers && !isArchived;
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
   const userError = actionData?.errors?.userId?.[0];
   const emailError = actionData?.errors?.email?.[0];
+  const searchResults = searchFetcher.data?.searchResults ?? [];
+  const shortDate = (value: Date | string) => formatShortDate(new Date(value), i18n.language);
+  // The last PM cannot be removed (server rule), so their row has no Remove button.
+  const pmCount = members.filter((member) => member.projectRole === "PM").length;
+  const roleOptions = PROJECT_ROLES.map((role) => ({ value: role, label: translateRole(t, role) }));
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const q = e.target.value;
-    setSearchQuery(q);
-    void searchFetcher.load(`?q=${encodeURIComponent(q)}`);
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const query = event.target.value;
+    setSearchQuery(query);
+    void searchFetcher.load(`?q=${encodeURIComponent(query)}`);
   };
 
   const handleCopyInviteUrl = (url: string) => {
@@ -69,368 +101,303 @@ export default function ProjectMembersPage() {
     }, 2000);
   };
 
-  const searchResults = searchFetcher.data?.searchResults ?? [];
-
   return (
-    <div className="space-y-8" data-testid="project-members-page">
-      {/* Read-only / archived banner */}
-      {isArchived ? (
-        <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800 border border-amber-200">
-          {t("project_members.archived_banner")}
-        </div>
-      ) : null}
+    <div className="flex flex-col gap-4" data-testid="project-members-page">
+      {isArchived ? <Banner tone="warning">{t("project_members.archived_banner")}</Banner> : null}
 
-      {/* Success banner */}
       {actionData?.success && !actionData.inviteUrl ? (
-        <div
-          className="rounded-lg bg-green-50 p-4 text-sm text-green-700 border border-green-200"
-          data-testid="success-banner"
-        >
+        <Banner tone="success" data-testid="success-banner">
           {t("project_members.success_banner")}
-        </div>
+        </Banner>
       ) : null}
 
-      {/* Invite URL display */}
       {actionData?.inviteUrl ? (
-        <div
-          className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900 border border-blue-200 space-y-2"
+        <Banner
+          tone="success"
+          title={t("project_members.invite_url_title")}
           data-testid="invite-url-box"
-        >
-          <div className="font-semibold text-blue-950">{t("project_members.invite_url_title")}</div>
-          <p className="text-blue-800 text-xs">{t("project_members.invite_url_desc")}</p>
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="text"
-              readOnly
-              value={actionData.inviteUrl}
-              className="flex-1 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs text-gray-900 font-mono shadow-sm"
-              data-testid="invite-url-link"
-            />
-            <button
-              type="button"
+          action={
+            <Button
+              size="sm"
+              icon="copy"
               onClick={() => {
                 handleCopyInviteUrl(actionData.inviteUrl ?? "");
               }}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-500"
               data-testid="copy-invite-url-btn"
             >
               {copied ? t("project_members.btn_copied") : t("project_members.btn_copy")}
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        >
+          <span className="flex flex-col gap-2">
+            {t("project_members.invite_url_desc")}
+            <Input
+              readOnly
+              value={actionData.inviteUrl}
+              className="font-mono text-[12px]"
+              data-testid="invite-url-link"
+            />
+          </span>
+        </Banner>
       ) : null}
 
-      {/* Error banner */}
       {formError ? (
-        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 border border-red-200" data-testid="action-error">
+        <Banner tone="danger" role="alert" data-testid="action-error">
           {formError}
-        </div>
+        </Banner>
       ) : null}
 
-      {/* Member Management Forms (Only if canManageMembers and not archived) */}
-      {permissions.canManageMembers && !isArchived ? (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Add Existing Member Card */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">{t("project_members.add_user_title")}</h2>
-            <Form method="post" className="space-y-4" data-testid="add-member-form">
+      {canManage ? (
+        <Panel title={t("project_members.add_title")} subtitle={t("project_members.add_subtitle")}>
+          <div className="flex flex-col gap-4 p-4">
+            <Form
+              method="post"
+              className="grid items-end gap-2.5"
+              style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr) 160px auto" }}
+              data-testid="add-member-form"
+            >
               <input type="hidden" name="intent" value="add" />
-
-              <div>
-                <label htmlFor="searchQuery" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_members.search_users_label")}
-                </label>
-                <input
-                  id="searchQuery"
-                  type="text"
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  placeholder={t("project_members.search_placeholder")}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="search-user-input"
-                />
-              </div>
-
-              {searchFetcher.state === "loading" ? (
-                <p className="text-xs text-gray-500 italic">{t("project_members.searching")}</p>
-              ) : searchResults.length > 0 ? (
-                <div>
-                  <label htmlFor="userId" className="block text-xs font-medium text-gray-700 mb-1">
-                    {t("project_members.select_user_label")}
-                  </label>
-                  <select
-                    id="userId"
-                    name="userId"
-                    value={selectedUserId}
-                    onChange={(e) => {
-                      setSelectedUserId(e.target.value);
-                    }}
-                    className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    data-testid="search-user-select"
-                  >
-                    <option value="">{t("project_members.choose_user_option")}</option>
-                    {searchResults.map((u) => (
-                      <option key={u.id} value={u.id} data-testid={`user-option-${u.id}`}>
-                        {u.fullName} ({u.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : searchQuery.trim().length > 0 ? (
-                <p className="text-xs text-gray-500 italic">{t("project_members.no_users_found")}</p>
-              ) : null}
-
-              {userError ? <p className="text-xs text-red-600">{userError}</p> : null}
-
-              <div>
-                <label htmlFor="addRole" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_members.project_role_label")}
-                </label>
-                <select
-                  id="addRole"
-                  name="projectRole"
-                  value={addRole}
-                  onChange={(e) => {
-                    setAddRole(e.target.value as ProjectRole);
-                  }}
-                  className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="add-member-role-select"
-                >
-                  {PROJECT_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
+              <Input
+                id="searchQuery"
+                icon="search"
+                label={t("project_members.search_users_label")}
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder={t("project_members.search_placeholder")}
+                data-testid="search-user-input"
+              />
+              <Select
+                id="userId"
+                name="userId"
+                label={t("project_members.select_user_label")}
+                value={selectedUserId}
+                onChange={(event) => {
+                  setSelectedUserId(event.target.value);
+                }}
+                placeholder={
+                  searchFetcher.state === "loading"
+                    ? t("project_members.searching")
+                    : searchQuery.trim() && searchResults.length === 0
+                      ? t("project_members.no_users_found")
+                      : t("project_members.choose_user_option")
+                }
+                options={searchResults.map((user) => ({ value: user.id, label: `${user.fullName} (${user.email})` }))}
+                error={userError}
+                data-testid="search-user-select"
+              />
+              <Select
+                id="addRole"
+                name="projectRole"
+                label={t("project_members.project_role_label")}
+                value={addRole}
+                onChange={(event) => {
+                  setAddRole(event.target.value as ProjectRole);
+                }}
+                options={roleOptions}
+                data-testid="add-member-role-select"
+              />
+              <Button
                 type="submit"
+                variant="secondary"
+                icon="user-plus"
                 disabled={isSubmitting || !selectedUserId}
-                className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
                 data-testid="add-member-submit-btn"
               >
-                {isSubmitting ? t("project_members.btn_adding") : t("project_members.btn_add")}
-              </button>
+                {t("project_members.btn_add")}
+              </Button>
             </Form>
-          </div>
-
-          {/* Invite New User by Email Card */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">{t("project_members.invite_email_title")}</h2>
-            <Form method="post" className="space-y-4" data-testid="invite-member-form">
+            <Form
+              method="post"
+              className="grid items-end gap-2.5"
+              style={{ gridTemplateColumns: "minmax(0,1fr) 160px auto" }}
+              data-testid="invite-member-form"
+            >
               <input type="hidden" name="intent" value="invite" />
-
-              <div>
-                <label htmlFor="inviteEmail" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_members.invite_email_label")}
-                </label>
-                <input
-                  id="inviteEmail"
-                  type="email"
-                  name="email"
-                  value={inviteEmail}
-                  onChange={(e) => {
-                    setInviteEmail(e.target.value);
-                  }}
-                  placeholder={t("project_members.invite_email_placeholder")}
-                  required
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="invite-email-input"
-                />
-                {emailError ? <p className="text-xs text-red-600 mt-1">{emailError}</p> : null}
-              </div>
-
-              <div>
-                <label htmlFor="inviteRole" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_members.assigned_role_label")}
-                </label>
-                <select
-                  id="inviteRole"
-                  name="projectRole"
-                  value={inviteRole}
-                  onChange={(e) => {
-                    setInviteRole(e.target.value as ProjectRole);
-                  }}
-                  className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="invite-role-select"
-                >
-                  {PROJECT_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
+              <Input
+                id="inviteEmail"
+                name="email"
+                type="email"
+                required
+                requiredMark={false}
+                label={t("project_members.invite_email_label")}
+                placeholder={t("project_members.invite_email_placeholder")}
+                value={inviteEmail}
+                onChange={(event) => {
+                  setInviteEmail(event.target.value);
+                }}
+                error={emailError}
+                data-testid="invite-email-input"
+              />
+              <Select
+                id="inviteRole"
+                name="projectRole"
+                label={t("project_members.project_role_label")}
+                value={inviteRole}
+                onChange={(event) => {
+                  setInviteRole(event.target.value as ProjectRole);
+                }}
+                options={roleOptions}
+                data-testid="invite-role-select"
+              />
+              <Button
                 type="submit"
-                disabled={isSubmitting || !inviteEmail.trim()}
-                className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                variant="primary"
+                icon="user-plus"
+                disabled={isSubmitting}
                 data-testid="invite-submit-btn"
               >
                 {isSubmitting ? t("project_members.btn_inviting") : t("project_members.btn_invite")}
-              </button>
+              </Button>
             </Form>
           </div>
-        </div>
-      ) : null}
+        </Panel>
+      ) : (
+        <Banner tone="info">{t("project_members.only_pm_banner")}</Banner>
+      )}
 
-      {/* Members List Table */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {t("project_members.members_count", { count: members.length })}
-          </h2>
-        </div>
+      <Panel title={t("project_members.members_title")} count={members.length}>
+        <Table<MemberRow>
+          data-testid="members-table"
+          rows={members}
+          rowKey={(row) => row.userId}
+          rowTestId={(row) => `member-row-${row.userId}`}
+          columns={[
+            {
+              id: "member",
+              label: t("project_members.th_member"),
+              render: (row) => (
+                <span className="inline-flex items-center gap-2.5">
+                  <Avatar name={row.fullName} src={row.avatarKey ? `/api/avatars/${row.userId}` : null} size={24} />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="font-medium" data-testid={`member-name-${row.userId}`}>
+                      {row.fullName}
+                      {row.userId === appData?.user.id ? (
+                        <span className="font-normal text-fg-muted">{` ${t("project_members.you")}`}</span>
+                      ) : null}
+                    </span>
+                    <span className="text-[11.5px] leading-none text-fg-muted">{row.email}</span>
+                  </span>
+                </span>
+              ),
+            },
+            {
+              id: "role",
+              label: t("project_members.th_role"),
+              width: 170,
+              render: (row) =>
+                canManage ? (
+                  <Select
+                    key={`${row.projectRole}-${String(actionCount)}`}
+                    size="sm"
+                    name="projectRole"
+                    aria-label={t("project_members.th_role")}
+                    defaultValue={row.projectRole}
+                    options={roleOptions}
+                    onChange={(event) => {
+                      void submit(
+                        { intent: "changeRole", userId: row.userId, projectRole: event.target.value },
+                        { method: "post" },
+                      );
+                    }}
+                    data-testid={`member-role-select-${row.userId}`}
+                  />
+                ) : (
+                  <Badge tone={roleTone(row.projectRole)} data-testid={`member-role-${row.userId}`}>
+                    {translateRole(t, row.projectRole)}
+                  </Badge>
+                ),
+            },
+            {
+              id: "joined",
+              label: t("project_members.th_joined"),
+              muted: true,
+              render: (row) => shortDate(row.createdAt),
+            },
+            {
+              id: "actions",
+              label: "",
+              align: "right",
+              render: (row) =>
+                canManage && !(row.projectRole === "PM" && pmCount <= 1) ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setRemoving(row);
+                    }}
+                    data-testid={`remove-member-btn-${row.userId}`}
+                  >
+                    {t("project_members.btn_remove")}
+                  </Button>
+                ) : null,
+            },
+          ]}
+        />
+      </Panel>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200" data-testid="members-table">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t("project_members.th_member")}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t("project_members.th_role")}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t("project_members.th_joined")}
-                </th>
-                {permissions.canManageMembers && !isArchived ? (
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t("project_members.th_actions")}
-                  </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {members.map((member) => (
-                <tr key={member.userId} data-testid={`member-row-${member.userId}`}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm">
-                        {member.fullName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="ml-3">
-                        <div className="text-sm font-medium text-gray-900" data-testid={`member-name-${member.userId}`}>
-                          {member.fullName}
-                        </div>
-                        <div className="text-xs text-gray-500">{member.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {permissions.canManageMembers && !isArchived ? (
-                      <Form method="post" className="inline-block">
-                        <input type="hidden" name="intent" value="changeRole" />
-                        <input type="hidden" name="userId" value={member.userId} />
-                        <select
-                          name="projectRole"
-                          defaultValue={member.projectRole}
-                          onChange={(e) => {
-                            e.target.form?.requestSubmit();
-                          }}
-                          className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          data-testid={`member-role-select-${member.userId}`}
-                        >
-                          {PROJECT_ROLES.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
-                      </Form>
-                    ) : (
-                      <span
-                        className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10"
-                        data-testid={`member-role-${member.userId}`}
-                      >
-                        {member.projectRole}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                    {new Date(member.createdAt).toLocaleDateString()}
-                  </td>
-                  {permissions.canManageMembers && !isArchived ? (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                      <Form
-                        method="post"
-                        onSubmit={(e) => {
-                          if (!confirm(t("project_members.confirm_remove", { name: member.fullName }))) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        <input type="hidden" name="intent" value="remove" />
-                        <input type="hidden" name="userId" value={member.userId} />
-                        <button
-                          type="submit"
-                          className="text-red-600 hover:text-red-900 text-xs font-medium"
-                          data-testid={`remove-member-btn-${member.userId}`}
-                        >
-                          {t("project_members.btn_remove")}
-                        </button>
-                      </Form>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Pending Invitations Table */}
       {pendingInvites.length > 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-base font-semibold text-gray-900">
-              {t("project_members.pending_count", { count: pendingInvites.length })}
-            </h2>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200" data-testid="pending-invites-table">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t("project_members.th_email")}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t("project_members.th_assigned_role")}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t("project_members.th_invited_on")}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t("project_members.th_expires_on")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {pendingInvites.map((invite) => (
-                  <tr key={invite.id} data-testid={`pending-invite-row-${invite.id}`}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{invite.email}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10">
-                        {invite.projectRole}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                      {new Date(invite.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                      {new Date(invite.expiresAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Panel title={t("project_members.pending_title")} count={pendingInvites.length}>
+          <Table<InviteRow>
+            dense
+            data-testid="pending-invites-table"
+            rows={pendingInvites}
+            rowKey={(row) => row.id}
+            rowTestId={(row) => `pending-invite-row-${row.id}`}
+            columns={[
+              { id: "email", label: t("project_members.th_email"), render: (row) => row.email },
+              {
+                id: "role",
+                label: t("project_members.th_assigned_role"),
+                render: (row) => <Badge size="sm">{translateRole(t, row.projectRole)}</Badge>,
+              },
+              {
+                id: "invited",
+                label: t("project_members.th_invited_on"),
+                muted: true,
+                render: (row) => shortDate(row.createdAt),
+              },
+              {
+                id: "expires",
+                label: t("project_members.th_expires_on"),
+                muted: true,
+                render: (row) => shortDate(row.expiresAt),
+              },
+            ]}
+          />
+        </Panel>
       ) : null}
+
+      <Dialog
+        open={removing !== null}
+        onClose={() => {
+          setRemoving(null);
+        }}
+        title={removing ? t("project_members.remove_title", { name: removing.fullName }) : ""}
+        description={t("project_members.remove_desc")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setRemoving(null);
+              }}
+            >
+              {t("project_members.btn_cancel")}
+            </Button>
+            <Button
+              variant="danger"
+              data-testid="confirm-remove-btn"
+              onClick={() => {
+                if (removing) {
+                  void submit({ intent: "remove", userId: removing.userId }, { method: "post" });
+                }
+                setRemoving(null);
+              }}
+            >
+              {t("project_members.btn_remove")}
+            </Button>
+          </>
+        }
+      />
     </div>
   );
 }

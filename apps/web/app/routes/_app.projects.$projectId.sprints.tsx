@@ -1,16 +1,28 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
+import { Form, Link, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 
-import { APP_NAME, type SprintWithStatsDto } from "@pm/domain";
+import { APP_NAME, getTodayDateString, type SprintStatus, type SprintWithStatsDto } from "@pm/domain";
 
 import { sprintsAction } from "../actions/sprintsAction";
+import { Badge, type BadgeTone } from "../components/ui/Badge";
+import { Banner } from "../components/ui/Banner";
+import { Button, buttonClass } from "../components/ui/Button";
+import { Dialog } from "../components/ui/Dialog";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Icon } from "../components/ui/Icon";
+import { Input } from "../components/ui/Input";
+import { MenuButton } from "../components/ui/Menu";
+import { Panel } from "../components/ui/Page";
+import { ProgressBar } from "../components/ui/ProgressBar";
+import { Table } from "../components/ui/Table";
 import { sprintsLoader } from "../loaders/sprintsLoader";
+import { formatShortDate } from "../utils/format";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta() {
-  return [{ title: `Project Sprints — ${APP_NAME}` }];
+  return [{ title: `Sprints — ${APP_NAME}` }];
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
@@ -31,351 +43,341 @@ interface ActionData {
   message?: string;
 }
 
+const STATUS_TONE: Record<SprintStatus, BadgeTone> = { ACTIVE: "progress", COMPLETED: "done", PLANNED: "neutral" };
+const DAY_MS = 86_400_000;
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+}
+
 export default function ProjectSprintsPage() {
-  const { t } = useTranslation();
-  const { sprints, permissions } = useLoaderData<typeof loader>();
+  const { t, i18n } = useTranslation();
+  const { project, sprints, permissions } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const submit = useSubmit();
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingSprint, setEditingSprint] = useState<SprintWithStatsDto | null>(null);
+  const [prevActionData, setPrevActionData] = useState(actionData);
+  if (actionData !== prevActionData) {
+    setPrevActionData(actionData);
+    if (actionData?.success) {
+      setIsCreating(false);
+      setEditingSprint(null);
+    }
+  }
 
   const isSubmitting = navigation.state === "submitting";
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
+  const canManage = permissions.canManageSprint;
+  const shortDate = (value: string) => formatShortDate(value, i18n.language);
+  const range = (sprint: SprintWithStatsDto) => `${shortDate(sprint.startDate)} – ${shortDate(sprint.endDate)}`;
+  const statusLabel = (status: SprintStatus) =>
+    status === "ACTIVE"
+      ? t("project_sprints.status_active")
+      : status === "COMPLETED"
+        ? t("project_sprints.status_completed")
+        : t("project_sprints.status_planned");
 
-  const getStatusBadge = (status: "PLANNED" | "ACTIVE" | "COMPLETED") => {
-    switch (status) {
-      case "ACTIVE":
-        return "bg-green-50 text-green-700 ring-green-600/20";
-      case "COMPLETED":
-        return "bg-gray-100 text-gray-700 ring-gray-500/20";
-      case "PLANNED":
-      default:
-        return "bg-blue-50 text-blue-700 ring-blue-600/20";
-    }
+  const active = sprints.find((sprint) => sprint.status === "ACTIVE");
+  const today = getTodayDateString(new Date());
+
+  const archive = (sprint: SprintWithStatsDto) => {
+    void submit({ intent: "archive", sprintId: sprint.id }, { method: "post" });
   };
 
+  const createButton = canManage ? (
+    <Button
+      size="sm"
+      variant="primary"
+      icon="plus"
+      onClick={() => {
+        setIsCreating(true);
+      }}
+      data-testid="create-sprint-btn"
+    >
+      {t("project_sprints.btn_create")}
+    </Button>
+  ) : null;
+
   return (
-    <div className="space-y-6" data-testid="sprints-page">
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{t("project_sprints.title")}</h1>
-          <p className="text-xs text-gray-500 mt-1">{t("project_sprints.subtitle")}</p>
-        </div>
-        {permissions.canManageSprint ? (
-          <button
-            type="button"
-            onClick={() => {
-              setIsCreating(true);
-              setEditingSprint(null);
-            }}
-            className="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-            data-testid="create-sprint-btn"
-          >
-            {t("project_sprints.btn_create")}
-          </button>
-        ) : null}
-      </div>
-
-      {formError ? (
-        <div className="rounded-md bg-red-50 p-4 border border-red-200" data-testid="sprints-error-alert">
-          <p className="text-sm text-red-700">{formError}</p>
-        </div>
+    <div className="flex flex-col gap-4" data-testid="sprints-page">
+      {formError && !isCreating && !editingSprint ? (
+        <Banner tone="danger" role="alert" data-testid="sprints-error-alert">
+          {formError}
+        </Banner>
       ) : null}
 
-      {/* Create Sprint Modal / Form */}
-      {isCreating && permissions.canManageSprint ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="create-sprint-container">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">{t("project_sprints.create_title")}</h2>
-          <Form
-            method="post"
-            className="space-y-4"
-            data-testid="create-sprint-form"
-            onSubmit={() => {
-              setIsCreating(false);
-            }}
-          >
-            <input type="hidden" name="intent" value="create" />
-
-            <div>
-              <label htmlFor="sprint-name" className="block text-xs font-medium text-gray-700 mb-1">
-                {t("project_sprints.label_name")}
-              </label>
-              <input
-                id="sprint-name"
-                type="text"
-                name="name"
-                required
-                maxLength={100}
-                placeholder={t("project_sprints.placeholder_name")}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                data-testid="sprint-name-input"
-              />
-              {actionData?.errors?.name ? (
-                <p className="text-xs text-red-600 mt-1">{actionData.errors.name.join(", ")}</p>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="sprint-startDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_sprints.label_start_date")}
-                </label>
-                <input
-                  id="sprint-startDate"
-                  type="date"
-                  name="startDate"
-                  required
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="sprint-start-date-input"
-                />
-                {actionData?.errors?.startDate ? (
-                  <p className="text-xs text-red-600 mt-1">{actionData.errors.startDate.join(", ")}</p>
-                ) : null}
-              </div>
-
-              <div>
-                <label htmlFor="sprint-endDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_sprints.label_end_date")}
-                </label>
-                <input
-                  id="sprint-endDate"
-                  type="date"
-                  name="endDate"
-                  required
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="sprint-end-date-input"
-                />
-                {actionData?.errors?.endDate ? (
-                  <p className="text-xs text-red-600 mt-1">{actionData.errors.endDate.join(", ")}</p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCreating(false);
-                }}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                {t("project_sprints.btn_cancel")}
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-                data-testid="create-sprint-submit-btn"
-              >
-                {isSubmitting ? t("project_sprints.btn_creating") : t("project_sprints.btn_save_sprint")}
-              </button>
-            </div>
-          </Form>
-        </div>
+      {active ? (
+        <Panel
+          data-testid="active-sprint-panel"
+          title={
+            <>
+              {active.name}
+              <Badge tone="progress" dot size="sm">
+                {t("project_sprints.status_active")}
+              </Badge>
+            </>
+          }
+          subtitle={`${range(active)} · ${t("project_sprints.days_left", { count: Math.max(0, daysBetween(today, active.endDate)) })}`}
+          action={
+            <Link to={`/projects/${project.id}?sprintId=${active.id}`} className={buttonClass("ghost", "sm")}>
+              {t("project_sprints.view_tasks")}
+              <Icon name="arrow-up-right" size={14} style={{ opacity: 0.7 }} />
+            </Link>
+          }
+        >
+          <div className="flex flex-col gap-3 p-4">
+            <ProgressBar
+              value={active.completedCount}
+              total={active.taskCount || 1}
+              tone="done"
+              height={6}
+              label={t("project_sprints.done_of", { done: active.completedCount, total: active.taskCount })}
+            />
+          </div>
+        </Panel>
       ) : null}
 
-      {/* Edit Sprint Form */}
-      {editingSprint && permissions.canManageSprint ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="edit-sprint-container">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">
-            {t("project_sprints.edit_title", { name: editingSprint.name })}
-          </h2>
-          <Form
-            method="post"
-            className="space-y-4"
-            data-testid="edit-sprint-form"
-            onSubmit={() => {
-              setEditingSprint(null);
-            }}
-          >
+      <Panel
+        title={t("project_sprints.all_title")}
+        subtitle={t("project_sprints.all_subtitle")}
+        count={sprints.length}
+        action={sprints.length ? createButton : null}
+        data-testid="sprints-table-container"
+      >
+        {sprints.length === 0 ? (
+          <EmptyState
+            icon="target"
+            title={t("project_sprints.empty_title")}
+            description={t("project_sprints.empty_desc")}
+            action={createButton}
+            data-testid="empty-sprints"
+          />
+        ) : (
+          <Table<SprintWithStatsDto>
+            data-testid="sprints-table"
+            rows={sprints}
+            rowKey={(row) => row.id}
+            rowTestId={(row) => `sprint-row-${row.id}`}
+            columns={[
+              {
+                id: "name",
+                label: t("project_sprints.th_name"),
+                render: (row) => (
+                  <span className="font-medium" data-testid="sprint-name">
+                    {row.name}
+                  </span>
+                ),
+              },
+              {
+                id: "status",
+                label: t("project_sprints.th_status"),
+                render: (row) => (
+                  <Badge tone={STATUS_TONE[row.status]} dot size="sm" data-testid="sprint-status">
+                    {statusLabel(row.status)}
+                  </Badge>
+                ),
+              },
+              {
+                id: "duration",
+                label: t("project_sprints.th_duration"),
+                muted: true,
+                render: (row) => <span data-testid="sprint-dates">{range(row)}</span>,
+              },
+              {
+                id: "completion",
+                label: t("project_sprints.th_completion"),
+                width: 260,
+                render: (row) => (
+                  <div data-testid="sprint-completion">
+                    {row.taskCount ? (
+                      <ProgressBar
+                        value={row.completedCount}
+                        total={row.taskCount}
+                        tone={row.completedCount === row.taskCount ? "done" : "accent"}
+                        label={t("project_sprints.done_ratio", { done: row.completedCount, total: row.taskCount })}
+                      />
+                    ) : (
+                      <span className="text-fg-muted">{t("project_sprints.no_tasks")}</span>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                id: "actions",
+                label: "",
+                align: "right",
+                width: 40,
+                render: (row) =>
+                  canManage ? (
+                    <MenuButton
+                      label={t("project_sprints.actions_label")}
+                      data-testid={`sprint-actions-${row.id}`}
+                      items={[
+                        {
+                          id: "edit",
+                          label: t("project_sprints.btn_edit"),
+                          icon: "pencil",
+                          onSelect: () => {
+                            setEditingSprint(row);
+                          },
+                          "data-testid": `edit-sprint-btn-${row.id}`,
+                        },
+                        {
+                          id: "archive",
+                          label: t("project_sprints.btn_archive"),
+                          icon: "archive",
+                          danger: true,
+                          onSelect: () => {
+                            archive(row);
+                          },
+                          "data-testid": `archive-sprint-btn-${row.id}`,
+                        },
+                      ]}
+                    />
+                  ) : null,
+              },
+            ]}
+          />
+        )}
+      </Panel>
+
+      <Dialog
+        open={isCreating}
+        onClose={() => {
+          setIsCreating(false);
+        }}
+        title={t("project_sprints.create_title")}
+        description={t("project_sprints.create_desc")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setIsCreating(false);
+              }}
+            >
+              {t("project_sprints.btn_cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="create-sprint-form"
+              variant="primary"
+              disabled={isSubmitting}
+              data-testid="create-sprint-submit-btn"
+            >
+              {isSubmitting ? t("project_sprints.btn_creating") : t("project_sprints.btn_save_sprint")}
+            </Button>
+          </>
+        }
+      >
+        <Form id="create-sprint-form" method="post" className="flex flex-col gap-3" data-testid="create-sprint-form">
+          <input type="hidden" name="intent" value="create" />
+          {formError ? (
+            <Banner tone="danger" role="alert">
+              {formError}
+            </Banner>
+          ) : null}
+          <Input
+            id="sprint-name"
+            name="name"
+            required
+            label={t("project_sprints.label_name")}
+            placeholder={t("project_sprints.placeholder_name")}
+            error={actionData?.errors?.name?.join(", ")}
+            data-testid="sprint-name-input"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="sprint-start"
+              name="startDate"
+              type="date"
+              required
+              label={t("project_sprints.label_start_date")}
+              error={actionData?.errors?.startDate?.join(", ")}
+              data-testid="sprint-start-date-input"
+            />
+            <Input
+              id="sprint-end"
+              name="endDate"
+              type="date"
+              required
+              label={t("project_sprints.label_end_date")}
+              error={actionData?.errors?.endDate?.join(", ")}
+              data-testid="sprint-end-date-input"
+            />
+          </div>
+        </Form>
+      </Dialog>
+
+      <Dialog
+        open={editingSprint !== null}
+        onClose={() => {
+          setEditingSprint(null);
+        }}
+        title={editingSprint ? t("project_sprints.edit_title", { name: editingSprint.name }) : ""}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setEditingSprint(null);
+              }}
+            >
+              {t("project_sprints.btn_cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="edit-sprint-form"
+              variant="primary"
+              disabled={isSubmitting}
+              data-testid="edit-sprint-submit-btn"
+            >
+              {isSubmitting ? t("project_sprints.btn_saving") : t("project_sprints.btn_save_changes")}
+            </Button>
+          </>
+        }
+      >
+        {editingSprint ? (
+          <Form id="edit-sprint-form" method="post" className="flex flex-col gap-3" data-testid="edit-sprint-form">
             <input type="hidden" name="intent" value="update" />
             <input type="hidden" name="sprintId" value={editingSprint.id} />
-
-            <div>
-              <label htmlFor="edit-name" className="block text-xs font-medium text-gray-700 mb-1">
-                {t("project_sprints.label_name")}
-              </label>
-              <input
-                id="edit-name"
-                type="text"
-                name="name"
-                defaultValue={editingSprint.name}
+            {formError ? (
+              <Banner tone="danger" role="alert">
+                {formError}
+              </Banner>
+            ) : null}
+            <Input
+              id="edit-sprint-name"
+              name="name"
+              required
+              label={t("project_sprints.label_name")}
+              defaultValue={editingSprint.name}
+              data-testid="edit-sprint-name-input"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                id="edit-sprint-start"
+                name="startDate"
+                type="date"
                 required
-                maxLength={100}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                data-testid="edit-sprint-name-input"
+                label={t("project_sprints.label_start_date")}
+                defaultValue={editingSprint.startDate}
+                data-testid="edit-sprint-start-date-input"
+              />
+              <Input
+                id="edit-sprint-end"
+                name="endDate"
+                type="date"
+                required
+                label={t("project_sprints.label_end_date")}
+                defaultValue={editingSprint.endDate}
+                data-testid="edit-sprint-end-date-input"
               />
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="edit-startDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_sprints.label_start_date")}
-                </label>
-                <input
-                  id="edit-startDate"
-                  type="date"
-                  name="startDate"
-                  defaultValue={editingSprint.startDate}
-                  required
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="edit-sprint-start-date-input"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="edit-endDate" className="block text-xs font-medium text-gray-700 mb-1">
-                  {t("project_sprints.label_end_date")}
-                </label>
-                <input
-                  id="edit-endDate"
-                  type="date"
-                  name="endDate"
-                  defaultValue={editingSprint.endDate}
-                  required
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  data-testid="edit-sprint-end-date-input"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingSprint(null);
-                }}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                {t("project_sprints.btn_cancel")}
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-                data-testid="edit-sprint-submit-btn"
-              >
-                {isSubmitting ? t("project_sprints.btn_saving") : t("project_sprints.btn_save_changes")}
-              </button>
-            </div>
           </Form>
-        </div>
-      ) : null}
-
-      {/* Sprints List Table */}
-      {sprints.length === 0 ? (
-        <div
-          className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center"
-          data-testid="empty-sprints"
-        >
-          <p className="text-sm text-gray-500">{t("project_sprints.empty_title")}</p>
-          {permissions.canManageSprint ? (
-            <button
-              type="button"
-              onClick={() => {
-                setIsCreating(true);
-              }}
-              className="mt-3 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-            >
-              {t("project_sprints.empty_create_first")}
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <div
-          className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
-          data-testid="sprints-table-container"
-        >
-          <table className="min-w-full divide-y divide-gray-200" data-testid="sprints-table">
-            <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500">
-              <tr>
-                <th scope="col" className="px-6 py-3">
-                  {t("project_sprints.th_name")}
-                </th>
-                <th scope="col" className="px-6 py-3">
-                  {t("project_sprints.th_status")}
-                </th>
-                <th scope="col" className="px-6 py-3">
-                  {t("project_sprints.th_duration")}
-                </th>
-                <th scope="col" className="px-6 py-3">
-                  {t("project_sprints.th_completion")}
-                </th>
-                {permissions.canManageSprint ? (
-                  <th scope="col" className="px-6 py-3 text-right">
-                    {t("project_sprints.th_actions")}
-                  </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white text-sm">
-              {sprints.map((sprint) => (
-                <tr key={sprint.id} data-testid={`sprint-row-${sprint.id}`}>
-                  <td className="px-6 py-4 font-medium text-gray-900" data-testid="sprint-name">
-                    {sprint.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusBadge(
-                        sprint.status,
-                      )}`}
-                      data-testid="sprint-status"
-                    >
-                      {sprint.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-500" data-testid="sprint-dates">
-                    {t("project_sprints.duration_format", { start: sprint.startDate, end: sprint.endDate })}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap" data-testid="sprint-completion">
-                    {sprint.completionRate === null ? (
-                      <span className="text-gray-400">{t("project_sprints.no_tasks")}</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{sprint.completionRate}%</span>
-                        <span className="text-xs text-gray-500">
-                          {t("project_sprints.done_ratio", { done: sprint.completedCount, total: sprint.taskCount })}
-                        </span>
-                      </div>
-                    )}
-                  </td>
-                  {permissions.canManageSprint ? (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                      <div className="flex justify-end items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingSprint(sprint);
-                            setIsCreating(false);
-                          }}
-                          className="font-medium text-blue-600 hover:text-blue-500"
-                          data-testid={`edit-sprint-btn-${sprint.id}`}
-                        >
-                          {t("project_sprints.btn_edit")}
-                        </button>
-                        <Form method="post" className="inline" data-testid={`archive-sprint-form-${sprint.id}`}>
-                          <input type="hidden" name="intent" value="archive" />
-                          <input type="hidden" name="sprintId" value={sprint.id} />
-                          <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="font-medium text-red-600 hover:text-red-500 disabled:opacity-50"
-                            data-testid={`archive-sprint-btn-${sprint.id}`}
-                          >
-                            {t("project_sprints.btn_archive")}
-                          </button>
-                        </Form>
-                      </div>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        ) : null}
+      </Dialog>
     </div>
   );
 }

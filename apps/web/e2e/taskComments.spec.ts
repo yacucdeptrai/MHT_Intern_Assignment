@@ -6,7 +6,8 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
   test("FR-19 c1..c3: shows rejection reason as root comment, keeps replies one level deep, blocks non-author delete (403), and preserves replies when root is deleted", async ({
     browser,
   }) => {
-    test.slow();
+    // Several signed-in users plus reload-heavy steps run past the 90 s slow() budget.
+    test.setTimeout(150_000);
     const lead = await createSignedInMember(browser, "TEAM_LEAD");
     const author = await createSignedInMember(browser, "MEMBER");
     const bystander = await createSignedInMember(browser, "MEMBER");
@@ -34,6 +35,7 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
 
     // Author reloads and sees the rejection reason inside the Comments thread
     await author.page.reload();
+    await author.page.getByTestId("drawer-tab-activity").click();
     const commentsSection = author.page.getByTestId("comments-section");
     await expect(commentsSection).toContainText(rejectionReason);
 
@@ -57,6 +59,7 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
 
     // FR-19 c2: Bystander posts a direct reply to Author's root comment
     await bystander.page.goto(taskUrl);
+    await bystander.page.getByTestId("drawer-tab-activity").click();
     await bystander.page.getByTestId(`reply-comment-btn-${rootId}`).click();
     const directReplyText = "Looks great, checking locally now.";
     await bystander.page.getByTestId("input-reply-body").fill(directReplyText);
@@ -73,6 +76,7 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
 
     // FR-19 c2: Lead replies to Bystander's reply -> stays one level deep under rootId
     await lead.page.reload();
+    await lead.page.getByTestId("drawer-tab-activity").click();
     await lead.page.getByTestId(`reply-comment-btn-${directReplyId}`).click();
     const nestedReplyText = "Confirmed, ready to move back to Review.";
     await lead.page.getByTestId("input-reply-body").fill(nestedReplyText);
@@ -84,6 +88,7 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
 
     // FR-19 c3: Bystander cannot delete Author's root comment (no button + 403 on direct POST)
     await bystander.page.reload();
+    await bystander.page.getByTestId("drawer-tab-activity").click();
     await expect(bystander.page.getByTestId(`delete-comment-btn-${rootId}`)).toHaveCount(0);
     const forbiddenDeleteRes = await bystander.page.request.post(taskUrl, {
       form: { intent: "deleteComment", commentId: rootId },
@@ -92,6 +97,7 @@ test.describe("Task Threaded Comments Journey (FR-19)", () => {
 
     // FR-19 c3: Author deletes root comment -> shows "Comment deleted" while both replies remain visible
     await author.page.reload();
+    await author.page.getByTestId("drawer-tab-activity").click();
     await author.page.getByTestId(`delete-comment-btn-${rootId}`).click();
     await expect(author.page.getByTestId(`comment-deleted-${rootId}`)).toHaveText("Comment deleted");
     await expect(author.page.getByTestId(`comment-body-${rootId}`)).toHaveCount(0);

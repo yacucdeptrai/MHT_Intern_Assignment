@@ -548,6 +548,7 @@ export const taskService = {
         now,
       ),
       createdAt: typeof task.createdAt === "number" ? task.createdAt : task.createdAt.getTime(),
+      version: task.version,
       updatedAt: typeof task.updatedAt === "number" ? task.updatedAt : task.updatedAt.getTime(),
     }));
 

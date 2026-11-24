@@ -1,11 +1,22 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
+import { Form, useActionData, useFetcher, useLoaderData, useNavigate, useNavigation } from "react-router";
 
-import { APP_NAME } from "@pm/domain";
+import { APP_NAME, type MembershipDto } from "@pm/domain";
 
 import { profileAction, type ProfileActionData } from "../actions/profileAction";
+import { Avatar } from "../components/ui/Avatar";
+import { Badge, roleTone } from "../components/ui/Badge";
+import { Banner } from "../components/ui/Banner";
+import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
+import { Page } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Section } from "../components/ui/Section";
+import { Table } from "../components/ui/Table";
+import { Toast } from "../components/ui/Toast";
+import { translateRole } from "../i18n/labels";
 import { profileLoader } from "../loaders/profileLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 
@@ -25,10 +36,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
 export default function ProfilePage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { profile, memberships, hasPassword } = useLoaderData<typeof loader>();
   const actionData = useActionData<ProfileActionData>();
   const navigation = useNavigation();
   const avatarFetcher = useFetcher<{ success?: boolean; errors?: Record<string, string[]> }>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isProfileSubmitting =
     navigation.state === "submitting" && navigation.formData?.get("intent") === "updateProfile";
@@ -47,292 +60,228 @@ export default function ProfilePage() {
   const confirmPasswordError = actionData?.errors?.confirmPassword?.[0];
   const avatarError = avatarFetcher.data?.errors?.file?.[0] ?? avatarFetcher.data?.errors?.form?.[0];
 
+  // The password action returns a message; the profile action does not.
+  const toastText = actionData?.success
+    ? actionData.message
+      ? t("profile.msg_password_updated")
+      : t("profile.msg_profile_updated")
+    : null;
+
+  const hasAvatar = Boolean(profile.avatarKey) || avatarPreviewKey > 0;
+  const avatarSrc = hasAvatar
+    ? avatarPreviewKey > 0
+      ? `/api/avatars/${profile.id}?t=${String(avatarPreviewKey)}`
+      : `/api/avatars/${profile.id}`
+    : null;
+
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8" data-testid="profile-page">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t("profile.title")}</h1>
-        <p className="text-sm text-gray-500 mt-1">{t("profile.subtitle")}</p>
-      </div>
+    <div data-testid="profile-page" className="flex min-h-full flex-col">
+      <Page maxWidth={880} header={<PageHeader title={t("profile.title")} description={t("profile.subtitle")} />}>
+        {profileError ? (
+          <Banner tone="danger" role="alert">
+            {profileError}
+          </Banner>
+        ) : null}
 
-      {actionData?.success && (
-        <div className="p-4 rounded-md bg-green-50 border border-green-200 text-sm text-green-800" role="status">
-          {actionData.message ?? t("profile.msg_profile_updated")}
-        </div>
-      )}
-
-      {profileError && (
-        <div className="p-4 rounded-md bg-red-50 border border-red-200 text-sm text-red-800" role="alert">
-          {profileError}
-        </div>
-      )}
-
-      {/* Avatar Section */}
-      <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">{t("profile.photo_title")}</h2>
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          <div className="relative">
-            <img
-              src={
-                avatarPreviewKey > 0 ? `/api/avatars/${profile.id}?t=${avatarPreviewKey}` : `/api/avatars/${profile.id}`
-              }
-              alt={profile.fullName}
-              className="h-24 w-24 rounded-full object-cover border-2 border-gray-200 shadow-sm"
-              data-testid="avatar-image"
-            />
-          </div>
-
-          <div className="flex-1 space-y-2">
+        <div>
+          <Section title={t("profile.photo_title")} description={t("profile.photo_hint")}>
             <avatarFetcher.Form
               method="post"
               action={`/api/avatars/${profile.id}`}
               encType="multipart/form-data"
-              className="flex flex-col sm:flex-row gap-3 items-start sm:items-center"
-              onSubmit={() => {
+              className="flex items-center gap-3.5"
+              onChange={(event) => {
+                void avatarFetcher.submit(event.currentTarget);
                 setTimeout(() => {
                   setAvatarPreviewKey(Date.now());
                 }, 500);
               }}
             >
+              <Avatar name={profile.fullName} src={avatarSrc} size={56} data-testid="avatar-image" />
               <input
+                ref={fileInputRef}
                 type="file"
                 name="file"
                 accept="image/png,image/jpeg,image/webp"
-                required
-                className="text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                className="sr-only"
+                tabIndex={-1}
+                aria-label={t("profile.btn_upload_photo")}
                 data-testid="avatar-file-input"
               />
-              <button
-                type="submit"
+              <Button
+                size="sm"
+                icon="upload"
                 disabled={isAvatarUploading}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
                 data-testid="avatar-upload-button"
               >
                 {isAvatarUploading ? t("profile.btn_uploading") : t("profile.btn_upload_photo")}
-              </button>
+              </Button>
             </avatarFetcher.Form>
-            <p className="text-xs text-gray-500">{t("profile.photo_hint")}</p>
-            {avatarError && <p className="text-xs text-red-600">{avatarError}</p>}
-          </div>
-        </div>
-      </section>
+            {avatarError ? <span className="text-[11.5px] leading-[1.35] text-danger">{avatarError}</span> : null}
+          </Section>
 
-      {/* Personal Information Form */}
-      <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">{t("profile.personal_info_title")}</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{t("profile.personal_info_subtitle")}</p>
-        </div>
+          <Section title={t("profile.personal_info_title")} description={t("profile.personal_info_subtitle")}>
+            <Form method="post" className="flex flex-col gap-3.5">
+              <input type="hidden" name="intent" value="updateProfile" />
+              <div className="grid grid-cols-2 gap-3.5">
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  required
+                  requiredMark={false}
+                  label={t("profile.label_fullname")}
+                  defaultValue={actionData?.values?.fullName ?? profile.fullName}
+                  error={fullNameError}
+                  data-testid="profile-fullname-input"
+                />
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  label={t("profile.label_phone")}
+                  defaultValue={actionData?.values?.phone ?? profile.phone ?? ""}
+                  error={phoneError}
+                  data-testid="profile-phone-input"
+                />
+                <Input
+                  id="email"
+                  type="email"
+                  disabled
+                  label={t("profile.label_email")}
+                  defaultValue={profile.email}
+                  hint={t("profile.hint_email")}
+                  data-testid="profile-email-readonly"
+                />
+                <Input
+                  id="department"
+                  disabled
+                  label={t("profile.label_department")}
+                  defaultValue={profile.department ?? "—"}
+                  hint={t("profile.hint_department")}
+                  data-testid="profile-department-readonly"
+                />
+                <Input
+                  id="systemRole"
+                  disabled
+                  label={t("profile.label_system_role")}
+                  defaultValue={translateRole(t, profile.systemRole)}
+                  hint={t("profile.hint_system_role")}
+                  data-testid="profile-role-readonly"
+                />
+              </div>
+              <div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={isProfileSubmitting}
+                  data-testid="profile-save-button"
+                >
+                  {isProfileSubmitting ? t("profile.btn_saving") : t("profile.btn_save_changes")}
+                </Button>
+              </div>
+            </Form>
+          </Section>
 
-        <Form method="post" className="space-y-4">
-          <input type="hidden" name="intent" value="updateProfile" />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
-                {t("profile.label_fullname")}
-              </label>
-              <input
-                id="fullName"
-                name="fullName"
-                type="text"
-                required
-                defaultValue={actionData?.values?.fullName ?? profile.fullName}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                data-testid="profile-fullname-input"
-              />
-              {fullNameError && <p className="mt-1 text-xs text-red-600">{fullNameError}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                {t("profile.label_phone")}
-              </label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                defaultValue={actionData?.values?.phone ?? profile.phone ?? ""}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                data-testid="profile-phone-input"
-              />
-              {phoneError && <p className="mt-1 text-xs text-red-600">{phoneError}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-500">
-                {t("profile.label_email")}
-              </label>
-              <input
-                id="email"
-                type="email"
-                disabled
-                defaultValue={profile.email}
-                className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed shadow-sm"
-                data-testid="profile-email-readonly"
-              />
-              <p className="mt-1 text-xs text-gray-400">{t("profile.hint_email")}</p>
-            </div>
-
-            <div>
-              <label htmlFor="department" className="block text-sm font-medium text-gray-500">
-                {t("profile.label_department")}
-              </label>
-              <input
-                id="department"
-                type="text"
-                disabled
-                defaultValue={profile.department ?? "—"}
-                className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed shadow-sm"
-                data-testid="profile-department-readonly"
-              />
-              <p className="mt-1 text-xs text-gray-400">{t("profile.hint_department")}</p>
-            </div>
-
-            <div>
-              <label htmlFor="systemRole" className="block text-sm font-medium text-gray-500">
-                {t("profile.label_system_role")}
-              </label>
-              <input
-                id="systemRole"
-                type="text"
-                disabled
-                defaultValue={profile.systemRole}
-                className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed shadow-sm"
-                data-testid="profile-role-readonly"
-              />
-              <p className="mt-1 text-xs text-gray-400">{t("profile.hint_system_role")}</p>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="submit"
-              disabled={isProfileSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              data-testid="profile-save-button"
-            >
-              {isProfileSubmitting ? t("profile.btn_saving") : t("profile.btn_save_changes")}
-            </button>
-          </div>
-        </Form>
-      </section>
-
-      {/* Password Management */}
-      <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            {hasPassword ? t("profile.security_change_pwd") : t("profile.security_set_pwd")}
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {hasPassword ? t("profile.hint_has_pwd") : t("profile.hint_no_pwd")}
-          </p>
-        </div>
-
-        <Form method="post" className="space-y-4 max-w-md">
-          <input type="hidden" name="intent" value="changePassword" />
-
-          {hasPassword && (
-            <div>
-              <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700">
-                {t("profile.label_current_pwd")}
-              </label>
-              <input
-                id="currentPassword"
-                name="currentPassword"
-                type="password"
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                data-testid="current-password-input"
-              />
-              {currentPasswordError && <p className="mt-1 text-xs text-red-600">{currentPasswordError}</p>}
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
-              {t("profile.label_new_pwd")}
-            </label>
-            <input
-              id="newPassword"
-              name="newPassword"
-              type="password"
-              minLength={10}
-              required
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              data-testid="new-password-input"
-            />
-            {newPasswordError && <p className="mt-1 text-xs text-red-600">{newPasswordError}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-              {t("profile.label_confirm_pwd")}
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              minLength={10}
-              required
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              data-testid="confirm-password-input"
-            />
-            {confirmPasswordError && <p className="mt-1 text-xs text-red-600">{confirmPasswordError}</p>}
-          </div>
-
-          <button
-            type="submit"
-            disabled={isPasswordSubmitting}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            data-testid="change-password-button"
+          <Section
+            title={hasPassword ? t("profile.security_change_pwd") : t("profile.security_set_pwd")}
+            description={hasPassword ? t("profile.hint_has_pwd") : t("profile.hint_no_pwd")}
           >
-            {isPasswordSubmitting
-              ? t("profile.btn_updating_pwd")
-              : hasPassword
-                ? t("profile.btn_update_pwd")
-                : t("profile.btn_set_pwd")}
-          </button>
-        </Form>
-      </section>
+            <Form method="post" className="flex flex-col gap-3.5">
+              <input type="hidden" name="intent" value="changePassword" />
+              <div className="grid grid-cols-2 gap-3.5">
+                {hasPassword ? (
+                  <>
+                    <Input
+                      id="currentPassword"
+                      name="currentPassword"
+                      type="password"
+                      required
+                      requiredMark={false}
+                      autoComplete="current-password"
+                      label={t("profile.label_current_pwd")}
+                      error={currentPasswordError}
+                      data-testid="current-password-input"
+                    />
+                    <span />
+                  </>
+                ) : null}
+                <Input
+                  id="newPassword"
+                  name="newPassword"
+                  type="password"
+                  minLength={10}
+                  required
+                  requiredMark={false}
+                  autoComplete="new-password"
+                  label={t("profile.label_new_pwd")}
+                  placeholder={t("profile.placeholder_new_pwd")}
+                  error={newPasswordError}
+                  data-testid="new-password-input"
+                />
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  minLength={10}
+                  required
+                  requiredMark={false}
+                  autoComplete="new-password"
+                  label={t("profile.label_confirm_pwd")}
+                  error={confirmPasswordError}
+                  data-testid="confirm-password-input"
+                />
+              </div>
+              <div>
+                <Button type="submit" size="sm" disabled={isPasswordSubmitting} data-testid="change-password-button">
+                  {isPasswordSubmitting
+                    ? t("profile.btn_updating_pwd")
+                    : hasPassword
+                      ? t("profile.btn_update_pwd")
+                      : t("profile.btn_set_pwd")}
+                </Button>
+              </div>
+            </Form>
+          </Section>
 
-      {/* Project Memberships */}
-      <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">{t("profile.memberships_title")}</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{t("profile.memberships_subtitle")}</p>
+          <Section title={t("profile.memberships_title")} description={t("profile.memberships_subtitle")}>
+            <div className="overflow-hidden rounded-lg border border-line">
+              <Table<MembershipDto>
+                dense
+                data-testid="profile-memberships"
+                rows={memberships}
+                rowKey={(row) => row.projectId}
+                onRowClick={(row) => {
+                  void navigate(`/projects/${row.projectId}`);
+                }}
+                empty={t("profile.empty_memberships")}
+                columns={[
+                  {
+                    id: "code",
+                    label: t("profile.th_project_code"),
+                    width: 70,
+                    render: (row) => <Badge tone="accent">{row.projectCode}</Badge>,
+                  },
+                  {
+                    id: "name",
+                    label: t("profile.th_name"),
+                    render: (row) => <span className="font-medium">{row.projectName}</span>,
+                  },
+                  {
+                    id: "role",
+                    label: t("profile.th_role"),
+                    render: (row) => (
+                      <Badge tone={roleTone(row.projectRole)}>{translateRole(t, row.projectRole)}</Badge>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          </Section>
         </div>
-
-        {memberships.length === 0 ? (
-          <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-lg">
-            <p className="text-sm text-gray-500">{t("profile.empty_memberships")}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t("profile.th_project_code")}</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t("profile.th_name")}</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t("profile.th_role")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {memberships.map((m) => (
-                  <tr key={m.projectId}>
-                    <td className="px-4 py-3 font-mono font-medium text-gray-900">{m.projectCode}</td>
-                    <td className="px-4 py-3 text-gray-700">{m.projectName}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                        {m.projectRole}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      </Page>
+      <Toast text={toastText} id={actionData} />
     </div>
   );
 }

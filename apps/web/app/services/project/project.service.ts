@@ -312,6 +312,22 @@ export const projectService = {
     });
   },
 
+  /** Done / total task counts for the projects list progress column. */
+  async getTaskProgress(
+    ctx: RequestContext,
+    projectIds: string[],
+  ): Promise<Record<string, { total: number; done: number }>> {
+    if (!ctx.user) {
+      throw new UnauthorizedError();
+    }
+    const rows = await projectRepository.countTaskProgress(ctx.db, projectIds);
+    const progress: Record<string, { total: number; done: number }> = {};
+    for (const row of rows) {
+      progress[row.projectId] = { total: row.total, done: row.done };
+    }
+    return progress;
+  },
+
   async listProjects(ctx: RequestContext, options?: { archivedOnly?: boolean; includeArchived?: boolean }) {
     if (!ctx.user) {
       throw new UnauthorizedError();
@@ -347,6 +363,11 @@ export const projectService = {
     }
 
     const permissions = getProjectPermissions(actor);
+    // Tab counts (Tasks 14, Members 5) shown in the project header.
+    const [progress, members] = await Promise.all([
+      projectRepository.countTaskProgress(ctx.db, [projectId]),
+      projectMemberRepository.listByProject(ctx.db, projectId),
+    ]);
 
     return {
       project: {
@@ -357,6 +378,8 @@ export const projectService = {
         status: access.project.status,
         projectRole: access.projectRole,
         isArchived: access.isArchived,
+        taskCount: progress[0]?.total ?? 0,
+        memberCount: members.length,
       },
       permissions,
     };

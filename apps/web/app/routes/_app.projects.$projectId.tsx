@@ -1,10 +1,17 @@
 import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
-import { NavLink, Outlet, useLoaderData } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation, useRouteLoaderData } from "react-router";
 
 import { APP_NAME } from "@pm/domain";
 
+import { Badge, type BadgeTone } from "../components/ui/Badge";
+import { buttonClass } from "../components/ui/Button";
+import { Icon } from "../components/ui/Icon";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Tabs, type TabItem } from "../components/ui/Tabs";
+import { translateProjectStatus, translateRole } from "../i18n/labels";
 import { projectHeaderLoader } from "../loaders/projectHeaderLoader";
+import type { ProjectTasksLoaderData } from "../loaders/projectTasksLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta({ data }: { data?: Awaited<ReturnType<typeof projectHeaderLoader>> }) {
@@ -19,95 +26,83 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   return projectHeaderLoader(ctx, request, projectId);
 }
 
+const STATUS_TONE: Record<string, BadgeTone> = { ACTIVE: "done", ON_HOLD: "warning", COMPLETED: "neutral" };
+
 export default function ProjectLayout() {
   const { project, permissions } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
+  const { pathname } = useLocation();
 
-  const navItems = [
-    { id: "tasks", label: t("project_layout.tab_tasks"), to: `/projects/${project.id}`, end: true },
-    { id: "sprints", label: t("project_layout.tab_sprints"), to: `/projects/${project.id}/sprints`, end: false },
-    { id: "members", label: t("project_layout.tab_members"), to: `/projects/${project.id}/members`, end: false },
+  const base = `/projects/${project.id}`;
+  const tabs: TabItem[] = [
+    { id: "tasks", label: t("project_layout.tab_tasks"), to: base, count: project.taskCount },
+    { id: "sprints", label: t("project_layout.tab_sprints"), to: `${base}/sprints` },
+    { id: "members", label: t("project_layout.tab_members"), to: `${base}/members`, count: project.memberCount },
     ...(permissions.canManageProject
-      ? [
-          {
-            id: "settings",
-            label: t("project_layout.tab_settings"),
-            to: `/projects/${project.id}/settings`,
-            end: false,
-          },
-        ]
+      ? [{ id: "settings", label: t("project_layout.tab_settings"), to: `${base}/settings` }]
       : []),
     ...(permissions.canViewMemberReport || permissions.canViewProjectReport
-      ? [{ id: "reports", label: t("project_layout.tab_reports"), to: `/projects/${project.id}/reports`, end: false }]
+      ? [{ id: "reports", label: t("project_layout.tab_reports"), to: `${base}/reports` }]
       : []),
-  ];
+  ].map((tab) => ({ ...tab, "data-testid": `tab-${tab.id}` }));
+
+  const sub = pathname.slice(base.length).split("/")[1] ?? "";
+  const activeTab = tabs.some((tab) => tab.id === sub) ? sub : "tasks";
+  const roleLabel = translateRole(t, project.projectRole);
+  const tasksData = useRouteLoaderData<ProjectTasksLoaderData>("routes/_app.projects.$projectId._index");
+  // The task list (and the task drawer over it) is full-bleed; other tabs use the padded column.
+  const isTaskRoute = pathname.startsWith(`${base}/tasks/`);
+  const isTasksTab = activeTab === "tasks" && (pathname.replace(/\/+$/, "") === base || isTaskRoute);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* Project Header Banner */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="project-header">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                  {project.code}
-                </span>
-                <h1 className="text-2xl font-bold text-gray-900" data-testid="project-title">
-                  {project.name}
-                </h1>
-                {project.isArchived ? (
-                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20">
-                    {t("project_layout.status_archived")}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                    {project.status}
-                  </span>
-                )}
-              </div>
-              {project.description ? (
-                <p className="text-sm text-gray-600 max-w-3xl pt-1">{project.description}</p>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t("project_layout.your_role")}
-              </span>
-              <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800">
-                {project.projectRole}
-              </span>
-            </div>
-          </div>
-
-          {/* Navigation Tabs */}
-          <div className="mt-6 border-b border-gray-200">
-            <nav className="-mb-px flex space-x-6" aria-label={t("project_layout.aria_tabs")}>
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.id}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
-                      isActive
-                        ? "border-blue-600 text-blue-600"
-                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                    }`
-                  }
-                  data-testid={`tab-${item.id}`}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-        </div>
-
-        {/* Child Route Outlet */}
+    <div className={`flex h-full min-h-0 flex-col${isTaskRoute ? " min-[1200px]:pr-[var(--drawer-width)]" : ""}`}>
+      <PageHeader
+        data-testid="project-header"
+        titleTestId="project-title"
+        dense
+        eyebrow={
+          <>
+            <Badge tone="accent" size="sm">
+              {project.code}
+            </Badge>
+            {t("project_layout.eyebrow")}
+          </>
+        }
+        title={project.name}
+        meta={
+          <>
+            {project.isArchived ? (
+              <Badge tone="warning" dot>
+                {t("project_layout.status_archived")}
+              </Badge>
+            ) : (
+              <Badge tone={STATUS_TONE[project.status] ?? "neutral"} dot>
+                {translateProjectStatus(t, project.status)}
+              </Badge>
+            )}
+            <Badge tone="outline" data-testid="project-role-badge">
+              {t("project_layout.your_role_badge", { role: roleLabel })}
+            </Badge>
+          </>
+        }
+        description={project.description ?? undefined}
+        actions={
+          isTasksTab && tasksData?.canCreate ? (
+            <Link to={`${base}?new=1`} className={buttonClass("primary", "sm")} data-testid="create-task-button">
+              <Icon name="plus" size={14} />
+              {t("project_tasks.btn_new_task")}
+            </Link>
+          ) : null
+        }
+        tabs={<Tabs items={tabs} value={activeTab} label={t("project_layout.aria_tabs")} />}
+      />
+      {isTasksTab ? (
         <Outlet />
-      </div>
+      ) : (
+        <div className="flex w-full max-w-[1176px] flex-col gap-4 px-7 pb-10 pt-5">
+          <Outlet />
+        </div>
+      )}
     </div>
   );
 }

@@ -43,8 +43,8 @@ export async function createSignedInMember(
   await adminPage.goto("/admin/users");
 
   /* cspell:disable */
-  const createButton = adminPage.getByRole("button", { name: /^(\+ Create User|\+ Thêm người dùng)$/i });
-  const modalHeading = adminPage.getByRole("heading", { level: 2, name: /Create New User|Tạo người dùng mới/i });
+  const createButton = adminPage.getByTestId("btn-open-create-user");
+  const modalHeading = adminPage.getByRole("heading", { level: 2, name: /^(Create user|Tạo người dùng)$/i });
   await expect(async () => {
     await createButton.click();
     await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -58,11 +58,9 @@ export async function createSignedInMember(
   if (role !== "MEMBER") {
     await adminPage.locator("#create-systemRole").selectOption(role);
   }
-  await adminPage.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
+  await adminPage.getByTestId("btn-submit-create-user").click();
 
-  await expect(
-    adminPage.getByText(/User account created successfully!|Tài khoản người dùng đã được tạo thành công!/i),
-  ).toBeVisible();
+  await expect(adminPage.getByText(/User account created|Đã tạo tài khoản người dùng/i)).toBeVisible();
   /* cspell:enable */
   const inviteUrl = await adminPage.locator("input[readonly]").inputValue();
   await adminContext.close();
@@ -111,7 +109,7 @@ export async function setupProjectWithTask(
   /* cspell:enable */
 
   await adminPage.waitForURL("**/projects");
-  await adminPage.getByRole("link", { name: projectName }).click();
+  await adminPage.getByRole("main").getByRole("link", { name: projectName }).click();
   await adminPage.waitForURL("**/projects/*");
 
   const projectId = adminPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
@@ -129,6 +127,7 @@ export async function setupProjectWithTask(
   }
 
   await adminPage.goto(`/projects/${projectId}`);
+  await adminPage.getByTestId("toggle-filters-button").click();
   const doneStatusId = await adminPage
     .getByTestId("filter-status-select")
     .locator("option", { hasText: "Done" })
@@ -164,10 +163,9 @@ export async function setupProjectWithTask(
 }
 
 export async function moveTaskToStatus(page: Page, statusLabel: string): Promise<void> {
-  const select = page.getByTestId("select-task-status");
-  await expect(select).toBeVisible();
-  await select.selectOption({ label: statusLabel });
-  await page.getByTestId("btn-change-status").click();
+  // The drawer's status picker lists the statuses the user may move the task to.
+  await page.getByTestId("status-picker").click();
+  await page.getByRole("menuitem", { name: statusLabel, exact: true }).click();
   await expect(page.getByTestId("task-status-badge")).toHaveText(statusLabel);
   await expect(page.getByTestId("sidebar-status")).toHaveText(statusLabel);
 }
@@ -192,7 +190,7 @@ export async function addMemberToNewProject(browser: Browser, member: TestUser):
   await adminPage.getByRole("button", { name: /Create Project|Tạo dự án/i }).click();
   /* cspell:enable */
   await adminPage.waitForURL("**/projects");
-  await adminPage.getByRole("link", { name: projectName }).click();
+  await adminPage.getByRole("main").getByRole("link", { name: projectName }).click();
   await adminPage.waitForURL("**/projects/*");
   const projectId = adminPage.url().split("/projects/")[1]?.split("/")[0] ?? "";
 

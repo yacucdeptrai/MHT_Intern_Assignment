@@ -1,18 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 
-import { AcceptInviteSchema, APP_NAME } from "@pm/domain";
+import { AcceptInviteSchema, APP_NAME, PASSWORD_MIN_LENGTH } from "@pm/domain";
 
-import { LanguageSwitcher } from "../components/i18n/LanguageSwitcher";
+import { AuthFrame, AuthHeading } from "../components/layouts/AuthFrame";
+import { Banner } from "../components/ui/Banner";
+import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
 import { inviteService } from "../services/invite.service";
 import { handleActionError } from "../utils/errors.server";
+import { formatShortDate } from "../utils/format";
 import { requestContextKey } from "../utils/requestContext.server";
 import { commitSession, getSession, isRequestSecure } from "../utils/session.server";
 
 export function meta() {
-  return [{ title: `Accept Invitation | ${APP_NAME}` }];
+  return [{ title: `Accept invitation | ${APP_NAME}` }];
 }
 
 export async function loader({ context, params }: LoaderFunctionArgs) {
@@ -24,6 +28,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     status: validation.status,
     email: validation.email,
     projectName: validation.projectName,
+    expiresAt: validation.expiresAt,
   };
 }
 
@@ -76,105 +81,118 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 }
 
 export default function InvitePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<{ success: boolean; errors?: Record<string, string[]>; message?: string }>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
-  const passwordRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (actionData && !actionData.success && passwordRef.current) {
-      passwordRef.current.value = "";
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formKey, setFormKey] = useState(0);
+  const [prevActionData, setPrevActionData] = useState(actionData);
+  // A failed submit clears both password fields (never echo a rejected password back).
+  if (actionData !== prevActionData) {
+    setPrevActionData(actionData);
+    if (actionData && !actionData.success) {
+      setPassword("");
+      setConfirmPassword("");
+      setFormKey((key) => key + 1);
     }
-  }, [actionData]);
+  }
 
   if (loaderData.status === "invalid") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
-        <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm border border-gray-200 text-center space-y-4">
-          <div className="flex justify-end">
-            <LanguageSwitcher />
-          </div>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-            <span className="text-xl text-red-600 font-bold">!</span>
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">{t("invite.invalid_title")}</h1>
-          <p className="text-sm text-gray-600">{t("invite.invalid_description")}</p>
-        </div>
-      </div>
+      <AuthFrame>
+        <AuthHeading title={t("invite.invalid_title")} description={t("invite.invalid_description")} />
+      </AuthFrame>
     );
   }
 
-  const passwordError = actionData?.errors?.password?.[0];
-  const confirmPasswordError = actionData?.errors?.confirmPassword?.[0];
+  const isTooShort = password.length > 0 && password.length < PASSWORD_MIN_LENGTH;
+  const isMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit = password.length > 0 && confirmPassword.length > 0 && !isTooShort && !isMismatch;
+
+  const passwordError =
+    (isTooShort ? t("invite.error_short", { min: PASSWORD_MIN_LENGTH }) : undefined) ??
+    actionData?.errors?.password?.[0];
+  const confirmPasswordError =
+    (isMismatch ? t("invite.error_mismatch") : undefined) ?? actionData?.errors?.confirmPassword?.[0];
   const formError = actionData?.message ?? actionData?.errors?.form?.[0];
+  const joinTarget = loaderData.projectName ?? t("auth.title");
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-sm border border-gray-200">
-        <div className="flex justify-end">
-          <LanguageSwitcher />
-        </div>
-        <div className="text-center space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{APP_NAME}</span>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t("invite.title")}</h1>
-          <p className="text-sm text-gray-600">
-            {t("invite.set_password_for")} <span className="font-semibold text-gray-900">{loaderData.email}</span>
-            {loaderData.projectName ? ` ${t("invite.to_join")} ${loaderData.projectName}` : ""}.
-          </p>
-        </div>
+    <AuthFrame>
+      <AuthHeading
+        title={t("invite.title")}
+        description={
+          <>
+            {t("invite.set_password_for")} <span className="font-medium text-fg">{loaderData.email}</span>{" "}
+            {t("invite.to_join")} <span className="font-medium text-fg">{joinTarget}</span>.
+          </>
+        }
+      />
 
-        {formError ? (
-          <div role="alert" className="rounded-md bg-red-50 p-4 border border-red-200 text-sm font-medium text-red-700">
-            {formError}
-          </div>
-        ) : null}
+      {formError ? (
+        <Banner tone="danger" role="alert">
+          {formError}
+        </Banner>
+      ) : null}
 
-        <Form method="post" className="space-y-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              {t("invite.new_password")}
-            </label>
-            <input
-              ref={passwordRef}
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="new-password"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder={t("invite.new_password_placeholder")}
-            />
-            {passwordError ? <p className="mt-1 text-xs text-red-600">{passwordError}</p> : null}
-          </div>
+      <Form key={formKey} method="post" className="flex flex-col gap-4">
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          size="lg"
+          required
+          requiredMark={false}
+          autoComplete="new-password"
+          label={t("invite.new_password")}
+          placeholder={t("invite.new_password_placeholder")}
+          defaultValue=""
+          // Uncontrolled so text typed before hydration is kept; the ref syncs it into state.
+          ref={(element) => {
+            if (element && element.value !== password) {
+              setPassword(element.value);
+            }
+          }}
+          onChange={(event) => {
+            setPassword(event.target.value);
+          }}
+          error={passwordError}
+        />
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          size="lg"
+          required
+          requiredMark={false}
+          autoComplete="new-password"
+          label={t("invite.confirm_password")}
+          placeholder={t("invite.confirm_password_placeholder")}
+          defaultValue=""
+          ref={(element) => {
+            if (element && element.value !== confirmPassword) {
+              setConfirmPassword(element.value);
+            }
+          }}
+          onChange={(event) => {
+            setConfirmPassword(event.target.value);
+          }}
+          error={confirmPasswordError}
+        />
+        <Button type="submit" variant="primary" size="lg" fullWidth disabled={!canSubmit || isSubmitting}>
+          {isSubmitting ? t("invite.submitting") : t("invite.submit")}
+        </Button>
+      </Form>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-              {t("invite.confirm_password")}
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              required
-              autoComplete="new-password"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder={t("invite.confirm_password_placeholder")}
-            />
-            {confirmPasswordError ? <p className="mt-1 text-xs text-red-600">{confirmPasswordError}</p> : null}
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-md bg-blue-600 py-2.5 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-          >
-            {isSubmitting ? t("invite.submitting") : t("invite.submit")}
-          </button>
-        </Form>
-      </div>
-    </div>
+      {loaderData.expiresAt ? (
+        <p className="m-0 text-center text-[12px] leading-normal text-fg-muted" data-testid="invite-expiry">
+          {t("invite.expires_note", { date: formatShortDate(loaderData.expiresAt, i18n.language) })}
+        </p>
+      ) : null}
+    </AuthFrame>
   );
 }

@@ -1,17 +1,29 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation, useSearchParams, useSubmit } from "react-router";
 
-import type { UserAdminRow } from "@pm/domain";
-import { APP_NAME } from "@pm/domain";
+import { APP_NAME, SYSTEM_ROLES, type SystemRole, type UserAdminRow } from "@pm/domain";
 
 import { adminUsersAction } from "../actions/adminUsersAction";
+import { Avatar } from "../components/ui/Avatar";
+import { Badge, roleTone } from "../components/ui/Badge";
+import { Banner } from "../components/ui/Banner";
+import { Button } from "../components/ui/Button";
+import { cx } from "../components/ui/cx";
+import { Dialog } from "../components/ui/Dialog";
+import { Input } from "../components/ui/Input";
+import { MenuButton } from "../components/ui/Menu";
+import { Page, Toolbar } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Select } from "../components/ui/Select";
+import { Table } from "../components/ui/Table";
+import { translateRole } from "../i18n/labels";
 import { adminUsersLoader } from "../loaders/adminUsersLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta() {
-  return [{ title: `User Management — ${APP_NAME}` }];
+  return [{ title: `Users — ${APP_NAME}` }];
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -33,17 +45,22 @@ interface ActionData {
   user?: UserAdminRow;
 }
 
+/** System roles from least to most privileged, as the create form lists them. */
+const ROLE_ORDER: SystemRole[] = ["MEMBER", "TEAM_LEAD", "PM", "ADMIN"];
+
 export default function AdminUsersPage() {
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const [searchParams] = useSearchParams();
+  const submit = useSubmit();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isSubmitting = navigation.state === "submitting";
-
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAdminRow | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserAdminRow | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [prevActionData, setPrevActionData] = useState(actionData);
 
@@ -58,6 +75,12 @@ export default function AdminUsersPage() {
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
   const createEmailError = actionData?.errors?.email?.[0];
   const createNameError = actionData?.errors?.fullName?.[0];
+  // The create dialog stays open after a failed submit, keeping what was typed.
+  const isCreateError = isCreateOpen && Boolean(actionData && !actionData.success);
+  const roleOptions = ROLE_ORDER.filter((role) => SYSTEM_ROLES.includes(role)).map((role) => ({
+    value: role,
+    label: translateRole(t, role),
+  }));
 
   const handleCopyLink = async (url: string) => {
     try {
@@ -67,428 +90,408 @@ export default function AdminUsersPage() {
         setCopiedLink(false);
       }, 2000);
     } catch {
-      // Fallback if clipboard API is unavailable
+      // Clipboard can be unavailable (permissions); the link stays visible to copy by hand.
     }
   };
 
+  const runIntent = (intent: "lock" | "unlock" | "delete", user: UserAdminRow) => {
+    void submit({ intent, userId: user.id }, { method: "post" });
+  };
+
+  const users = loaderData.users.items;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* Page Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t("admin_users.title")}</h1>
-            <p className="text-sm text-gray-600">{t("admin_users.subtitle")}</p>
-          </div>
-          <div>
-            <button
-              type="button"
-              data-testid="btn-open-create-user"
+    <Page
+      header={
+        <PageHeader
+          eyebrow={t("nav.management")}
+          title={t("admin_users.title")}
+          description={t("admin_users.subtitle")}
+          meta={<Badge data-testid="users-total">{loaderData.users.total}</Badge>}
+          actions={
+            <Button
+              variant="primary"
+              size="sm"
+              icon="user-plus"
               onClick={() => {
                 setIsCreateOpen(true);
               }}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              data-testid="btn-open-create-user"
             >
               {t("admin_users.btn_create_user")}
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        />
+      }
+    >
+      {formError && !isCreateError && !editingUser ? (
+        <Banner tone="danger" role="alert">
+          {formError}
+        </Banner>
+      ) : null}
 
-        {/* Global Error Alert */}
-        {formError ? (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-            {formError}
-          </div>
-        ) : null}
+      {actionData?.success && actionData.inviteUrl ? (
+        <Banner
+          tone="success"
+          title={t("admin_users.success_created_title")}
+          action={
+            <Button
+              size="sm"
+              icon="copy"
+              onClick={() => {
+                void handleCopyLink(actionData.inviteUrl ?? "");
+              }}
+            >
+              {copiedLink ? t("admin_users.btn_copied") : t("admin_users.btn_copy_link")}
+            </Button>
+          }
+        >
+          <span className="flex flex-col gap-2">
+            {t("admin_users.success_created_desc")}
+            <Input readOnly value={actionData.inviteUrl} className="font-mono text-[12px]" />
+          </span>
+        </Banner>
+      ) : null}
 
-        {/* Invite Link Success Banner */}
-        {actionData?.success && actionData.inviteUrl ? (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-900">
-            <h3 className="text-sm font-semibold text-green-800">{t("admin_users.success_created_title")}</h3>
-            <p className="mt-1 text-sm text-green-700">{t("admin_users.success_created_desc")}</p>
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                type="text"
-                readOnly
-                value={actionData.inviteUrl}
-                className="w-full max-w-xl rounded-md border border-green-300 bg-white px-3 py-1.5 text-sm text-gray-800"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  void handleCopyLink(actionData.inviteUrl ?? "");
-                }}
-                className="rounded-md bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800"
-              >
-                {copiedLink ? t("admin_users.btn_copied") : t("admin_users.btn_copy_link")}
-              </button>
-            </div>
-          </div>
-        ) : null}
+      <Form
+        method="get"
+        onChange={(event) => {
+          const form = event.currentTarget;
+          if (searchTimer.current) {
+            clearTimeout(searchTimer.current);
+          }
+          // Debounce typing in the search box; selects apply immediately.
+          searchTimer.current = setTimeout(
+            () => {
+              void submit(form, { replace: true });
+            },
+            (event.target as HTMLElement).tagName === "INPUT" ? 300 : 0,
+          );
+        }}
+      >
+        <Toolbar>
+          <Input
+            size="sm"
+            icon="search"
+            type="search"
+            name="q"
+            aria-label={t("admin_users.search_placeholder")}
+            placeholder={t("admin_users.search_placeholder")}
+            defaultValue={searchParams.get("q") ?? ""}
+            className="w-[260px]"
+            data-testid="users-search"
+          />
+          <Select
+            size="sm"
+            name="status"
+            aria-label={t("admin_users.th_status")}
+            defaultValue={searchParams.get("status") ?? ""}
+            placeholder={t("admin_users.filter_all_statuses")}
+            options={[
+              { value: "ACTIVE", label: t("admin_users.status_active") },
+              { value: "LOCKED", label: t("admin_users.status_locked") },
+            ]}
+            className="w-[140px]"
+          />
+          <Select
+            size="sm"
+            name="systemRole"
+            aria-label={t("admin_users.th_role")}
+            defaultValue={searchParams.get("systemRole") ?? ""}
+            placeholder={t("admin_users.filter_all_roles")}
+            options={[...ROLE_ORDER].reverse().map((role) => ({ value: role, label: translateRole(t, role) }))}
+            className="w-[140px]"
+          />
+        </Toolbar>
+      </Form>
 
-        {/* Search & Filter Bar */}
-        <Form method="get" className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white p-4">
-          <div className="min-w-[200px] flex-1">
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchParams.get("q") ?? ""}
-              placeholder={t("admin_users.search_placeholder")}
-              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      <div className="rounded-lg border border-line bg-surface">
+        <Table<UserAdminRow>
+          data-testid="users-table"
+          rows={users}
+          rowKey={(row) => row.id}
+          rowTestId={(row) => `user-row-${row.id}`}
+          empty={t("admin_users.no_users_found")}
+          columns={[
+            {
+              id: "name",
+              label: t("admin_users.th_full_name"),
+              render: (row) => (
+                <span
+                  className={cx(
+                    "inline-flex items-center gap-2.5 font-medium",
+                    row.status === "LOCKED" && "opacity-55",
+                  )}
+                >
+                  <Avatar name={row.fullName} src={row.avatarKey ? `/api/avatars/${row.id}` : null} size={24} />
+                  {row.fullName}
+                </span>
+              ),
+            },
+            { id: "email", label: t("admin_users.th_email"), muted: true, render: (row) => row.email },
+            {
+              id: "role",
+              label: t("admin_users.th_role"),
+              render: (row) => (
+                <Badge tone={roleTone(row.systemRole)} size="sm">
+                  {translateRole(t, row.systemRole)}
+                </Badge>
+              ),
+            },
+            {
+              id: "department",
+              label: t("admin_users.th_department"),
+              muted: true,
+              render: (row) => row.department ?? "—",
+            },
+            {
+              id: "status",
+              label: t("admin_users.th_status"),
+              render: (row) =>
+                row.status === "ACTIVE" ? (
+                  <Badge tone="done" dot size="sm" data-testid={`user-status-${row.id}`}>
+                    {t("admin_users.status_active")}
+                  </Badge>
+                ) : (
+                  <Badge tone="danger" icon="circle-pause" size="sm" data-testid={`user-status-${row.id}`}>
+                    {t("admin_users.status_locked")}
+                  </Badge>
+                ),
+            },
+            {
+              id: "actions",
+              label: "",
+              align: "right",
+              width: 48,
+              render: (row) => (
+                <MenuButton
+                  label={t("admin_users.actions_label")}
+                  data-testid={`user-actions-${row.id}`}
+                  items={[
+                    {
+                      id: "edit",
+                      label: t("admin_users.btn_edit"),
+                      icon: "pencil",
+                      onSelect: () => {
+                        setEditingUser(row);
+                      },
+                    },
+                    {
+                      id: "role",
+                      label: t("admin_users.btn_change_role"),
+                      icon: "users",
+                      onSelect: () => {
+                        setEditingUser(row);
+                      },
+                    },
+                    row.status === "ACTIVE"
+                      ? {
+                          id: "lock",
+                          label: t("admin_users.btn_lock"),
+                          icon: "circle-pause",
+                          disabled: isSubmitting,
+                          onSelect: () => {
+                            runIntent("lock", row);
+                          },
+                          "data-testid": `btn-toggle-status-${row.id}`,
+                        }
+                      : {
+                          id: "unlock",
+                          label: t("admin_users.btn_unlock"),
+                          icon: "rotate-ccw",
+                          disabled: isSubmitting,
+                          onSelect: () => {
+                            runIntent("unlock", row);
+                          },
+                          "data-testid": `btn-toggle-status-${row.id}`,
+                        },
+                    { id: "divider", label: "", divider: true },
+                    {
+                      id: "delete",
+                      label: t("admin_users.btn_delete"),
+                      icon: "trash-2",
+                      danger: true,
+                      onSelect: () => {
+                        setDeletingUser(row);
+                      },
+                    },
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
+      </div>
+
+      <Dialog
+        open={isCreateOpen}
+        onClose={() => {
+          setIsCreateOpen(false);
+        }}
+        title={t("admin_users.modal_create_title")}
+        description={t("admin_users.modal_create_desc")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setIsCreateOpen(false);
+              }}
+            >
+              {t("admin_users.btn_cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="create-user-form"
+              variant="primary"
+              disabled={isSubmitting}
+              data-testid="btn-submit-create-user"
+            >
+              {isSubmitting ? t("admin_users.btn_creating") : t("admin_users.btn_submit_create")}
+            </Button>
+          </>
+        }
+      >
+        <Form id="create-user-form" method="post" className="flex flex-col gap-3.5">
+          <input type="hidden" name="intent" value="create" />
+          {formError && isCreateError && !createEmailError && !createNameError ? (
+            <Banner tone="danger" role="alert">
+              {formError}
+            </Banner>
+          ) : null}
+          <Input
+            id="create-fullName"
+            name="fullName"
+            required
+            label={t("admin_users.label_full_name")}
+            placeholder={t("admin_users.placeholder_full_name")}
+            defaultValue={isCreateError ? (actionData?.values?.fullName ?? "") : ""}
+            error={createNameError}
+          />
+          <Input
+            id="create-email"
+            name="email"
+            type="email"
+            required
+            label={t("admin_users.label_email")}
+            placeholder={t("admin_users.placeholder_email")}
+            defaultValue={isCreateError ? (actionData?.values?.email ?? "") : ""}
+            error={createEmailError ? <span data-testid="error-create-email">{createEmailError}</span> : undefined}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              id="create-systemRole"
+              name="systemRole"
+              label={t("admin_users.label_system_role")}
+              defaultValue={isCreateError ? (actionData?.values?.systemRole ?? "MEMBER") : "MEMBER"}
+              options={roleOptions}
+            />
+            <Input
+              id="create-department"
+              name="department"
+              label={t("admin_users.label_department")}
+              hint={t("admin_users.hint_optional")}
+              defaultValue={isCreateError ? (actionData?.values?.department ?? "") : ""}
             />
           </div>
-
-          <div>
-            <select
-              name="status"
-              defaultValue={searchParams.get("status") ?? ""}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">{t("admin_users.filter_all_statuses")}</option>
-              <option value="ACTIVE">{t("admin_users.filter_status_active")}</option>
-              <option value="LOCKED">{t("admin_users.filter_status_locked")}</option>
-            </select>
-          </div>
-
-          <div>
-            <select
-              name="systemRole"
-              defaultValue={searchParams.get("systemRole") ?? ""}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">{t("admin_users.filter_all_roles")}</option>
-              <option value="ADMIN">{t("admin_users.filter_role_admin")}</option>
-              <option value="PM">{t("admin_users.filter_role_pm")}</option>
-              <option value="TEAM_LEAD">{t("admin_users.filter_role_team_lead")}</option>
-              <option value="MEMBER">{t("admin_users.filter_role_member")}</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
-          >
-            {t("admin_users.btn_filter")}
-          </button>
         </Form>
+      </Dialog>
 
-        {/* Users Table */}
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-600">
-            <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              <tr>
-                <th className="px-6 py-3">{t("admin_users.th_full_name")}</th>
-                <th className="px-6 py-3">{t("admin_users.th_email")}</th>
-                <th className="px-6 py-3">{t("admin_users.th_role")}</th>
-                <th className="px-6 py-3">{t("admin_users.th_department")}</th>
-                <th className="px-6 py-3">{t("admin_users.th_status")}</th>
-                <th className="px-6 py-3 text-right">{t("admin_users.th_actions")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {loaderData.users.items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                    {t("admin_users.no_users_found")}
-                  </td>
-                </tr>
-              ) : (
-                loaderData.users.items.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900">{u.fullName}</td>
-                    <td className="whitespace-nowrap px-6 py-4">{u.email}</td>
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                        {u.systemRole}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4">{u.department ?? "—"}</td>
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          u.status === "ACTIVE" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {u.status}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingUser(u);
-                          }}
-                          className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
-                        >
-                          {t("admin_users.btn_edit")}
-                        </button>
-
-                        <Form method="post" className="inline">
-                          <input type="hidden" name="userId" value={u.id} />
-                          <input type="hidden" name="intent" value={u.status === "ACTIVE" ? "lock" : "unlock"} />
-                          <button
-                            type="submit"
-                            data-testid={`btn-toggle-status-${u.id}`}
-                            disabled={isSubmitting}
-                            className={`rounded px-2 py-1 text-xs font-medium ${
-                              u.status === "ACTIVE"
-                                ? "text-amber-600 hover:bg-amber-50"
-                                : "text-green-600 hover:bg-green-50"
-                            }`}
-                          >
-                            {u.status === "ACTIVE" ? t("admin_users.btn_lock") : t("admin_users.btn_unlock")}
-                          </button>
-                        </Form>
-
-                        <Form
-                          method="post"
-                          className="inline"
-                          onSubmit={(e) => {
-                            if (!confirm(t("admin_users.confirm_delete", { name: u.fullName }))) {
-                              e.preventDefault();
-                            }
-                          }}
-                        >
-                          <input type="hidden" name="userId" value={u.id} />
-                          <input type="hidden" name="intent" value="delete" />
-                          <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                          >
-                            {t("admin_users.btn_delete")}
-                          </button>
-                        </Form>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Create User Modal */}
-        {isCreateOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-              <div className="flex items-center justify-between border-b pb-3">
-                <h2 className="text-lg font-semibold text-gray-900">{t("admin_users.modal_create_title")}</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreateOpen(false);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label={t("admin_users.modal_close")}
-                >
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-
-              <Form method="post" className="mt-4 space-y-4">
-                <input type="hidden" name="intent" value="create" />
-
-                <div>
-                  <label htmlFor="create-fullName" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_full_name")}
-                  </label>
-                  <input
-                    id="create-fullName"
-                    type="text"
-                    name="fullName"
-                    required
-                    defaultValue={actionData?.values?.fullName ?? ""}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  {createNameError ? <p className="mt-1 text-xs text-red-600">{createNameError}</p> : null}
-                </div>
-
-                <div>
-                  <label htmlFor="create-email" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_email")}
-                  </label>
-                  <input
-                    id="create-email"
-                    type="email"
-                    name="email"
-                    required
-                    defaultValue={actionData?.values?.email ?? ""}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  {createEmailError ? (
-                    <p data-testid="error-create-email" className="mt-1 text-xs text-red-600">
-                      {createEmailError}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label htmlFor="create-systemRole" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_system_role")}
-                  </label>
-                  <select
-                    id="create-systemRole"
-                    name="systemRole"
-                    defaultValue={actionData?.values?.systemRole ?? "MEMBER"}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="MEMBER">{t("admin_users.role_member")}</option>
-                    <option value="TEAM_LEAD">{t("admin_users.role_team_lead")}</option>
-                    <option value="PM">{t("admin_users.role_pm")}</option>
-                    <option value="ADMIN">{t("admin_users.role_admin")}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="create-department" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_department")}
-                  </label>
-                  <input
-                    id="create-department"
-                    type="text"
-                    name="department"
-                    defaultValue={actionData?.values?.department ?? ""}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3 border-t pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCreateOpen(false);
-                    }}
-                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    {t("admin_users.btn_cancel")}
-                  </button>
-                  <button
-                    type="submit"
-                    data-testid="btn-submit-create-user"
-                    disabled={isSubmitting}
-                    className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {isSubmitting ? t("admin_users.btn_creating") : t("admin_users.btn_submit_create")}
-                  </button>
-                </div>
-              </Form>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Edit User Modal */}
+      <Dialog
+        open={editingUser !== null}
+        onClose={() => {
+          setEditingUser(null);
+        }}
+        title={editingUser ? t("admin_users.modal_edit_title", { name: editingUser.fullName }) : ""}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setEditingUser(null);
+              }}
+            >
+              {t("admin_users.btn_cancel")}
+            </Button>
+            <Button type="submit" form="edit-user-form" variant="primary" disabled={isSubmitting}>
+              {isSubmitting ? t("admin_users.btn_saving") : t("admin_users.btn_save_changes")}
+            </Button>
+          </>
+        }
+      >
         {editingUser ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-              <div className="flex items-center justify-between border-b pb-3">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {t("admin_users.modal_edit_title", { name: editingUser.fullName })}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingUser(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label={t("admin_users.modal_close")}
-                >
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-
-              <Form
-                method="post"
-                className="mt-4 space-y-4"
-                onSubmit={() => {
-                  setEditingUser(null);
-                }}
-              >
-                <input type="hidden" name="intent" value="update" />
-                <input type="hidden" name="userId" value={editingUser.id} />
-
-                <div>
-                  <label htmlFor="edit-fullName" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_full_name")}
-                  </label>
-                  <input
-                    id="edit-fullName"
-                    type="text"
-                    name="fullName"
-                    required
-                    defaultValue={editingUser.fullName}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="edit-email" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_email")}
-                  </label>
-                  <input
-                    id="edit-email"
-                    type="email"
-                    name="email"
-                    required
-                    defaultValue={editingUser.email}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="edit-systemRole" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_system_role")}
-                  </label>
-                  <select
-                    id="edit-systemRole"
-                    name="systemRole"
-                    defaultValue={editingUser.systemRole}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="MEMBER">{t("admin_users.role_member")}</option>
-                    <option value="TEAM_LEAD">{t("admin_users.role_team_lead")}</option>
-                    <option value="PM">{t("admin_users.role_pm")}</option>
-                    <option value="ADMIN">{t("admin_users.role_admin")}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="edit-department" className="block text-sm font-medium text-gray-700">
-                    {t("admin_users.label_department_edit")}
-                  </label>
-                  <input
-                    id="edit-department"
-                    type="text"
-                    name="department"
-                    defaultValue={editingUser.department ?? ""}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3 border-t pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingUser(null);
-                    }}
-                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    {t("admin_users.btn_cancel")}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {isSubmitting ? t("admin_users.btn_saving") : t("admin_users.btn_save_changes")}
-                  </button>
-                </div>
-              </Form>
+          <Form id="edit-user-form" method="post" className="flex flex-col gap-3.5">
+            <input type="hidden" name="intent" value="update" />
+            <input type="hidden" name="userId" value={editingUser.id} />
+            {formError ? (
+              <Banner tone="danger" role="alert">
+                {formError}
+              </Banner>
+            ) : null}
+            <Input
+              id="edit-fullName"
+              name="fullName"
+              required
+              label={t("admin_users.label_full_name")}
+              defaultValue={editingUser.fullName}
+            />
+            <Input
+              id="edit-email"
+              name="email"
+              type="email"
+              required
+              label={t("admin_users.label_email")}
+              defaultValue={editingUser.email}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                id="edit-systemRole"
+                name="systemRole"
+                label={t("admin_users.label_system_role")}
+                defaultValue={editingUser.systemRole}
+                options={roleOptions}
+              />
+              <Input
+                id="edit-department"
+                name="department"
+                label={t("admin_users.label_department")}
+                defaultValue={editingUser.department ?? ""}
+              />
             </div>
-          </div>
+          </Form>
         ) : null}
-      </div>
-    </div>
+      </Dialog>
+
+      <Dialog
+        open={deletingUser !== null}
+        onClose={() => {
+          setDeletingUser(null);
+        }}
+        title={deletingUser ? t("admin_users.delete_title", { name: deletingUser.fullName }) : ""}
+        description={t("admin_users.delete_desc")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setDeletingUser(null);
+              }}
+            >
+              {t("admin_users.btn_cancel")}
+            </Button>
+            <Button
+              variant="danger"
+              icon="trash-2"
+              data-testid="confirm-delete-user-btn"
+              onClick={() => {
+                if (deletingUser) {
+                  runIntent("delete", deletingUser);
+                }
+                setDeletingUser(null);
+              }}
+            >
+              {t("admin_users.btn_delete")}
+            </Button>
+          </>
+        }
+      />
+    </Page>
   );
 }

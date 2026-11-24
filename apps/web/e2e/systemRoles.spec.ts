@@ -9,11 +9,11 @@ test.describe("System Role Assignment Journey (FR-04)", () => {
 
     // 2. Open User Management
     await page.goto("/admin/users");
-    await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Users", exact: true })).toBeVisible();
 
     // 3. Create a Member user
-    const createButton = page.getByRole("button", { name: "+ Create User" });
-    const modalHeading = page.getByRole("heading", { level: 2, name: "Create New User" });
+    const createButton = page.getByTestId("btn-open-create-user");
+    const modalHeading = page.getByRole("heading", { level: 2, name: "Create user", exact: true });
     await expect(async () => {
       await createButton.click();
       await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -25,21 +25,22 @@ test.describe("System Role Assignment Journey (FR-04)", () => {
 
     await page.getByLabel("Full Name").fill(testName);
     await page.getByLabel("Email Address").fill(testEmail);
-    await page.getByRole("button", { name: "Create User", exact: true }).click();
-    await expect(page.getByText("User account created successfully!")).toBeVisible();
+    await page.getByTestId("btn-submit-create-user").click();
+    await expect(page.getByText("User account created", { exact: true })).toBeVisible();
 
     // 4. Find user row and click Edit
     const userRow = page.locator("tr", { hasText: testEmail });
     await expect(userRow).toBeVisible();
-    await expect(userRow.getByText("MEMBER")).toBeVisible();
+    await expect(userRow.getByText("Member", { exact: true })).toBeVisible();
 
-    await userRow.getByRole("button", { name: "Edit" }).click();
-    const editModalHeading = page.getByRole("heading", { level: 2, name: `Edit User: ${testName}` });
+    await userRow.getByRole("button", { name: "User actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+    const editModalHeading = page.getByRole("heading", { level: 2, name: `Edit ${testName}` });
     await expect(editModalHeading).toBeVisible();
 
     // 5. Change role to PM and save
     await page.getByLabel("System Role").selectOption("PM");
-    await page.getByRole("button", { name: "Save Changes" }).click();
+    await page.getByRole("button", { name: "Save changes" }).click();
 
     // 6. Verify row now displays PM role badge
     await expect(userRow.getByText("PM", { exact: true })).toBeVisible();

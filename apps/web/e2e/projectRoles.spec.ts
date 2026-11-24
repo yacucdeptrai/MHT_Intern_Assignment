@@ -70,7 +70,7 @@ test.describe("Project Roles Management (FR-11)", () => {
     await expect(memberPage.getByTestId("members-table")).toBeVisible();
     const memberRowOnMemberPage = memberPage.locator("tr", { hasText: member.fullName });
     // Regular member sees role badge, NOT a role select
-    await expect(memberRowOnMemberPage.getByText("TEAM_LEAD")).toBeVisible();
+    await expect(memberRowOnMemberPage.getByText("Team lead")).toBeVisible();
     await expect(memberRowOnMemberPage.locator("select[name='projectRole']")).not.toBeVisible();
 
     await member.context.close();

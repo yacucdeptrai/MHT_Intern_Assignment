@@ -21,11 +21,11 @@ test.describe("Journey 2: Admin User Management (FR-03, FR-04)", () => {
 
     // 2. Open User Management
     await page.goto("/admin/users");
-    await expect(page.getByRole("heading", { level: 1, name: /User Management|Quản lý người dùng/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /^(Users|Người dùng)$/ })).toBeVisible();
 
     // 3. Open Create User Modal
-    const createButton = page.getByRole("button", { name: /^(\+ Create User|\+ Thêm người dùng)$/i });
-    const modalHeading = page.getByRole("heading", { level: 2, name: /Create New User|Tạo người dùng mới/i });
+    const createButton = page.getByTestId("btn-open-create-user");
+    const modalHeading = page.getByRole("heading", { level: 2, name: /^(Create user|Tạo người dùng)$/i });
     await expect(async () => {
       await createButton.click();
       await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -37,13 +37,11 @@ test.describe("Journey 2: Admin User Management (FR-03, FR-04)", () => {
 
     await page.getByLabel(/Full Name|Họ và tên/i).fill(testName);
     await page.getByLabel(/Email Address|Địa chỉ email/i).fill(testEmail);
-    await page.getByLabel(/Department \(Optional\)|Phòng ban \(Tùy chọn\)/i).fill("Platform");
-    await page.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
+    await page.getByLabel(/^(Department|Phòng ban)$/i).fill("Platform");
+    await page.getByTestId("btn-submit-create-user").click();
 
     // 4. Verify Success & Invite Link
-    await expect(
-      page.getByText(/User account created successfully!|Tài khoản người dùng đã được tạo thành công!/i),
-    ).toBeVisible();
+    await expect(page.getByText(/User account created|Đã tạo tài khoản người dùng/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Copy Link|Sao chép liên kết/i })).toBeVisible();
 
     // 5. Verify user appears in table
@@ -57,8 +55,8 @@ test.describe("Journey 2: Admin User Management (FR-03, FR-04)", () => {
     const dupName = `Duplicate Attempt ${uniqueId}`;
     await page.getByLabel(/Full Name|Họ và tên/i).fill(dupName);
     await page.getByLabel(/Email Address|Địa chỉ email/i).fill(testEmail);
-    await page.getByLabel(/Department \(Optional\)|Phòng ban \(Tùy chọn\)/i).fill("DevOps");
-    await page.getByRole("button", { name: /^(Create User|Tạo người dùng)$/i }).click();
+    await page.getByLabel(/^(Department|Phòng ban)$/i).fill("DevOps");
+    await page.getByTestId("btn-submit-create-user").click();
 
     // Duplicate shows field error AND keeps the form values (Lesson #14)
     await expect(page.getByTestId("error-create-email")).toContainText(
@@ -66,7 +64,7 @@ test.describe("Journey 2: Admin User Management (FR-03, FR-04)", () => {
     );
     await expect(page.getByLabel(/Full Name|Họ và tên/i)).toHaveValue(dupName);
     await expect(page.getByLabel(/Email Address|Địa chỉ email/i)).toHaveValue(testEmail);
-    await expect(page.getByLabel(/Department \(Optional\)|Phòng ban \(Tùy chọn\)/i)).toHaveValue("DevOps");
+    await expect(page.getByLabel(/^(Department|Phòng ban)$/i)).toHaveValue("DevOps");
 
     // Close the modal
     await page.getByRole("button", { name: /Cancel|Hủy/i }).click();
@@ -82,10 +80,13 @@ test.describe("Journey 2: Admin User Management (FR-03, FR-04)", () => {
     // Admin finds member in table and locks them
     await page.goto("/admin/users");
     const memberRow = page.locator("tr", { hasText: member.email });
-    const lockBtn = memberRow.getByRole("button", { name: /Lock|Khóa/i });
-    await expect(lockBtn).toBeVisible();
-    await lockBtn.click();
-    await expect(memberRow.getByRole("button", { name: /Unlock|Mở khóa/i })).toBeVisible();
+    // Lock / Unlock live in the row actions menu
+    await memberRow.getByRole("button", { name: /User actions|Thao tác người dùng/i }).click();
+    await page.getByRole("menuitem", { name: /^(Lock|Khóa)$/i }).click();
+    await expect(memberRow.getByTestId(/^user-status-/)).toHaveText(/Locked|Đã khóa/i);
+    await memberRow.getByRole("button", { name: /User actions|Thao tác người dùng/i }).click();
+    await expect(page.getByRole("menuitem", { name: /^(Unlock|Mở khóa)$/i })).toBeVisible();
+    await page.keyboard.press("Escape");
 
     // Member navigates to another page
     await member.page.goto("/profile");

@@ -1,0 +1,37 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--text-1);
+  background: var(--bg-app);
+  font-feature-settings: "cv11", "ss01";
+}
+a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+::selection {
+  background: var(--blue-200);
+  color: var(--gray-900);
+}
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+button {
+  font: inherit;
+  color: inherit;
+}

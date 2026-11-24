@@ -13,7 +13,7 @@ test.describe("User Profile Journey (FR-05, FR-06)", () => {
     try {
       // 2. Open /profile
       await page.goto("/profile");
-      await expect(page.getByRole("heading", { level: 1, name: "User Profile" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Profile" })).toBeVisible();
 
       // Verify readonly fields (FR-06 c4)
       await expect(page.getByTestId("profile-email-readonly")).toBeDisabled();

@@ -1,10 +1,22 @@
 import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useNavigate } from "react-router";
 
-import { APP_NAME } from "@pm/domain";
+import { APP_NAME, type ProjectStatus, type SystemRole } from "@pm/domain";
 
+import { Badge, roleTone, type BadgeTone } from "../components/ui/Badge";
+import { buttonClass } from "../components/ui/Button";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Icon } from "../components/ui/Icon";
+import { Page } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { ProgressBar } from "../components/ui/ProgressBar";
+import { projectDot } from "../components/ui/projectColor";
+import { Table } from "../components/ui/Table";
+import { Tabs } from "../components/ui/Tabs";
+import { translateProjectStatus, translateRole } from "../i18n/labels";
 import { projectsLoader } from "../loaders/projectsLoader";
+import { formatShortDate } from "../utils/format";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta() {
@@ -16,164 +28,201 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return projectsLoader(ctx, request);
 }
 
+const STATUS_TONE: Record<ProjectStatus, BadgeTone> = { ACTIVE: "done", ON_HOLD: "warning", COMPLETED: "neutral" };
+
+/** VND with thousands separators, e.g. "450,000,000 ₫". */
+function formatBudget(budget: number | null): string {
+  return budget ? `${budget.toLocaleString("en-US")} ₫` : "—";
+}
+
+type ProjectRow = Awaited<ReturnType<typeof projectsLoader>>["projects"][number];
+
 export default function ProjectsIndexPage() {
-  const { projects, canCreate, filter, isAdmin } = useLoaderData<typeof loader>();
-  const { t } = useTranslation();
+  const { projects, progress, counts, canCreate, filter, isAdmin } = useLoaderData<typeof loader>();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const isArchivedTab = filter === "archived";
+
+  const emptyText = isArchivedTab
+    ? t("projects.empty_archived")
+    : canCreate
+      ? t("projects.empty_can_create")
+      : t("projects.empty_not_assigned");
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* Page Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t("projects.title")}</h1>
-            <p className="text-sm text-gray-600">{t("projects.description")}</p>
-          </div>
-          {canCreate ? (
-            <Link
-              to="/projects/new"
-              data-testid="new-project-button"
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors"
-            >
-              {t("projects.new_project")}
-            </Link>
-          ) : null}
-        </div>
-
-        {/* Admin Filter Tabs */}
-        {isAdmin ? (
-          <div className="flex border-b border-gray-200 gap-4" data-testid="projects-filter-tabs">
-            <Link
-              to="/projects"
-              data-testid="filter-active"
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                filter !== "archived"
-                  ? "border-blue-600 text-blue-600 font-semibold"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              {t("projects.active")}
-            </Link>
-            <Link
-              to="/projects?filter=archived"
-              data-testid="filter-archived"
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                filter === "archived"
-                  ? "border-blue-600 text-blue-600 font-semibold"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              {t("projects.archived")}
-            </Link>
-          </div>
-        ) : null}
-
-        {/* Projects List */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          {projects.length === 0 ? (
-            <div className="p-12 text-center" data-testid="empty-projects">
-              <p className="text-base font-semibold text-gray-900">{t("projects.empty_title")}</p>
-              <p className="mt-1 text-sm text-gray-500">
-                {filter === "archived"
-                  ? t("projects.empty_archived")
-                  : canCreate
-                    ? t("projects.empty_can_create")
-                    : t("projects.empty_not_assigned")}
-              </p>
-              {canCreate && filter !== "archived" ? (
-                <div className="mt-6">
-                  <Link
-                    to="/projects/new"
-                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
-                  >
-                    {t("projects.create_button")}
-                  </Link>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-left text-sm" data-testid="projects-table">
-                <thead className="bg-gray-50 text-gray-600 font-medium">
-                  <tr>
-                    <th scope="col" className="px-6 py-3.5">
-                      {t("projects.th_code")}
-                    </th>
-                    <th scope="col" className="px-6 py-3.5">
-                      {t("projects.th_name")}
-                    </th>
-                    <th scope="col" className="px-6 py-3.5">
-                      {t("projects.th_status")}
-                    </th>
-                    <th scope="col" className="px-6 py-3.5">
-                      {t("projects.th_timeline")}
-                    </th>
-                    <th scope="col" className="px-6 py-3.5">
-                      {t("projects.th_budget")}
-                    </th>
-                    <th scope="col" className="px-6 py-3.5">
-                      {t("projects.th_role")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {projects.map((project) => (
-                    <tr
-                      key={project.id}
-                      className="hover:bg-gray-50 transition-colors"
-                      data-testid={`project-row-${project.code}`}
+    <Page
+      header={
+        <PageHeader
+          title={t("projects.title")}
+          description={t("projects.description")}
+          actions={
+            canCreate ? (
+              <Link to="/projects/new" className={buttonClass("primary", "sm")} data-testid="new-project-button">
+                <Icon name="plus" size={14} />
+                {t("projects.new_project")}
+              </Link>
+            ) : null
+          }
+          tabs={
+            isAdmin ? (
+              <div data-testid="projects-filter-tabs">
+                <Tabs
+                  value={isArchivedTab ? "archived" : "active"}
+                  items={[
+                    {
+                      id: "active",
+                      label: t("projects.active"),
+                      count: counts.active,
+                      to: "/projects",
+                      "data-testid": "filter-active",
+                    },
+                    {
+                      id: "archived",
+                      label: t("projects.archived"),
+                      count: counts.archived,
+                      to: "/projects?filter=archived",
+                      "data-testid": "filter-archived",
+                    },
+                  ]}
+                />
+              </div>
+            ) : null
+          }
+        />
+      }
+    >
+      <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        {projects.length === 0 ? (
+          <EmptyState
+            icon="folder-kanban"
+            title={t("projects.empty_title")}
+            description={emptyText}
+            data-testid="empty-projects"
+            action={
+              canCreate && !isArchivedTab ? (
+                <Link to="/projects/new" className={buttonClass("primary", "sm")}>
+                  <Icon name="plus" size={14} />
+                  {t("projects.new_project")}
+                </Link>
+              ) : null
+            }
+          />
+        ) : (
+          <Table<ProjectRow>
+            data-testid="projects-table"
+            rows={projects}
+            rowKey={(row) => row.id}
+            rowTestId={(row) => `project-row-${row.code}`}
+            onRowClick={
+              isArchivedTab
+                ? undefined
+                : (row) => {
+                    void navigate(`/projects/${row.id}`);
+                  }
+            }
+            columns={[
+              {
+                id: "code",
+                label: t("projects.th_code"),
+                width: 80,
+                render: (row) =>
+                  row.deletedAt ? (
+                    <Badge tone="accent">{row.code}</Badge>
+                  ) : (
+                    <Link
+                      to={`/projects/${row.id}`}
+                      className="no-underline hover:no-underline"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
                     >
-                      <td className="px-6 py-4 font-mono font-medium text-blue-600">
-                        <Link to={`/projects/${project.id}`} className="hover:underline">
-                          {project.code}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Link to={`/projects/${project.id}`} className="font-medium text-gray-900 hover:text-blue-600">
-                          {project.name}
-                        </Link>
-                        {project.description ? (
-                          <div className="text-xs text-gray-500 line-clamp-1">{project.description}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            project.deletedAt
-                              ? "bg-gray-200 text-gray-700"
-                              : project.status === "ACTIVE"
-                                ? "bg-green-100 text-green-800"
-                                : project.status === "ON_HOLD"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {project.deletedAt ? t("projects.status_archived") : project.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-gray-600 whitespace-nowrap">
-                        {project.startDate} → {project.endDate}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-gray-600 whitespace-nowrap">
-                        {project.budget !== null ? `${project.budget.toLocaleString()} VND` : "—"}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-semibold text-gray-700">
-                        {"projectRole" in project && typeof project.projectRole === "string" ? (
-                          <span className="inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700">
-                            {project.projectRole}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                      <Badge tone="accent">{row.code}</Badge>
+                    </Link>
+                  ),
+              },
+              {
+                id: "name",
+                label: t("projects.th_name"),
+                render: (row) => {
+                  const label = (
+                    <span className="inline-flex items-center gap-2 font-medium text-fg">
+                      <span className="size-2 rounded-[2px]" style={{ background: projectDot(row.code) }} />
+                      {row.name}
+                    </span>
+                  );
+                  return row.deletedAt ? (
+                    label
+                  ) : (
+                    <Link
+                      to={`/projects/${row.id}`}
+                      className="no-underline hover:no-underline"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      {label}
+                    </Link>
+                  );
+                },
+              },
+              {
+                id: "status",
+                label: t("projects.th_status"),
+                render: (row) =>
+                  row.deletedAt ? (
+                    <Badge>{t("projects.status_archived")}</Badge>
+                  ) : (
+                    <Badge tone={STATUS_TONE[row.status]} dot>
+                      {translateProjectStatus(t, row.status)}
+                    </Badge>
+                  ),
+              },
+              {
+                id: "progress",
+                label: t("projects.th_progress"),
+                width: 180,
+                render: (row) => {
+                  const counts = progress[row.id] ?? { total: 0, done: 0 };
+                  return <ProgressBar value={counts.done} total={counts.total || 1} tone="done" />;
+                },
+              },
+              {
+                id: "timeline",
+                label: t("projects.th_timeline"),
+                muted: true,
+                render: (row) =>
+                  `${formatShortDate(row.startDate, i18n.language)} – ${formatShortDate(row.endDate, i18n.language)}`,
+              },
+              ...(isAdmin
+                ? [
+                    {
+                      id: "budget",
+                      label: t("projects.th_budget"),
+                      align: "right" as const,
+                      muted: true,
+                      render: (row: ProjectRow) => formatBudget(row.budget),
+                    },
+                  ]
+                : []),
+              {
+                id: "role",
+                label: t("projects.th_role"),
+                render: (row) => {
+                  const role =
+                    ("projectRole" in row ? (row.projectRole as SystemRole) : null) ?? (isAdmin ? "ADMIN" : null);
+                  return role ? (
+                    <Badge tone={roleTone(role)} size="sm">
+                      {translateRole(t, role)}
+                    </Badge>
+                  ) : (
+                    "—"
+                  );
+                },
+              },
+            ]}
+          />
+        )}
       </div>
-    </div>
+    </Page>
   );
 }

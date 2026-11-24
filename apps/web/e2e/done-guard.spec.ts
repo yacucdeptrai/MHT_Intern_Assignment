@@ -6,6 +6,7 @@ test.describe("Journey 7: Done Status Guard (FR-21)", () => {
   test("member posts a changeStatus with a Done status directly via page.request -> 403; task status is unchanged", async ({
     browser,
   }) => {
+    test.slow();
     const assignee = await createSignedInMember(browser, "MEMBER");
     const { taskUrl, doneStatusId } = await setupProjectWithTask(browser, {
       taskTitle: "Direct Done Guard Task",

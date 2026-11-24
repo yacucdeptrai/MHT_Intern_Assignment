@@ -24,7 +24,7 @@ test.describe("Project Settings & Archive (FR-08 & FR-09)", () => {
     await page.getByRole("link", { name: code, exact: true }).click();
     await page.waitForURL("**/projects/*");
 
-    const settingsTab = page.getByRole("link", { name: "Settings" });
+    const settingsTab = page.getByRole("main").getByRole("link", { name: "Settings" });
     await expect(settingsTab).toBeVisible();
     await settingsTab.click();
     await page.waitForURL("**/settings");
@@ -44,7 +44,7 @@ test.describe("Project Settings & Archive (FR-08 & FR-09)", () => {
     // Verify success banner and updated header
     await expect(page.getByTestId("success-banner")).toBeVisible();
     await expect(page.getByTestId("project-title")).toHaveText(updatedName);
-    await expect(page.getByTestId("project-header").getByText("ON_HOLD")).toBeVisible();
+    await expect(page.getByTestId("project-header").getByText("On hold")).toBeVisible();
 
     await pm.context.close();
   });
@@ -71,12 +71,12 @@ test.describe("Project Settings & Archive (FR-08 & FR-09)", () => {
     // Navigate to Settings
     await page.getByRole("link", { name: code, exact: true }).click();
     await page.waitForURL("**/projects/*");
-    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("main").getByRole("link", { name: "Settings" }).click();
     await page.waitForURL("**/settings");
 
     // Archive project via Danger Zone
-    page.on("dialog", (dialog) => dialog.accept());
     await page.getByTestId("archive-project-button").click();
+    await page.getByTestId("confirm-archive-btn").click();
     await page.waitForURL("**/projects");
 
     // Verify project is no longer visible in active list for PM
@@ -102,7 +102,7 @@ test.describe("Project Settings & Archive (FR-08 & FR-09)", () => {
 
     // Project should be visible on archived tab
     await expect(adminPage.getByTestId(`project-row-${code}`)).toBeVisible();
-    await expect(adminPage.getByTestId(`project-row-${code}`).getByText("ARCHIVED")).toBeVisible();
+    await expect(adminPage.getByTestId(`project-row-${code}`).getByText("Archived")).toBeVisible();
 
     await adminContext.close();
   });

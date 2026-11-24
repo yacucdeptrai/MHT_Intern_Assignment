@@ -11,10 +11,10 @@ test.describe("M2-T2: Project Visibility & Access Control (P3 / FR-16)", () => {
     const code = `SEC${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const name = `Confidential Project ${code}`;
 
-    await page.getByLabel("Project Code *").fill(code);
-    await page.getByLabel("Project Name *").fill(name);
-    await page.getByLabel("Start Date *").fill("2026-11-01");
-    await page.getByLabel("End Date *").fill("2026-12-31");
+    await page.getByLabel("Project Code").fill(code);
+    await page.getByLabel("Project Name").fill(name);
+    await page.getByLabel("Start Date").fill("2026-11-01");
+    await page.getByLabel("End Date").fill("2026-12-31");
     await page.getByTestId("submit-project-button").click();
 
     await page.waitForURL("**/projects");
@@ -39,7 +39,7 @@ test.describe("M2-T2: Project Visibility & Access Control (P3 / FR-16)", () => {
     await expect(nonMember.page.getByRole("heading", { name: "Not found" })).toBeVisible();
     await expect(nonMember.page.getByText("The requested page could not be found.")).toBeVisible();
     await expect(nonMember.page.getByTestId("project-header")).not.toBeVisible();
-    await expect(nonMember.page.getByText(name)).not.toBeVisible();
+    await expect(nonMember.page.getByRole("main").getByText(name)).not.toBeVisible();
 
     await nonMember.context.close();
   });

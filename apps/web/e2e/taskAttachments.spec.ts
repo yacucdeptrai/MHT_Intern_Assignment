@@ -22,6 +22,7 @@ test.describe("Task Attachments Journey (FR-18)", () => {
 
     // Uploader visits task page
     await uploader.page.goto(taskUrl);
+    await uploader.page.getByTestId("drawer-tab-files").click();
     const attachmentsSection = uploader.page.getByTestId("task-attachments-section");
     await expect(attachmentsSection).toBeVisible();
     await expect(uploader.page.getByTestId("no-attachments-msg")).toBeVisible();
@@ -59,6 +60,7 @@ test.describe("Task Attachments Journey (FR-18)", () => {
 
     // FR-18 c4: Bystander (project member but not uploader) sees attachment but has NO delete button
     await bystander.page.goto(taskUrl);
+    await bystander.page.getByTestId("drawer-tab-files").click();
     const bystanderSection = bystander.page.getByTestId("task-attachments-section");
     await expect(bystanderSection).toContainText("guidelines.pdf");
     const bystanderDeleteBtn = bystanderSection.locator('[data-testid^="attachment-delete-"]');

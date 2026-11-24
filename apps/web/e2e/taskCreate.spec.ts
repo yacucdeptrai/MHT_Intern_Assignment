@@ -16,7 +16,10 @@ test.describe("Task Creation Journey (FR-12)", () => {
     await page.getByRole("button", { name: "Create Project" }).click();
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Task Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Task Project ${code}` })
+      .click();
 
     // Verify on project overview/tasks page
     await expect(page.getByTestId("create-task-button")).toBeVisible();
@@ -35,7 +38,7 @@ test.describe("Task Creation Journey (FR-12)", () => {
     // Verify task appears in table
     await expect(page.getByTestId("tasks-table")).toBeVisible();
     await expect(page.getByText("First Feature Task")).toBeVisible();
-    await expect(page.getByTestId("tasks-table").getByText("HIGH")).toBeVisible();
+    await expect(page.getByTestId("tasks-table").getByRole("img", { name: "High" })).toBeVisible();
     await expect(page.getByText(`${code}-1`)).toBeVisible();
   });
 
@@ -52,7 +55,10 @@ test.describe("Task Creation Journey (FR-12)", () => {
     await page.getByRole("button", { name: "Create Project" }).click();
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Invalid Dates Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Invalid Dates Project ${code}` })
+      .click();
 
     await page.getByTestId("create-task-button").click();
     await page.getByTestId("task-title-input").fill("Task with Bad Dates");

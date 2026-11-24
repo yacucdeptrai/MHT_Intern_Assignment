@@ -20,7 +20,10 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     /* cspell:enable */
 
     await page.waitForURL("**/projects");
-    await page.getByRole("link", { name: `Sprints E2E Project ${code}` }).click();
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: `Sprints E2E Project ${code}` })
+      .click();
     await page.waitForURL("**/projects/*");
 
     const projectUrl = page.url();
@@ -49,7 +52,8 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     await expect(page.getByTestId("sprint-completion")).toHaveText(/No tasks|Chưa có công việc/i);
 
     // 5. Edit sprint
-    await page.getByRole("button", { name: /Edit|Chỉnh sửa/i }).click();
+    await page.getByRole("button", { name: /Sprint actions|Thao tác sprint/i }).click();
+    await page.getByRole("menuitem", { name: /Edit|Chỉnh sửa/i }).click();
     /* cspell:enable */
     await expect(page.getByTestId("edit-sprint-form")).toBeVisible();
     await page.getByTestId("edit-sprint-name-input").fill("Sprint 1 Renamed");
@@ -85,7 +89,8 @@ test.describe("Sprint Management Journey (FR-36)", () => {
     await expect(page.getByTestId("sprint-completion")).toContainText(/0\/1 (done|hoàn thành)/i);
 
     // 8. Archive the sprint
-    await page.getByRole("button", { name: /Archive|Lưu trữ/i }).click();
+    await page.getByRole("button", { name: /Sprint actions|Thao tác sprint/i }).click();
+    await page.getByRole("menuitem", { name: /Archive|Lưu trữ/i }).click();
     /* cspell:enable */
 
     // Verify sprint is removed from sprints table (empty state appears)

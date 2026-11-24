@@ -11,11 +11,11 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     await signInAsAdmin(page);
 
     await page.goto("/admin/users");
-    await expect(page.getByRole("heading", { level: 1, name: "User Management" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Users", exact: true })).toBeVisible();
 
     // 2. Open Create User Modal
-    const createButton = page.getByRole("button", { name: "+ Create User" });
-    const modalHeading = page.getByRole("heading", { level: 2, name: "Create New User" });
+    const createButton = page.getByTestId("btn-open-create-user");
+    const modalHeading = page.getByRole("heading", { level: 2, name: "Create user", exact: true });
     await expect(async () => {
       await createButton.click();
       await expect(modalHeading).toBeVisible({ timeout: 1000 });
@@ -27,10 +27,10 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
 
     await page.getByLabel("Full Name").fill(testName);
     await page.getByLabel("Email Address").fill(testEmail);
-    await page.getByRole("button", { name: "Create User", exact: true }).click();
+    await page.getByTestId("btn-submit-create-user").click();
 
     // 3. Extract invite link
-    await expect(page.getByText("User account created successfully!")).toBeVisible();
+    await expect(page.getByText("User account created", { exact: true })).toBeVisible();
     const inviteInput = page.locator("input[readonly]");
     await expect(inviteInput).toBeVisible();
     const inviteUrl = await inviteInput.inputValue();
@@ -56,11 +56,17 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     ).toBeVisible();
     await expect(userPage.getByText(testEmail)).toBeVisible();
 
-    // 5. Test validation: password mismatch
+    // 5. Test validation: the expiry note shows, and short or mismatched passwords keep submit disabled
+    const submitButton = userPage.getByRole("button", { name: /Set Password and Sign In|Đặt mật khẩu và Đăng nhập/i });
+    await expect(userPage.getByTestId("invite-expiry")).toContainText(/can be used once|chỉ dùng được một lần/);
+    await expect(submitButton).toBeDisabled();
+    await userPage.getByLabel(/New Password|Mật khẩu mới/i).fill("short");
+    await expect(userPage.getByText("Password must be at least 10 characters")).toBeVisible();
+    await expect(submitButton).toBeDisabled();
     await userPage.getByLabel(/New Password|Mật khẩu mới/i).fill("Password123!");
     await userPage.getByLabel(/Confirm Password|Xác nhận mật khẩu/i).fill("Mismatch123!");
-    await userPage.getByRole("button", { name: /Set Password and Sign In|Đặt mật khẩu và Đăng nhập/i }).click();
     await expect(userPage.getByText("Passwords do not match")).toBeVisible();
+    await expect(submitButton).toBeDisabled();
 
     // 6. Test success: submit matching valid password (>=10 chars)
     const validPassword = "SecurePassword123!";
@@ -73,7 +79,7 @@ test.describe("Invite & Password Setup Journey (FR-37)", () => {
     await expect(
       userPage.getByRole("heading", {
         level: 1,
-        name: /Project & Task Management|Hệ thống Quản lý Dự án & Công việc/i,
+        name: /^(Dashboard|Bảng điều khiển)$/,
       }),
     ).toBeVisible();
     await expect(userPage.getByText(new RegExp(`(Welcome back|Chào mừng trở lại), ${testName}`))).toBeVisible();

@@ -70,7 +70,8 @@ test.describe("Task Reject and Reopen Journey (FR-23)", () => {
 
     await expect(lead.page.getByTestId("task-status-badge")).toHaveText("In Progress");
     await expect(lead.page.getByTestId("edit-task-button")).toBeVisible();
-    await expect(lead.page.getByTestId("form-change-status")).toBeVisible();
+    // Reopened tasks are editable again: the status picker is back
+    await expect(lead.page.getByTestId("status-picker")).toBeVisible();
 
     await lead.context.close();
     await assignee.context.close();

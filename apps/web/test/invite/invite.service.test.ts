@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import { createDatabase, inviteRepository, userRepository } from "@pm/db";
-import { ValidationError } from "@pm/domain";
+import { TOKEN_INVITE_EXPIRY_MS, ValidationError } from "@pm/domain";
 
 import { inviteService } from "../../app/services/invite.service";
 import type { RequestContext } from "../../app/utils/requestContext.server";
@@ -86,6 +86,8 @@ describe("invite.service", () => {
     const validRes = await inviteService.validateToken(ctx, created.inviteToken);
     expect(validRes.status).toBe("valid");
     expect(validRes.email).toBe("validatetoken@example.com");
+    // The invite page shows "This link expires on …" from this timestamp.
+    expect(validRes.expiresAt).toBe(new Date(now.getTime() + TOKEN_INVITE_EXPIRY_MS).toISOString());
 
     // 2. Non-existent token
     const nonExistent = await inviteService.validateToken(

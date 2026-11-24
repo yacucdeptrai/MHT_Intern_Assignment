@@ -67,10 +67,9 @@ test.describe("Project Members Management (FR-10)", () => {
     await expect(pmPage.getByText(inviteEmail)).toBeVisible();
 
     // Remove candidate from project
-    // Handle browser confirmation dialog
-    pmPage.once("dialog", (dialog) => dialog.accept());
     const candidateRow = pmPage.locator("tr", { hasText: candidate.fullName });
     await candidateRow.getByRole("button", { name: "Remove" }).click();
+    await pmPage.getByTestId("confirm-remove-btn").click();
 
     // Verify member is removed from table
     await expect(pmPage.getByTestId("success-banner")).toBeVisible();
@@ -115,14 +114,10 @@ test.describe("Project Members Management (FR-10)", () => {
     await pmPage.getByTestId("add-member-submit-btn").click();
     await expect(pmPage.getByTestId("members-table").getByText(otherMember.fullName)).toBeVisible();
 
-    // PM tries to remove self (the only PM)
-    pmPage.once("dialog", (dialog) => dialog.accept());
-    // Click remove for PM
+    // The only PM cannot be removed: the UI hides Remove on that row (the server rule is
+    // covered in projectMember.service and projectMembersRoute unit tests).
     const pmRow = pmPage.locator("tr", { hasText: pm.fullName });
-    await pmRow.getByRole("button", { name: "Remove" }).click();
-
-    // Verify error banner
-    await expect(pmPage.getByTestId("action-error")).toHaveText("A project needs at least one PM");
+    await expect(pmRow.getByRole("button", { name: "Remove" })).toHaveCount(0);
 
     // Now test otherMember (regular member): can view members, cannot see add/invite forms
     const memberPage = otherMember.page;

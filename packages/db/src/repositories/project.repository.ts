@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { ProjectRiskItem } from "@pm/domain";
 
+import { chunk } from "../chunk";
 import type { AppDatabase } from "../client";
 import { projectMembers } from "../schema/projectMembers";
 import { projects, type NewProject, type Project } from "../schema/projects";
@@ -8,6 +9,31 @@ import { tasks } from "../schema/tasks";
 import { taskStatuses } from "../schema/taskStatuses";
 
 export const projectRepository = {
+  /** Live task totals and DONE-category counts per project (projects list progress bar). */
+  async countTaskProgress(
+    db: AppDatabase,
+    projectIds: string[],
+  ): Promise<Array<{ projectId: string; total: number; done: number }>> {
+    if (projectIds.length === 0) {
+      return [];
+    }
+    const results = await Promise.all(
+      chunk(projectIds).map((ids) =>
+        db
+          .select({
+            projectId: tasks.projectId,
+            total: sql<number>`count(${tasks.id})`.mapWith(Number),
+            done: sql<number>`sum(case when ${taskStatuses.category} = 'DONE' then 1 else 0 end)`.mapWith(Number),
+          })
+          .from(tasks)
+          .innerJoin(taskStatuses, eq(tasks.statusId, taskStatuses.id))
+          .where(and(inArray(tasks.projectId, ids), isNull(tasks.deletedAt)))
+          .groupBy(tasks.projectId),
+      ),
+    );
+    return results.flat();
+  },
+
   insertStmt(db: AppDatabase, project: NewProject) {
     return db.insert(projects).values(project);
   },

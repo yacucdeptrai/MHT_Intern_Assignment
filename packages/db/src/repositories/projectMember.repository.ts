@@ -1,7 +1,8 @@
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 import type { MemberRow, ProjectRole } from "@pm/domain";
 
+import { chunk } from "../chunk";
 import type { AppDatabase } from "../client";
 import { projectMembers, type NewProjectMember, type ProjectMember } from "../schema/projectMembers";
 import { users } from "../schema/users";
@@ -70,5 +71,26 @@ export const projectMemberRepository = {
 
   async listByUser(db: AppDatabase, userId: string): Promise<ProjectMember[]> {
     return db.select().from(projectMembers).where(eq(projectMembers.userId, userId));
+  },
+
+  /** Project managers of the given projects, ordered by name (dashboard "Projects at risk" PM column). */
+  async listPmNamesByProjects(
+    db: AppDatabase,
+    projectIds: string[],
+  ): Promise<Array<{ projectId: string; fullName: string }>> {
+    if (projectIds.length === 0) {
+      return [];
+    }
+    const results = await Promise.all(
+      chunk(projectIds).map((ids) =>
+        db
+          .select({ projectId: projectMembers.projectId, fullName: users.fullName })
+          .from(projectMembers)
+          .innerJoin(users, eq(projectMembers.userId, users.id))
+          .where(and(inArray(projectMembers.projectId, ids), eq(projectMembers.projectRole, "PM")))
+          .orderBy(asc(users.fullName)),
+      ),
+    );
+    return results.flat().sort((a, b) => a.fullName.localeCompare(b.fullName));
   },
 };

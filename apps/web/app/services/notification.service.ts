@@ -25,6 +25,14 @@ function toNotificationDto(item: Notification): NotificationDto {
 }
 
 export const notificationService = {
+  /** Unread badge count for the sidebar. */
+  async countUnread(ctx: RequestContext): Promise<number> {
+    if (!ctx.user) {
+      throw new UnauthorizedError("Authentication required", { key: "errors.authentication_required" });
+    }
+    return notificationRepository.countUnread(ctx.db, ctx.user.id);
+  },
+
   async listNotifications(
     ctx: RequestContext,
     rawQuery?: unknown,

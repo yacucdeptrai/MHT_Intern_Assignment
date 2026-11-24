@@ -25,6 +25,10 @@ export interface ProjectHeaderDto {
   status: ProjectStatus;
   projectRole: ProjectRole;
   isArchived: boolean;
+  /** Live (non-archived) task count for the Tasks tab */
+  taskCount?: number;
+  /** Member count for the Members tab */
+  memberCount?: number;
 }
 
 export interface ProjectSettingsDto {
@@ -62,4 +66,6 @@ export interface ProjectRiskItem {
   code: string;
   name: string;
   overdueCount: number;
+  /** First project manager by name, when the project has one */
+  pmName?: string | null;
 }

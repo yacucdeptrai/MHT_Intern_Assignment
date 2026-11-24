@@ -1,16 +1,27 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 
 import { APP_NAME, STATUS_CATEGORIES, type StatusCategory } from "@pm/domain";
 
 import { adminStatusesAction } from "../actions/adminStatusesAction";
+import { Badge } from "../components/ui/Badge";
+import { Banner } from "../components/ui/Banner";
+import { Button } from "../components/ui/Button";
+import { Dialog } from "../components/ui/Dialog";
+import { IconButton } from "../components/ui/IconButton";
+import { Input } from "../components/ui/Input";
+import { Page, Panel } from "../components/ui/Page";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Select } from "../components/ui/Select";
+import { StatusIcon, statusGlyph } from "../components/ui/TaskIcons";
+import { translateCategory } from "../i18n/labels";
 import { adminStatusesLoader, type StatusAdminRow } from "../loaders/adminStatusesLoader";
 import { requestContextKey } from "../utils/requestContext.server";
 
 export function meta() {
-  return [{ title: `Status Configuration — ${APP_NAME}` }];
+  return [{ title: `Task statuses — ${APP_NAME}` }];
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -36,313 +47,288 @@ export default function AdminStatusesPage() {
   const { statuses } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const submit = useSubmit();
 
   const isSubmitting = navigation.state === "submitting";
-
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState<StatusAdminRow | null>(null);
+  const [deletingStatus, setDeletingStatus] = useState<StatusAdminRow | null>(null);
+  const [prevActionData, setPrevActionData] = useState(actionData);
+  if (actionData !== prevActionData) {
+    setPrevActionData(actionData);
+    if (actionData?.success) {
+      setIsCreateOpen(false);
+      setEditingStatus(null);
+    }
+  }
 
   const formError = actionData?.errors?.form?.[0] ?? actionData?.message;
   const nameError = actionData?.errors?.name?.[0];
   const categoryError = actionData?.errors?.category?.[0];
 
-  const handleMove = (index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= statuses.length) return;
-
-    const reordered = [...statuses];
-    const moved = reordered[index];
-    if (!moved) return;
-    reordered.splice(index, 1);
-    reordered.splice(targetIndex, 0, moved);
-
-    const form = document.createElement("form");
-    form.method = "post";
-    form.style.display = "none";
-
-    const intentInput = document.createElement("input");
-    intentInput.name = "intent";
-    intentInput.value = "reorder";
-    form.appendChild(intentInput);
-
-    for (const status of reordered) {
-      const idInput = document.createElement("input");
-      idInput.name = "orderedIds";
-      idInput.value = status.id;
-      form.appendChild(idInput);
+  /** Moves a status one place within its category and saves the full order. */
+  const move = (status: StatusAdminRow, direction: -1 | 1) => {
+    const siblings = statuses.filter((item) => item.category === status.category);
+    const index = siblings.findIndex((item) => item.id === status.id);
+    const target = siblings[index + direction];
+    if (!target) return;
+    const order = statuses.map((item) => item.id);
+    const from = order.indexOf(status.id);
+    const to = order.indexOf(target.id);
+    order[from] = target.id;
+    order[to] = status.id;
+    const formData = new FormData();
+    formData.set("intent", "reorder");
+    for (const id of order) {
+      formData.append("orderedIds", id);
     }
+    void submit(formData, { method: "post" });
+  };
 
-    document.body.appendChild(form);
-    form.requestSubmit();
-    document.body.removeChild(form);
+  const post = (intent: "setDefault" | "delete", status: StatusAdminRow) => {
+    void submit({ intent, statusId: status.id }, { method: "post" });
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            {t("admin_statuses.title")}
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t("admin_statuses.subtitle")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setIsCreateOpen(true);
-          }}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          {t("admin_statuses.btn_add_status")}
-        </button>
-      </div>
+    <Page
+      maxWidth={900}
+      header={
+        <PageHeader
+          eyebrow={t("nav.management")}
+          title={t("admin_statuses.title")}
+          description={t("admin_statuses.subtitle")}
+          actions={
+            <Button
+              variant="primary"
+              size="sm"
+              icon="plus"
+              onClick={() => {
+                setIsCreateOpen(true);
+              }}
+              data-testid="btn-add-status"
+            >
+              {t("admin_statuses.btn_add_status")}
+            </Button>
+          }
+        />
+      }
+    >
+      <Banner tone="info" title={t("admin_statuses.info_title")}>
+        {t("admin_statuses.info_body")}
+      </Banner>
 
-      {formError && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">{formError}</div>
-      )}
+      {formError && !isCreateOpen && !editingStatus ? (
+        <Banner tone="danger" role="alert">
+          {formError}
+        </Banner>
+      ) : null}
 
-      {/* Statuses Table */}
-      <div className="bg-white dark:bg-slate-800 shadow rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t("admin_statuses.th_order")}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t("admin_statuses.th_name")}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t("admin_statuses.th_category")}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t("admin_statuses.th_default")}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t("admin_statuses.th_tasks")}
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t("admin_statuses.th_actions")}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {statuses.map((status, index) => (
-              <tr key={status.id} className="hover:bg-slate-50 dark:hover:bg-slate-750">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center space-x-1">
-                    <button
-                      type="button"
+      {STATUS_CATEGORIES.map((category: StatusCategory) => {
+        const rows = statuses.filter((status) => status.category === category);
+        return (
+          <Panel
+            key={category}
+            title={
+              <>
+                <StatusIcon category={category} />
+                {translateCategory(t, category)}
+              </>
+            }
+            count={rows.length}
+            data-testid={`status-group-${category}`}
+          >
+            {rows.map((status, index) => {
+              const isInUse = status.taskCount > 0;
+              return (
+                <div
+                  key={status.id}
+                  className="flex h-11 items-center gap-3 border-b border-line pl-4 pr-3 last:border-b-0"
+                  data-testid={`status-row-${status.id}`}
+                >
+                  <span className="flex flex-col">
+                    <IconButton
+                      icon="chevron-down"
+                      label={t("admin_statuses.aria_move_up")}
+                      size="xs"
+                      className="!h-3.5 rotate-180"
                       disabled={index === 0 || isSubmitting}
                       onClick={() => {
-                        handleMove(index, "up");
+                        move(status, -1);
                       }}
-                      className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label={t("admin_statuses.aria_move_up")}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === statuses.length - 1 || isSubmitting}
+                    />
+                    <IconButton
+                      icon="chevron-down"
+                      label={t("admin_statuses.aria_move_down")}
+                      size="xs"
+                      className="!h-3.5"
+                      disabled={index === rows.length - 1 || isSubmitting}
                       onClick={() => {
-                        handleMove(index, "down");
+                        move(status, 1);
                       }}
-                      className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label={t("admin_statuses.aria_move_down")}
-                    >
-                      ↓
-                    </button>
-                    <span className="font-mono text-xs">{status.position}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">
-                  {status.name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
-                    {status.category}
+                    />
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                  <StatusIcon category={statusGlyph(status.name, status.category)} />
+                  <span className="min-w-[120px] text-[13px] font-medium leading-none text-fg">{status.name}</span>
                   {status.isDefault ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    <Badge tone="accent" size="sm">
                       {t("admin_statuses.badge_default")}
-                    </span>
+                    </Badge>
                   ) : (
-                    <Form method="post" className="inline">
-                      <input type="hidden" name="intent" value="setDefault" />
-                      <input type="hidden" name="statusId" value={status.id} />
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
-                      >
-                        {t("admin_statuses.btn_set_default")}
-                      </button>
-                    </Form>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isSubmitting}
+                      onClick={() => {
+                        post("setDefault", status);
+                      }}
+                    >
+                      {t("admin_statuses.btn_set_default")}
+                    </Button>
                   )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
-                  {status.taskCount}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                  <button
-                    type="button"
+                  <span className="flex-1" />
+                  <span className="w-[70px] text-right text-[12px] leading-none text-fg-muted">
+                    {t("admin_statuses.task_count", { count: status.taskCount })}
+                  </span>
+                  <IconButton
+                    icon="pencil"
+                    label={t("admin_statuses.btn_edit")}
+                    size="xs"
                     onClick={() => {
                       setEditingStatus(status);
                     }}
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-900"
-                  >
-                    {t("admin_statuses.btn_edit")}
-                  </button>
-                  {!status.isDefault && (
-                    <Form
-                      method="post"
-                      className="inline"
-                      onSubmit={(e) => {
-                        if (!confirm(t("admin_statuses.confirm_delete", { name: status.name }))) {
-                          e.preventDefault();
-                        }
-                      }}
-                    >
-                      <input type="hidden" name="intent" value="delete" />
-                      <input type="hidden" name="statusId" value={status.id} />
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="text-red-600 dark:text-red-400 hover:text-red-900 disabled:opacity-50"
-                      >
-                        {t("admin_statuses.btn_delete")}
-                      </button>
-                    </Form>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  />
+                  <IconButton
+                    icon="trash-2"
+                    label={isInUse ? t("admin_statuses.delete_in_use") : t("admin_statuses.btn_delete")}
+                    size="xs"
+                    disabled={isInUse || status.isDefault || isSubmitting}
+                    onClick={() => {
+                      setDeletingStatus(status);
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </Panel>
+        );
+      })}
 
-      {/* Create Modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {t("admin_statuses.modal_add_title")}
-            </h2>
-            <Form
-              method="post"
-              className="space-y-4"
-              onSubmit={() => {
-                // Keep open until server returns success
+      <Dialog
+        open={isCreateOpen}
+        onClose={() => {
+          setIsCreateOpen(false);
+        }}
+        title={t("admin_statuses.modal_add_title")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setIsCreateOpen(false);
               }}
             >
-              <input type="hidden" name="intent" value="create" />
-              <div>
-                <label htmlFor="create-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {t("admin_statuses.label_status_name")}
-                </label>
-                <input
-                  id="create-name"
-                  type="text"
-                  name="name"
-                  required
-                  defaultValue={actionData?.values?.name ?? ""}
-                  className="mt-1 block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm focus:border-blue-500 focus:outline-none"
-                />
-                {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
-              </div>
-              <div>
-                <label
-                  htmlFor="create-category"
-                  className="block text-sm font-medium text-slate-700 dark:text-slate-300"
-                >
-                  {t("admin_statuses.label_category")}
-                </label>
-                <select
-                  id="create-category"
-                  name="category"
-                  defaultValue={actionData?.values?.category ?? "TODO"}
-                  className="mt-1 block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm focus:border-blue-500 focus:outline-none"
-                >
-                  {STATUS_CATEGORIES.map((cat: StatusCategory) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                {categoryError && <p className="mt-1 text-xs text-red-600">{categoryError}</p>}
-              </div>
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreateOpen(false);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200"
-                >
-                  {t("admin_statuses.btn_cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSubmitting ? t("admin_statuses.btn_saving") : t("admin_statuses.btn_create")}
-                </button>
-              </div>
-            </Form>
-          </div>
-        </div>
-      )}
+              {t("admin_statuses.btn_cancel")}
+            </Button>
+            <Button type="submit" form="create-status-form" variant="primary" disabled={isSubmitting}>
+              {isSubmitting ? t("admin_statuses.btn_saving") : t("admin_statuses.btn_create")}
+            </Button>
+          </>
+        }
+      >
+        <Form id="create-status-form" method="post" className="flex flex-col gap-3">
+          <input type="hidden" name="intent" value="create" />
+          {formError && !nameError && !categoryError ? (
+            <Banner tone="danger" role="alert">
+              {formError}
+            </Banner>
+          ) : null}
+          <Input
+            id="create-status-name"
+            name="name"
+            required
+            label={t("admin_statuses.label_status_name")}
+            placeholder={t("admin_statuses.placeholder_name")}
+            defaultValue={actionData?.values?.name ?? ""}
+            error={nameError}
+          />
+          <Select
+            id="create-status-category"
+            name="category"
+            label={t("admin_statuses.label_category")}
+            defaultValue={actionData?.values?.category ?? "IN_PROGRESS"}
+            options={STATUS_CATEGORIES.map((category) => ({ value: category, label: translateCategory(t, category) }))}
+            error={categoryError}
+          />
+        </Form>
+      </Dialog>
 
-      {/* Edit Modal */}
-      {editingStatus && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {t("admin_statuses.modal_edit_title")}
-            </h2>
-            <Form method="post" className="space-y-4">
-              <input type="hidden" name="intent" value="update" />
-              <input type="hidden" name="statusId" value={editingStatus.id} />
-              <div>
-                <label htmlFor="edit-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {t("admin_statuses.label_status_name")}
-                </label>
-                <input
-                  id="edit-name"
-                  type="text"
-                  name="name"
-                  required
-                  defaultValue={editingStatus.name}
-                  className="mt-1 block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm focus:border-blue-500 focus:outline-none"
-                />
-                {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
-              </div>
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingStatus(null);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200"
-                >
-                  {t("admin_statuses.btn_cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSubmitting ? t("admin_statuses.btn_saving") : t("admin_statuses.btn_update")}
-                </button>
-              </div>
-            </Form>
-          </div>
-        </div>
-      )}
-    </div>
+      <Dialog
+        open={editingStatus !== null}
+        onClose={() => {
+          setEditingStatus(null);
+        }}
+        title={t("admin_statuses.modal_edit_title")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setEditingStatus(null);
+              }}
+            >
+              {t("admin_statuses.btn_cancel")}
+            </Button>
+            <Button type="submit" form="edit-status-form" variant="primary" disabled={isSubmitting}>
+              {isSubmitting ? t("admin_statuses.btn_saving") : t("admin_statuses.btn_update")}
+            </Button>
+          </>
+        }
+      >
+        {editingStatus ? (
+          <Form id="edit-status-form" method="post" className="flex flex-col gap-3">
+            <input type="hidden" name="intent" value="update" />
+            <input type="hidden" name="statusId" value={editingStatus.id} />
+            <Input
+              id="edit-status-name"
+              name="name"
+              required
+              label={t("admin_statuses.label_status_name")}
+              defaultValue={editingStatus.name}
+              error={nameError}
+            />
+          </Form>
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={deletingStatus !== null}
+        onClose={() => {
+          setDeletingStatus(null);
+        }}
+        title={deletingStatus ? t("admin_statuses.delete_title", { name: deletingStatus.name }) : ""}
+        description={t("admin_statuses.delete_desc")}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setDeletingStatus(null);
+              }}
+            >
+              {t("admin_statuses.btn_cancel")}
+            </Button>
+            <Button
+              variant="danger"
+              icon="trash-2"
+              onClick={() => {
+                if (deletingStatus) {
+                  post("delete", deletingStatus);
+                }
+                setDeletingStatus(null);
+              }}
+            >
+              {t("admin_statuses.btn_delete")}
+            </Button>
+          </>
+        }
+      />
+    </Page>
   );
 }
