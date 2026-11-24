@@ -48,3 +48,19 @@ export function formatCsv(rows: string[][]): string {
   const body = rows.map((row) => row.map((cell) => escapeCsvCell(cell)).join(",")).join("\r\n");
   return BOM + body;
 }
+
+export const AUDIT_EXPORT_COLUMNS = [
+  "Timestamp",
+  "Actor",
+  "Action",
+  "Entity Type",
+  "Entity ID",
+  "Project",
+  "Changes",
+] as const;
+
+/**
+ * Upper bound on rows in one audit log CSV, so a single export stays inside the Worker CPU budget.
+ * Narrow the filters to export older entries.
+ */
+export const AUDIT_EXPORT_MAX_ROWS = 5000;

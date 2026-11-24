@@ -619,6 +619,7 @@
     "label_from_date": "Từ ngày",
     "label_to_date": "Đến ngày",
     "btn_reset": "Đặt lại",
+    "btn_export_csv": "Xuất CSV",
     "th_timestamp": "Thời gian",
     "th_actor": "Người thực hiện",
     "th_action": "Hành động",

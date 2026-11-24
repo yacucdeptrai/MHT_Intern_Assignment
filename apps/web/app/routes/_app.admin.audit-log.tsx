@@ -13,6 +13,7 @@ import {
 import { Avatar } from "../components/ui/Avatar";
 import { Badge, type BadgeTone } from "../components/ui/Badge";
 import { Button, buttonClass } from "../components/ui/Button";
+import { Icon } from "../components/ui/Icon";
 import { Input } from "../components/ui/Input";
 import { Page, Toolbar } from "../components/ui/Page";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -31,15 +32,26 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return adminAuditLogLoader(ctx, request);
 }
 
-function buildPageHref(filters: AdminAuditLogLoaderData["filters"], targetPage: number): string {
+function filterParams(filters: AdminAuditLogLoaderData["filters"]): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.actorId) params.set("actorId", filters.actorId);
   if (filters.entityType) params.set("entityType", filters.entityType);
   if (filters.action) params.set("action", filters.action);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
+  return params;
+}
+
+function buildPageHref(filters: AdminAuditLogLoaderData["filters"], targetPage: number): string {
+  const params = filterParams(filters);
   params.set("page", String(targetPage));
   return `/admin/audit-log?${params.toString()}`;
+}
+
+/** The export covers every page of the current filters, so it carries no page number. */
+function buildExportHref(filters: AdminAuditLogLoaderData["filters"]): string {
+  const query = filterParams(filters).toString();
+  return query ? `/api/admin/audit-log/export?${query}` : "/api/admin/audit-log/export";
 }
 
 /** Destructive actions read red, creations and approvals green, everything else neutral. */
@@ -65,6 +77,17 @@ export default function AdminAuditLogPage() {
           eyebrow={t("nav.management")}
           title={t("admin_audit.title")}
           description={t("admin_audit.subtitle")}
+          actions={
+            <a
+              href={buildExportHref(filters)}
+              download
+              className={buttonClass("secondary", "sm")}
+              data-testid="audit-export-csv-btn"
+            >
+              <Icon name="arrow-down" size={14} />
+              {t("admin_audit.btn_export_csv")}
+            </a>
+          }
         />
       }
     >

@@ -619,6 +619,7 @@
     "label_from_date": "From date",
     "label_to_date": "To date",
     "btn_reset": "Reset",
+    "btn_export_csv": "Export CSV",
     "th_timestamp": "Timestamp",
     "th_actor": "Actor",
     "th_action": "Action",
