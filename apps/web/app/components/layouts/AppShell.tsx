@@ -13,7 +13,6 @@ import { Avatar } from "../ui/Avatar";
 import { PRODUCT_INITIALS } from "../ui/brand";
 import { projectDot } from "../ui/projectColor";
 import { Breadcrumb, type BreadcrumbItem } from "../ui/Breadcrumb";
-import { Button } from "../ui/Button";
 import { CommandBar, type CommandGroup, type CommandItem } from "../ui/CommandBar";
 import { Icon, type IconName } from "../ui/Icon";
 import { IconButton } from "../ui/IconButton";
@@ -300,14 +299,6 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
   const openCommand = () => {
     setIsCommandOpen(true);
   };
-  // Inside a project, New task opens that project's create form; elsewhere the command bar picks one.
-  const openNewTask = () => {
-    if (currentProject) {
-      void navigate(`/projects/${currentProject.id}?new=1`);
-    } else {
-      openCommand();
-    }
-  };
   const isOn = (page: PageId) => route.page === page;
   const roleLabel = translateRole(t, user.systemRole);
   const avatarSrc = user.avatarKey ? `/api/avatars/${user.id}` : null;
@@ -457,9 +448,6 @@ export function AppShell({ user, projects, unreadCount, children }: AppShellProp
             <span className="flex-1 whitespace-nowrap text-left">{t("shell.search_placeholder")}</span>
             <Kbd keys={["⌘", "K"]} size="xs" />
           </button>
-          <Button variant="primary" size="sm" icon="plus" onClick={openNewTask} data-testid="topbar-new-task">
-            {t("shell.new_task")}
-          </Button>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
