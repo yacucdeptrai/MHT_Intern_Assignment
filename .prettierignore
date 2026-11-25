@@ -3,3 +3,5 @@ pnpm-lock.yaml
 **/.react-router/
 **/build/
 **/.wrangler/
+# Docs were outside the repo until 36738e2; keep their hand formatting (nativedocs must stay unchanged).
+docs/
