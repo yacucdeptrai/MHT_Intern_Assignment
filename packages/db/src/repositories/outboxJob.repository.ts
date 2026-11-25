@@ -97,4 +97,20 @@ export const outboxJobRepository = {
       .limit(1);
     return job ?? null;
   },
+  /** Oldest SLACK_UPDATE_THREAD job for the task that has not finished yet (PENDING, RUNNING or FAILED). */
+  async findOldestOpenSlackUpdateJob(db: AppDatabase, taskId: string): Promise<OutboxJob | null> {
+    const [job] = await db
+      .select()
+      .from(outboxJobs)
+      .where(
+        and(
+          eq(outboxJobs.type, "SLACK_UPDATE_THREAD"),
+          sql`json_extract(${outboxJobs.payload}, '$.taskId') = ${taskId}`,
+          inArray(outboxJobs.status, ["PENDING", "RUNNING", "FAILED"]),
+        ),
+      )
+      .orderBy(asc(outboxJobs.createdAt), asc(outboxJobs.id))
+      .limit(1);
+    return job ?? null;
+  },
 };

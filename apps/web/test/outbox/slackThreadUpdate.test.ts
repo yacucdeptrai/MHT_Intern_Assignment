@@ -450,7 +450,87 @@ describe("SLACK_UPDATE_THREAD outbox handler (FR-28)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("FR-28 c2: ordering after post: marks SKIPPED if slack_thread_ts is null and post job was SKIPPED", async () => {
+  /** A thread-update job for a status change on `taskId`, created at `createdAt`. */
+  async function insertThreadJob(
+    taskId: string,
+    fromStatusId: string,
+    toStatusId: string,
+    actorId: string,
+    createdAt: Date,
+  ) {
+    const id = crypto.randomUUID();
+    await outboxJobRepository.insert(db, {
+      id,
+      type: "SLACK_UPDATE_THREAD",
+      payload: JSON.stringify({ taskId, fromStatusId, toStatusId, actorId }),
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: createdAt,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    return id;
+  }
+
+  function mockSlackOk(rootTs: string) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+      const body = JSON.parse((init as RequestInit).body as string) as { thread_ts?: string };
+      const ts = body.thread_ts ? "1731930000.999999" : rootTs;
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, ts }) } as Response);
+    });
+  }
+
+  for (const postJobStatus of ["SKIPPED", null] as const) {
+    const when = postJobStatus ? "its post job was SKIPPED (channel added later)" : "it has no post job";
+    it(`FR-28: starts the thread, then replies, when a task without a thread changes status and ${when}`, async () => {
+      const now = new Date("2026-11-18T10:00:00Z");
+      const { user, project, todoStatusId, inProgressStatusId } = await ensureUserAndProject("C_THREAD_CHAN");
+
+      const taskId = crypto.randomUUID();
+      await createTask({
+        id: taskId,
+        projectId: project.id,
+        statusId: inProgressStatusId,
+        title: "Created before the channel",
+        createdById: user,
+        slackThreadTs: null,
+        now,
+      });
+      if (postJobStatus) {
+        await outboxJobRepository.insert(db, {
+          id: crypto.randomUUID(),
+          type: "SLACK_POST_TASK",
+          payload: JSON.stringify({ taskId }),
+          status: postJobStatus,
+          attempts: 1,
+          nextAttemptAt: now,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      const threadJobId = await insertThreadJob(taskId, todoStatusId, inProgressStatusId, user, now);
+
+      const fetchMock = mockSlackOk("1731930000.000111");
+      const outcome = await processJob(
+        createTestContext(now, { ...env, SLACK_BOT_TOKEN: "xoxb-mock-token" }),
+        threadJobId,
+      );
+
+      expect(outcome).toBe("DONE");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const root = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as Record<string, string>;
+      const reply = JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string) as Record<string, string>;
+      expect(root.channel).toBe("C_THREAD_CHAN");
+      expect(root.thread_ts).toBeUndefined();
+      expect(root.text).toContain(`*${project.code}-`);
+      expect(root.text).toContain("Created before the channel");
+      expect(reply.thread_ts).toBe("1731930000.000111");
+      expect(reply.text).toBe("Status: To Do → In Progress by Alex Engineer");
+      expect((await taskRepository.findById(db, taskId))?.slackThreadTs).toBe("1731930000.000111");
+    });
+  }
+
+  it("FR-28: a younger update waits while an older open update starts the thread, so the root is posted once", async () => {
     const now = new Date("2026-11-18T10:00:00Z");
     const { user, project, todoStatusId, inProgressStatusId } = await ensureUserAndProject("C_THREAD_CHAN");
 
@@ -459,51 +539,62 @@ describe("SLACK_UPDATE_THREAD outbox handler (FR-28)", () => {
       id: taskId,
       projectId: project.id,
       statusId: inProgressStatusId,
-      title: "Skipped Post Task",
+      title: "Two quick changes",
       createdById: user,
       slackThreadTs: null,
       now,
     });
-
-    // Post job skipped
-    const postJobId = crypto.randomUUID();
-    await outboxJobRepository.insert(db, {
-      id: postJobId,
-      type: "SLACK_POST_TASK",
-      payload: JSON.stringify({ taskId }),
-      status: "SKIPPED",
-      attempts: 1,
-      nextAttemptAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const threadJobId = crypto.randomUUID();
-    await outboxJobRepository.insert(db, {
-      id: threadJobId,
-      type: "SLACK_UPDATE_THREAD",
-      payload: JSON.stringify({
-        taskId,
-        fromStatusId: todoStatusId,
-        toStatusId: inProgressStatusId,
-        actorId: user,
-      }),
-      status: "PENDING",
-      attempts: 0,
-      nextAttemptAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const testEnv: Env = {
-      ...env,
-      SLACK_BOT_TOKEN: "xoxb-mock-token",
-    };
+    await insertThreadJob(taskId, todoStatusId, inProgressStatusId, user, now);
+    const youngerJobId = await insertThreadJob(
+      taskId,
+      inProgressStatusId,
+      todoStatusId,
+      user,
+      new Date(now.getTime() + 1000),
+    );
 
     const fetchMock = vi.spyOn(globalThis, "fetch");
+    const outcome = await processJob(
+      // The younger job is due one second later, so run it once both are due.
+      createTestContext(new Date(now.getTime() + 2000), { ...env, SLACK_BOT_TOKEN: "xoxb-mock-token" }),
+      youngerJobId,
+    );
 
-    const ctx = createTestContext(now, testEnv);
-    const outcome = await processJob(ctx, threadJobId);
+    expect(outcome).toBe("FAILED");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await outboxJobRepository.findById(db, youngerJobId))?.lastError).toContain("Waiting for original post");
+  });
+
+  it("FR-27: a sub-task without a thread is SKIPPED and never starts one", async () => {
+    const now = new Date("2026-11-18T10:00:00Z");
+    const { user, project, todoStatusId, inProgressStatusId } = await ensureUserAndProject("C_THREAD_CHAN");
+
+    const parentId = crypto.randomUUID();
+    await createTask({
+      id: parentId,
+      projectId: project.id,
+      statusId: todoStatusId,
+      title: "Parent",
+      createdById: user,
+      now,
+    });
+    const subTaskId = crypto.randomUUID();
+    await createTask({
+      id: subTaskId,
+      projectId: project.id,
+      statusId: inProgressStatusId,
+      parentTaskId: parentId,
+      title: "Child",
+      createdById: user,
+      now,
+    });
+    const threadJobId = await insertThreadJob(subTaskId, todoStatusId, inProgressStatusId, user, now);
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const outcome = await processJob(
+      createTestContext(now, { ...env, SLACK_BOT_TOKEN: "xoxb-mock-token" }),
+      threadJobId,
+    );
 
     expect(outcome).toBe("SKIPPED");
     expect(fetchMock).not.toHaveBeenCalled();
