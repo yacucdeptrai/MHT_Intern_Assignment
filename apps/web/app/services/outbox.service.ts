@@ -112,6 +112,24 @@ async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DO
     return "SKIPPED";
   }
 
+  const posted = await postTaskRootMessage(ctx, job, task, project, project.slackChannelId);
+  return posted === null ? "SKIPPED" : "DONE";
+}
+
+type SlackTask = NonNullable<Awaited<ReturnType<typeof taskRepository.findById>>>;
+type SlackProject = NonNullable<Awaited<ReturnType<typeof projectRepository.findById>>>;
+
+/**
+ * Posts the task's root message to the project channel and stores its `ts` as the thread.
+ * Returns the thread ts, or null (job SKIPPED) when Slack reports the channel is unusable.
+ */
+async function postTaskRootMessage(
+  ctx: JobContext,
+  job: OutboxJob,
+  task: SlackTask,
+  project: SlackProject,
+  channelId: string,
+): Promise<string | null> {
   // Format message text: *<CODE>-<number>* <title> · Priority: <priority> · Due: <dueDate or "none"> · <APP_BASE_URL>/projects/<projectId>/tasks/<taskId>
   const appBaseUrl = ctx.env.APP_BASE_URL.replace(/\/+$/, "");
   const taskUrl = `${appBaseUrl}/projects/${project.id}/tasks/${task.id}`;
@@ -126,7 +144,7 @@ async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DO
       "Content-Type": "application/json; charset=utf-8",
     },
     body: JSON.stringify({
-      channel: project.slackChannelId,
+      channel: channelId,
       text: messageText,
     }),
   });
@@ -141,20 +159,19 @@ async function handleSlackPostTask(ctx: JobContext, job: OutboxJob): Promise<"DO
       ctx.logger.warn(`Slack post skipped: ${data.error}`, {
         jobId: job.id,
         taskId: task.id,
-        channel: project.slackChannelId,
+        channel: channelId,
         slackError: data.error,
       });
-      return "SKIPPED";
+      return null;
     }
     throw new Error(`Slack API error: ${data.error ?? "unknown"}`);
   }
 
-  if (data.ts) {
-    const now = ctx.clock.now();
-    await ctx.db.batch([taskRepository.updateSlackThreadTsStmt(ctx.db, task.id, data.ts, now)]);
+  if (!data.ts) {
+    throw new Error("Slack chat.postMessage returned no ts");
   }
-
-  return "DONE";
+  await ctx.db.batch([taskRepository.updateSlackThreadTsStmt(ctx.db, task.id, data.ts, ctx.clock.now())]);
+  return data.ts;
 }
 
 async function handleSlackUpdateThread(ctx: JobContext, job: OutboxJob): Promise<"DONE" | "SKIPPED"> {
@@ -179,17 +196,32 @@ async function handleSlackUpdateThread(ctx: JobContext, job: OutboxJob): Promise
   }
 
   // Determine thread_ts (ordering after post, FR-28 criterion 2)
-  const threadTs = task.slackThreadTs;
+  let threadTs = task.slackThreadTs;
   if (!threadTs) {
+    // Sub-tasks never get a thread of their own (FR-27).
+    if (task.parentTaskId !== null) {
+      return "SKIPPED";
+    }
     const postJob = await outboxJobRepository.findSlackPostTaskJob(ctx.db, task.id);
-    if (!postJob) {
+    if (postJob && (postJob.status === "PENDING" || postJob.status === "RUNNING" || postJob.status === "FAILED")) {
+      // The original post is still on its way: retry so this update lands in its thread.
+      throw new Error("Waiting for original post");
+    }
+    if (postJob?.status === "DEAD") {
       return "SKIPPED";
     }
-    if (postJob.status === "DEAD" || postJob.status === "SKIPPED") {
+    // The task was created before the project had a channel (post SKIPPED) or before Slack was
+    // set up at all (no post job). Start its thread now. Only the oldest open update job does
+    // this, so several quick status changes cannot post the root message twice.
+    const oldest = await outboxJobRepository.findOldestOpenSlackUpdateJob(ctx.db, task.id);
+    if (oldest && oldest.id !== job.id) {
+      throw new Error("Waiting for original post");
+    }
+    const posted = await postTaskRootMessage(ctx, job, task, project, project.slackChannelId);
+    if (posted === null) {
       return "SKIPPED";
     }
-    // If postJob is PENDING, RUNNING, or FAILED: throw retryable error so update follows post
-    throw new Error("Waiting for original post");
+    threadTs = (await taskRepository.findById(ctx.db, task.id))?.slackThreadTs ?? posted;
   }
 
   // Look up status names
