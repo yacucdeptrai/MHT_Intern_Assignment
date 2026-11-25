@@ -1,12 +1,13 @@
 # --- Local only (never committed) -------------------------------------------
-# Agent guidelines and the documentation set
+# Agent guidelines
 AGENTS.md
-docs/
+system-design/
 # Original source spreadsheet(s)
 *.xlsx
 # Local tool settings and scratch
 .claude/
 .superpowers/
+.playwright-mcp/
 
 # --- Dependencies -----------------------------------------------------------
 node_modules/
